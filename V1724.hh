@@ -30,6 +30,10 @@ class V1724{
 				vector <unsigned int> &end_values);
   int End();
 
+  int bid(){
+    return fBID;
+  };
+
  private:
   int fBoardHandle;
   int fLink, fCrate, fBID;
