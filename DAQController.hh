@@ -20,14 +20,23 @@ public:
   // Start run
   // Stop run
   // Get data (return new buffer and size)
+  double data_rate(){
+    return 0;
+  };
+  int status(){
+    return fStatus;
+  };
 
+  void Start();
+  void Stop();
   void End();
   
 private:
   vector <V1724*> fDigitizers;
   bsoncxx::document::view fOptions;
-
   DAXHelpers *fHelper;
+
+  int fStatus;
   
 };
 
