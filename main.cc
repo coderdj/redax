@@ -1,6 +1,5 @@
 #include <iostream>
 #include <string>
-#include <unistd.h>
 #include <limits.h>
 #include <mongocxx/client.hpp>
 #include <mongocxx/uri.hpp>
@@ -42,7 +41,8 @@ int main(int argc, char** argv){
   
   // The DAQController object is responsible for passing commands to the
   // boards and tracking the status
-  DAQController controller;  
+  DAQController *controller = new DAQController();  
+  thread *readoutThread = NULL;
   
   // Main program loop. Scan the database and look for commands addressed
   // either to this hostname or with no hostname specified. Note: if you
@@ -68,45 +68,62 @@ int main(int argc, char** argv){
       
       // Process commands
       if(command == "start"){
-	std::cout<<"Run start not implemented"<<std::endl;
-	controller.Start();
+
+	if(controller->status() == 2)	  
+	  controller->Start();       
+	else
+	  std::cout<<"Cannot start DAQ if not in armed state"<<std::endl;
       }
       else if(command == "stop"){
+	// "stop" is also a general reset command and can be called any time
 	std::cout<<"Run stop not implemented"<<std::endl;
-	controller.Stop();
-	controller.End();
+	controller->Stop();
+	if(readoutThread!=NULL){
+	  readoutThread->join();
+	  delete readoutThread;
+	  readoutThread=NULL;
+	}
+	controller->End();
       }
       else if(command == "arm"){
-	controller.End();
-	string options = "";
-	try{
-	  string option_name = doc["mode"].get_utf8().value.to_string();
-	  std::cout<<"option_name: "<<option_name<<std::endl;
-	  
-	  bsoncxx::stdx::optional<bsoncxx::document::value> trydoc =
-	    options_collection.find_one(bsoncxx::builder::stream::document{}<<
-					"name" << option_name.c_str() <<
-					bsoncxx::builder::stream::finalize);
-	  if(trydoc){
-	    options = bsoncxx::to_json(*trydoc);
-	    Options *opts = new Options(options);
-	    if(controller.InitializeElectronics(opts)!=0){
-	      std::cout<<"Failed to initialize electronics"<<std::endl;
-	    }
-	    else{
-	      std::cout<<"Initialized electronics"<<std::endl;
-	    }
-	    delete opts;
+	// Can only arm if we're in the idle, arming, or armed state
+	if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
+	  controller->End();
+	  string options = "";
+	  try{
+	    string option_name = doc["mode"].get_utf8().value.to_string();
+	    std::cout<<"option_name: "<<option_name<<std::endl;
+	    
+	    bsoncxx::stdx::optional<bsoncxx::document::value> trydoc =
+	      options_collection.find_one(bsoncxx::builder::stream::document{}<<
+					  "name" << option_name.c_str() <<
+					  bsoncxx::builder::stream::finalize);
+	    if(trydoc){
+	      options = bsoncxx::to_json(*trydoc);
+	      if(controller->InitializeElectronics(options)!=0){
+		std::cout<<"Failed to initialize electronics"<<std::endl;
+	      }
+	      else{
+		std::cout<<"Initialized electronics"<<std::endl;
+	      }
+	      
+	      if(readoutThread!=NULL){
+		std::cout<<"Can't start DAQ with active readout thread. Reset first."<<std::endl;
+	      }
+	      else
+		readoutThread = new std::thread(DAQController::ReadThreadWrapper,
+						(static_cast<void*>(controller))); 
+	    }	  
 	  }
-
+	  catch( const std::exception &e){
+	    std::cout<<"Want to arm boards but no valid mode provided"<<std::endl;
+	    options = "";	  
+	  }
 	}
-	catch( const std::exception &e){
-	  std::cout<<"Want to arm boards but no valid mode provided"<<std::endl;
-	  options = "";	  
-	}
+	else
+	  std::cout<<"Cannot ARM DAQ when it's in 'running' or 'error' state."<<std::endl;
       }
 
-      
 
       // This command was processed (or failed) so remove it
       control.delete_one(bsoncxx::builder::stream::document{} << "_id" <<
@@ -115,32 +132,12 @@ int main(int argc, char** argv){
 
     // No need to hammer DB
     status.insert_one(bsoncxx::builder::stream::document{} << "host" << hostname
-		  << "rate" << controller.data_rate() << "status" << controller.status()
-		  << bsoncxx::builder::stream::finalize);
+		      << "rate" << controller->data_rate() << "status" << controller->status()
+		      << "buffer_length" << controller->buffer_length() <<
+		      bsoncxx::builder::stream::finalize);
     usleep(1000000);
   }
-  /*
-  Options *opts = NULL;
-  try{
-    opts = new Options(ini_file.c_str());
-  }
-  catch (std::runtime_error &e){
-    std::cout << "EXITING: "<<e.what()<<std::endl;
-    exit(0);
-  }
-  */
-
-  // Main program look
   
-
-  /*
-  // Initialize the DAQ
-  DAQController baloo;
-  int ret = baloo.InitializeElectronics(opts);
-  std::cout<<ret<<std::endl;
-  // READ DATA HERE  
-  baloo.End();
-  */
   exit(0);
   
 

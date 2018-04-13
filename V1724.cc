@@ -43,21 +43,21 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int V1724::ReadMBLT(unsigned int *buffer){
+u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   // Initialize
   unsigned int blt_bytes=0;
   int nb=0,ret=-5;
   unsigned int BLT_SIZE=8388608; // 8MB buffer size
-  buffer = new unsigned int[BLT_SIZE/4];
+  u_int32_t *tempBuffer = new u_int32_t[BLT_SIZE/4];
 
   int count = 0;
   do{
     ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
-				   ((unsigned char*)buffer)+blt_bytes,
+				   ((unsigned char*)tempBuffer)+blt_bytes,
 				   BLT_SIZE, cvA32_U_BLT, cvD32, &nb);
     if( (ret != cvSuccess) && (ret != cvBusError) ){
       cout<<"Read error in board "<<fBID<<" after "<<count<<" reads."<<endl;
-      delete[] buffer;
+      delete[] tempBuffer;
       return 0;
     }
 
@@ -67,13 +67,26 @@ int V1724::ReadMBLT(unsigned int *buffer){
     if(blt_bytes>BLT_SIZE){
       cout<<"You managed to transfer more data than fits on board."<<endl;
       cout<<"Transferred: "<<blt_bytes<<" bytes, Buffer: "<<BLT_SIZE<<" bytes."<<endl;
-      delete[] buffer;
+      delete[] tempBuffer;
       return 0;
     }
   }while(ret != cvBusError);
 
-  cout<<"Did "<<count<<" BLTs"<<endl;
 
+  // Now, unfortunately we need to make one copy of the data here or else our memory
+  // usage explodes. We declare above a buffer of 8MB, which is the maximum capacity
+  // of the board in case every channel is 100% saturated (the practical largest
+  // capacity is certainly smaller depending on settings). But if we just keep reserving
+  // 8MB blocks and filling 500kB with actual data, we're gonna run out of memory.
+  // So here we declare the return buffer as *just* large enough to hold the actual
+  // data and free up the rest of the memory reserved as buffer.
+  // In tests this does not seem to impact our ability to read out the V1724 at the
+  // maximum bandwidth of the link.
+  if(blt_bytes>0){
+    buffer = new u_int32_t[blt_bytes/(sizeof(u_int32_t))];
+    std::memcpy(buffer, tempBuffer, blt_bytes);
+  }
+  delete[] tempBuffer;
   return blt_bytes;
   
 }

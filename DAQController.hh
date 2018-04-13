@@ -1,9 +1,19 @@
 #ifndef _DAQCONTROLLER_HH_
 #define _DAQCONTROLLER_HH_
 
+#include <mutex>
+#include <thread>
 #include "V1724.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
+#include "MongoInserter.hh"
+
+class V2718; //not implemented yet
+
+struct processingThread{
+  std::thread *pthread;
+  MongoInserter *inserter;
+};
 
 class DAQController{
   /*
@@ -15,10 +25,8 @@ public:
   DAQController();
   ~DAQController();
 
-  int InitializeElectronics(Options *opts);
+  int InitializeElectronics(string opts);
 
-  // Start run
-  // Stop run
   // Get data (return new buffer and size)
   double data_rate(){
     return 0;
@@ -26,18 +34,40 @@ public:
   int status(){
     return fStatus;
   };
+  int buffer_length(){
+    return fBufferLength;
+  };
 
   void Start();
   void Stop();
+  void ReadData();
   void End();
-  
-private:
-  vector <V1724*> fDigitizers;
-  bsoncxx::document::view fOptions;
-  DAXHelpers *fHelper;
 
-  int fStatus;
+  int GetData(std::vector <data_packet> *&retVec);
+    
+  // Statis wrapper so we can call ReadData in a std::thread
+  static void* ReadThreadWrapper(void* data);
+  static void* ProcessingThreadWrapper(void* data);
+    
+private:
+  void AppendData(vector<data_packet> d);
   
+  vector <processingThread> fProcessingThreads;
+  void OpenProcessingThreads();
+  void CloseProcessingThreads();
+  
+  std::vector <V1724*> fDigitizers;
+  std::mutex fBufferMutex;
+
+  bool fReadLoop;
+  Options *fOptions;
+  DAXHelpers *fHelper;
+  std::vector<data_packet> *fRawDataBuffer;
+  int fStatus;
+  int fNProcessingThreads;
+  u_int64_t fBufferLength;
+  
+  V2718 *fRunStartController;
 };
 
 #endif

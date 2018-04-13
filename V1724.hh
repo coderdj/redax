@@ -1,10 +1,8 @@
 #ifndef _V1724_HH_
 #define _V1724_HH_
 
-//#include <stdlib.h>
-//#include <cstdio>
 #include <unistd.h>
-
+#include <cstring>
 
 #include <stdint.h>
 #include <CAENVMElib.h>
@@ -23,7 +21,7 @@ class V1724{
   int Init(int link, int crate, int bid, unsigned int address);
   int WriteRegister(unsigned int register, unsigned int value);
   unsigned int ReadRegister(unsigned int register);
-  int ReadMBLT(u_int32_t *buffer);
+  u_int32_t ReadMBLT(u_int32_t *&buffer);
   int ConfigureBaselines(int nominal_value,
 				int ntries,
 				vector <unsigned int> start_values,
@@ -38,6 +36,7 @@ class V1724{
   int fBoardHandle;
   int fLink, fCrate, fBID;
   unsigned int fBaseAddress;
+
 };
 
 
