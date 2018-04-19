@@ -2,6 +2,16 @@
 #define _MONGOINSERTER_HH_
 
 #include <unistd.h>
+#include <cstdlib>
+#include <cstdarg>
+#include <cstring>
+#include <assert.h>
+#include <mongocxx/client.hpp>
+#include <mongocxx/uri.hpp>
+#include <mongocxx/instance.hpp>
+#include <mongocxx/database.hpp>
+#include <mongocxx/collection.hpp>
+#include <bsoncxx/builder/stream/document.hpp>
 #include "Options.hh"
 
 class DAQController;
@@ -29,6 +39,8 @@ public:
   
   
 private:
+  std::string FormatString(const std::string& format, ...);
+    
   Options *fOptions;
   DAQController *fDataSource;
   bool fActive;

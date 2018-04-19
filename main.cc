@@ -1,12 +1,6 @@
 #include <iostream>
 #include <string>
 #include <limits.h>
-#include <mongocxx/client.hpp>
-#include <mongocxx/uri.hpp>
-#include <mongocxx/instance.hpp>
-#include <mongocxx/database.hpp>
-#include <mongocxx/collection.hpp>
-#include <bsoncxx/builder/stream/document.hpp>
 #include "V1724.hh"
 #include "DAQController.hh"
 
@@ -145,10 +139,3 @@ int main(int argc, char** argv){
 
 
 
-// Structure?
-// DAQController - this is the monster
-//               - hold all digitizer objects
-//               - hold DAQ status object
-//               - define with options document
-// ControlDB     - poll this for commands
-//               - send updates here too

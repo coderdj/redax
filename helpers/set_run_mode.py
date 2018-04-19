@@ -9,6 +9,9 @@ run_mode = {
     "name": "test",
     "user": "coderre",
     "description": "Initial test mode",
+    "mongo_uri": "mongodb://daq:%s@127.0.0.1:27017/admin",
+    "mongo_database": "data",
+    "mongo_collection": "test",
     "boards":
     [
         {
