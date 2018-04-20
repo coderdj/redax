@@ -11,7 +11,7 @@ MongoInserter::~MongoInserter(){
 }
 
 int MongoInserter::Initialize(Options *options, DAQController *dataSource){
-  fOptions = options;
+  fOptions = options; 
   fDataSource = dataSource;
   return 0;
 }
@@ -24,11 +24,17 @@ std::string MongoInserter::FormatString(const std::string& format, ...){
   va_list args;
   va_start (args, format);
   size_t len = std::vsnprintf(NULL, 0, format.c_str(), args);
+  std::cout<<"Len: "<<len<<std::endl;
   va_end (args);
   std::vector<char> vec(len + 1);
   va_start (args, format);
   std::vsnprintf(&vec[0], len + 1, format.c_str(), args);
   va_end (args);
+  std::cout<<"Format: "<<format<<std::endl;
+  for(unsigned int x=0;x<vec.size();x++)
+    std::cout<<vec[x];
+  std::cout<<endl;
+
   return &vec[0];
 }
 
@@ -36,7 +42,10 @@ int MongoInserter::ReadAndInsertData(){
 
   // Parse the uri. Probably need some validation here
   std::string uri_base = fOptions->GetString("mongo_uri");
-  std::string pw = std::getenv("MONGO_PASSWORD");  
+  std::cout<<"BASE: "<<uri_base<<std::endl;
+  std::string pw = std::getenv("MONGO_PASSWORD");
+  std::cout<<FormatString(uri_base, pw)<<std::endl;
+  
   mongocxx::uri uri{FormatString(uri_base, pw)};
   mongocxx::client client{mongocxx::uri{}};
 

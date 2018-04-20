@@ -25,12 +25,11 @@ DAQController::~DAQController(){
     CloseProcessingThreads();
 }
 
-int DAQController::InitializeElectronics(string opts){
+int DAQController::InitializeElectronics(std::string opts){
 
   if(fOptions != NULL)
     delete fOptions;
   fOptions = new Options(opts);
-    
   fStatus = 1;
   for(auto d : fOptions->GetBoards("V1724")){
     
@@ -201,6 +200,7 @@ void DAQController::OpenProcessingThreads(){
   for(int i=0; i<fNProcessingThreads; i++){
     processingThread p;
     p.inserter = new MongoInserter();
+    std::cout<<"IN THREAD: "<<fOptions->GetString("mongo_uri")<<std::endl;
     p.inserter->Initialize(fOptions, this);
     p.pthread = new std::thread(ProcessingThreadWrapper,
 			       static_cast<void*>(p.inserter));

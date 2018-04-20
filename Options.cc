@@ -1,9 +1,10 @@
 #include "Options.hh"
 
 Options::Options(){
-  if(LoadFile(defaultPath)!=0)
-    throw std::runtime_error("Can't initialize options class");
+  //if(LoadFile(defaultPath)!=0)
+  //throw std::runtime_error("Can't initialize options class");
   fHelper = new DAXHelpers();
+  bson_value = NULL;
 }
 
 Options::Options(std::string opts){
@@ -14,6 +15,8 @@ Options::Options(std::string opts){
 
 Options::~Options(){
   delete fHelper;
+  if(bson_value != NULL)
+    delete bson_value;
 }
 
 int Options::LoadFile(std::string path){
@@ -35,9 +38,21 @@ int Options::LoadFile(std::string path){
   return 0;  
 }
 
+std::string Options::ExportToString(){
+  // This might be silly
+  std::string ret = bsoncxx::to_json(bson_options);
+  return ret;
+}
+
 int Options::Load(std::string opts){
   try{
-    bson_options = bsoncxx::from_json(opts).view();
+    // Holy cow. So the whole pointer thing is some lengths I went to to
+    // keep the stupid value in scope. You can't have a member variable with
+    // a non-pointer value since there is no way to initialize a default 'value'.
+    // So needs to be a pointer. Needs to stay in scope for as long as you might
+    // want to see the view.
+    bson_value = new bsoncxx::document::value(bsoncxx::from_json(opts).view());
+    bson_options = bson_value->view();
   }
   catch (const bsoncxx::v_noabi::exception &e){
     std::cout<<"Failed to load file or parse JSON. Check that your JSON is valid."<<std::endl;
@@ -54,7 +69,7 @@ int Options::Load(std::string opts){
 int Options::GetInt(std::string path){
 
   try{
-    return bson_options[path].get_int32();
+    return bson_options[path.c_str()].get_int32();
   }
   catch (const std::exception &e){
     //LOG
@@ -64,9 +79,8 @@ int Options::GetInt(std::string path){
 }
 
 std::string Options::GetString(std::string path){
-
   try{
-    return bson_options[path].get_utf8().value.to_string();
+    return bson_options[path.c_str()].get_utf8().value.to_string();
   }
   catch (const std::exception &e){
     //LOG

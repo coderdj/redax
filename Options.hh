@@ -11,6 +11,7 @@
 #include <bsoncxx/types.hpp>
 #include <bsoncxx/json.hpp>
 #include <bsoncxx/document/view.hpp>
+#include <bsoncxx/document/value.hpp>
 #include <bsoncxx/exception/exception.hpp>
 #include "DAXHelpers.hh"
 
@@ -43,11 +44,13 @@ public:
 
   std::vector<BoardType> GetBoards(std::string type="");
   std::vector<RegisterType> GetRegisters(int board=-1);
-  
+
+  std::string ExportToString();
 private:
   std::string defaultPath = "defaults/daxOptions.json";
   DAXHelpers *fHelper;
   bsoncxx::document::view bson_options;
+  bsoncxx::document::value *bson_value;
 };
 
 #endif
