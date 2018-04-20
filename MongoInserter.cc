@@ -67,13 +67,17 @@ int MongoInserter::ReadAndInsertData(){
 	//std::cout<<hex<<(*readVector)[i]->buff<<std::endl;
 
 	// Put into Mongo. To do: bulk inserts!
+	// Notes: size cast to int, apparently no uint in bson
+	//        readVector cast to char* (used to want void* in old driver)
+	//        binary size requires uint. k_binary sub type seems to be the applicable one
 	coll.insert_one(bsoncxx::builder::stream::document{} <<
-			"module" << (*readVector)[i].bid << "channel" << 0
-			<< "size" << (*readVector)[i].size << "data" <<
-			bsoncxx::types::b_binary {
-			  bsoncxx::binary_sub_type::k_binary,
+			"module" << (*readVector)[i].bid <<
+			"channel" << 0 <<
+			"size" << static_cast<int32_t>((*readVector)[i].size) <<
+			"data" << bsoncxx::types::b_binary {
+			    bsoncxx::binary_sub_type::k_binary,
 			    static_cast<u_int32_t>((*readVector)[i].size),
-			    static_cast<unsigned char*>((*readVector)[i].buff)}			    
+			    reinterpret_cast<unsigned char*>((*readVector)[i].buff)}
 			<< bsoncxx::builder::stream::finalize);
 	
 	delete[] (*readVector)[i].buff;
