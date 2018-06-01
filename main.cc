@@ -126,7 +126,7 @@ int main(int argc, char** argv){
 
     // No need to hammer DB
     status.insert_one(bsoncxx::builder::stream::document{} << "host" << hostname
-		      << "rate" << controller->data_rate() << "status" << controller->status()
+		      << "rate" << controller->GetDataSize()/1e6 << "status" << controller->status()
 		      << "buffer_length" << controller->buffer_length() <<
 		      bsoncxx::builder::stream::finalize);
     usleep(1000000);

@@ -20,23 +20,12 @@ void MongoInserter::Close(){
   fActive = false;
 }
 
-std::string MongoInserter::FormatString(const std::string& format, ...){
-  va_list args;
-  va_start (args, format);
-  size_t len = std::vsnprintf(NULL, 0, format.c_str(), args);
-  std::cout<<"Len: "<<len<<std::endl;
-  va_end (args);
-  std::vector<char> vec(len + 1);
-  va_start (args, format);
-  std::vsnprintf(&vec[0], len + 1, format.c_str(), args);
-  va_end (args);
-  std::cout<<"Format: "<<format<<std::endl;
-  for(unsigned int x=0;x<vec.size();x++)
-    std::cout<<vec[x];
-  std::cout<<endl;
-
-  return &vec[0];
+std::string MongoInserter::FormatString(const std::string format, const std::string pw){
+  char s[ format.size() + pw.size() ]; /* whatever MAX_URL_SIZE may be */
+  sprintf(s, format.c_str(), pw.c_str());
+  return std::string(s);
 }
+
 
 int MongoInserter::ReadAndInsertData(){
 
@@ -47,7 +36,7 @@ int MongoInserter::ReadAndInsertData(){
   std::cout<<FormatString(uri_base, pw)<<std::endl;
   
   mongocxx::uri uri{FormatString(uri_base, pw)};
-  mongocxx::client client{mongocxx::uri{}};
+  mongocxx::client client{uri};
 
   std::string database, collection;
   try{
@@ -89,6 +78,8 @@ int MongoInserter::ReadAndInsertData(){
 			    reinterpret_cast<unsigned char*>((*readVector)[i].buff)}
 			<< bsoncxx::builder::stream::finalize);
 	
+	//coll.insert_one(bsoncxx::builder::stream::document{} <<
+	//		"test"<<"fucker"<<bsoncxx::builder::stream::finalize);
 	delete[] (*readVector)[i].buff;
       }
       delete readVector;

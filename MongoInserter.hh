@@ -39,8 +39,10 @@ public:
   
   
 private:
-  std::string FormatString(const std::string& format, ...);
-    
+  //std::string FormatString(const std::string& format, ...);
+  std::string FormatString(const std::string format,
+			   const std::string pw);
+  
   Options *fOptions;
   DAQController *fDataSource;
   bool fActive;

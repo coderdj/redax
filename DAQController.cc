@@ -16,6 +16,7 @@ DAQController::DAQController(){
   fBufferLength = 0;
   fRunStartController = NULL;
   fRawDataBuffer = NULL;
+  fDatasize=0.;
 }
 DAQController::~DAQController(){
   delete fHelper;
@@ -80,7 +81,9 @@ void DAQController::Stop(){
     for(unsigned int x=0;x<fDigitizers.size();x++)
       fDigitizers[x]->WriteRegister(0x8100, 0x0);
   }
+  usleep(2000);
   fReadLoop = false; // at some point.
+  usleep(1000);//time to read out last data
   CloseProcessingThreads();
   fStatus = 0;
   End(); // Leave option open in future to separate stop/end
@@ -144,8 +147,10 @@ void DAQController::ReadData(){
 	  delete[] d.buff;
 	break;
       }
-      if(d.size!=0)
+      if(d.size!=0){
+	fDatasize += d.size;
 	local_buffer.push_back(d);
+      }
     }
     if(local_buffer.size()!=0)
       AppendData(local_buffer);
@@ -214,6 +219,7 @@ void DAQController::CloseProcessingThreads(){
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
     fProcessingThreads[i].inserter->Close();
     fProcessingThreads[i].pthread->join();
+        
     delete fProcessingThreads[i].pthread;
     delete fProcessingThreads[i].inserter;
   }

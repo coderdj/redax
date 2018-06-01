@@ -48,7 +48,9 @@ public:
   // Statis wrapper so we can call ReadData in a std::thread
   static void* ReadThreadWrapper(void* data);
   static void* ProcessingThreadWrapper(void* data);
-    
+
+  u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;};
+  
 private:
   void AppendData(vector<data_packet> d);
   
@@ -66,6 +68,7 @@ private:
   int fStatus;
   int fNProcessingThreads;
   u_int64_t fBufferLength;
+  u_int64_t fDatasize;
   
   V2718 *fRunStartController;
 };
