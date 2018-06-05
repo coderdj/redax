@@ -61,12 +61,11 @@ int Options::Load(std::string opts){
   }
   catch(const std::exception &e){
     std::cout<<e.what()<<std::endl;
-    return -1;
   }
   return 0;
 }
 
-int Options::GetInt(std::string path){
+int Options::GetInt(std::string path, int default_value){
 
   try{
     return bson_options[path.c_str()].get_int32();
@@ -74,17 +73,19 @@ int Options::GetInt(std::string path){
   catch (const std::exception &e){
     //LOG
     std::cout<<e.what()<<std::endl;
+    return default_value;
   }
   return -1;  
 }
 
-std::string Options::GetString(std::string path){
+std::string Options::GetString(std::string path, std::string default_value){
   try{
     return bson_options[path.c_str()].get_utf8().value.to_string();
   }
   catch (const std::exception &e){
     //LOG
     std::cout<<e.what()<<std::endl;
+    return default_value;
   }
   return "";
 }

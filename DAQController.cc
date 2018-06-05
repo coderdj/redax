@@ -81,15 +81,16 @@ void DAQController::Stop(){
     for(unsigned int x=0;x<fDigitizers.size();x++)
       fDigitizers[x]->WriteRegister(0x8100, 0x0);
   }
-  usleep(2000);
+  std::cout<<"Stopped digitizers"<<std::endl;
+  //usleep(2000);
   fReadLoop = false; // at some point.
-  usleep(1000);//time to read out last data
-  CloseProcessingThreads();
+  //usleep(1000);//time to read out last data
+  // CloseProcessingThreads();
   fStatus = 0;
-  End(); // Leave option open in future to separate stop/end
   return;
 }
 void DAQController::End(){
+  CloseProcessingThreads();
   for(unsigned int x=0; x<fDigitizers.size(); x++){
     fDigitizers[x]->End();
     delete fDigitizers[x];
@@ -129,8 +130,10 @@ void DAQController::ReadData(){
   }
   
   u_int32_t lastRead = 0; // bytes read in last cycle. make sure we clear digitizers at run stop
-  while(fReadLoop || lastRead > 0){
-    lastRead = 0;
+  while(fReadLoop){// || lastRead > 0){
+    //if(fReadLoop==false)
+    //  std::cout<<lastRead<<std::endl;
+    //lastRead = 0;
     
     vector<data_packet> local_buffer;
     for(unsigned int x=0; x<fDigitizers.size(); x++){
@@ -147,7 +150,7 @@ void DAQController::ReadData(){
 	  delete[] d.buff;
 	break;
       }
-      if(d.size!=0){
+      if(d.size>0){
 	fDatasize += d.size;
 	local_buffer.push_back(d);
       }

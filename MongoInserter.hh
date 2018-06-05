@@ -37,12 +37,14 @@ public:
   
   int ReadAndInsertData();
   
+private:  
+  static void ParseDocuments(std::vector<bsoncxx::document::value> &doc_array,
+		      u_int32_t *buff, u_int32_t size, u_int32_t bid);
   
-private:
   //std::string FormatString(const std::string& format, ...);
   std::string FormatString(const std::string format,
 			   const std::string pw);
-  
+  u_int32_t fBulkInsertSize;
   Options *fOptions;
   DAQController *fDataSource;
   bool fActive;

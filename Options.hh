@@ -39,8 +39,8 @@ public:
   int LoadFile(std::string path);
   int Load(std::string opts);
   
-  int GetInt(std::string key);
-  std::string GetString(std::string key);
+  int GetInt(std::string key, int default_value=-1);
+  std::string GetString(std::string key, std::string default_value="");
 
   std::vector<BoardType> GetBoards(std::string type="");
   std::vector<RegisterType> GetRegisters(int board=-1);
