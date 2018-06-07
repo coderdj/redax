@@ -7,7 +7,8 @@
 // 3-running
 // 4-error
 
-DAQController::DAQController(){
+DAQController::DAQController(MongoLog *log){
+  fLog=log;
   fHelper = new DAXHelpers();
   fOptions = NULL;
   fStatus = 0;
@@ -18,12 +19,24 @@ DAQController::DAQController(){
   fRawDataBuffer = NULL;
   fDatasize=0.;
 }
+
 DAQController::~DAQController(){
   delete fHelper;
   if(fOptions != NULL)
     delete fOptions;
   if(fProcessingThreads.size()!=0)
     CloseProcessingThreads();
+}
+
+std::string DAQController::run_mode(){
+  if(fOptions == NULL)
+    return "None";
+  try{
+    return fOptions->GetString("name");
+  }
+  catch(const std::exception &e){
+    return "None";
+  }
 }
 
 int DAQController::InitializeElectronics(std::string opts){
@@ -35,12 +48,16 @@ int DAQController::InitializeElectronics(std::string opts){
   for(auto d : fOptions->GetBoards("V1724")){
     
     V1724 *digi = new V1724();
-    if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){      
+    if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
       fDigitizers.push_back(digi);
-      std::cout<<"Initialized digitizer "<<d.board<<std::endl;
+      std::stringstream mess;
+      mess<<"Initialized digitizer "<<d.board;
+      fLog->Entry(mess.str(), MongoLog::Debug);
     }
     else{
-      std::cout<<"Failed to initialize digitizer "<<d.board<<std::endl;
+      std::stringstream err;
+      err<<"Failed to initialize digitizer "<<d.board;
+      fLog->Entry(err.str(), MongoLog::Warning);
       fStatus = 0;
       return -1;
     }
@@ -56,7 +73,7 @@ int DAQController::InitializeElectronics(std::string opts){
     if(success!=0){
       //LOG
       fStatus = 0;
-      std::cout<<"Failed to write registers."<<std::endl;
+      fLog->Entry("Failed to write registers.", MongoLog::Warning);
       return -1;
     }
   }
@@ -68,8 +85,9 @@ int DAQController::InitializeElectronics(std::string opts){
 
 void DAQController::Start(){
   if(fRunStartController==NULL){
-    for(unsigned int x=0;x<fDigitizers.size(); x++)
+    for(unsigned int x=0;x<fDigitizers.size(); x++){            
       fDigitizers[x]->WriteRegister(0x8100, 0x4);
+    }
   }
   fStatus = 3;
   return;
@@ -81,11 +99,9 @@ void DAQController::Stop(){
     for(unsigned int x=0;x<fDigitizers.size();x++)
       fDigitizers[x]->WriteRegister(0x8100, 0x0);
   }
-  std::cout<<"Stopped digitizers"<<std::endl;
-  //usleep(2000);
+  fLog->Entry("Stopped digitizers", MongoLog::Debug);
+
   fReadLoop = false; // at some point.
-  //usleep(1000);//time to read out last data
-  // CloseProcessingThreads();
   fStatus = 0;
   return;
 }
@@ -99,7 +115,8 @@ void DAQController::End(){
   fStatus = 0;
 
   if(fRawDataBuffer != NULL){
-    std::cerr<<"Caution: deleting uncleared data buffer"<<std::endl;
+    fLog->Entry("Deleting uncleared data buffer",
+		MongoLog::Debug);
     for(unsigned int i=0; i<fRawDataBuffer->size(); i++){
       delete[] (*fRawDataBuffer)[i].buff;
     }
@@ -121,11 +138,13 @@ void DAQController::ReadData(){
   
   // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
   if(fRawDataBuffer != NULL){
-    std::cout<<"Raw data buffer being brute force cleared."<<std::endl;
+    fLog->Entry("Raw data buffer being brute force cleared.",
+		MongoLog::Debug);
     for(unsigned int x=0;x<fRawDataBuffer->size(); x++){
       delete[] (*fRawDataBuffer)[x].buff;
     }
     delete fRawDataBuffer;
+    fBufferLength=0;
     fRawDataBuffer = NULL;
   }
   
@@ -168,7 +187,11 @@ void DAQController::AppendData(vector<data_packet> d){
   if(fRawDataBuffer==NULL)
     fRawDataBuffer = new std::vector<data_packet>();
   fRawDataBuffer->insert( fRawDataBuffer->end(), d.begin(), d.end() );
-  fBufferLength = fRawDataBuffer->size();
+  u_int64_t bl = 0;
+  for(unsigned int x=0; x<fRawDataBuffer->size(); x++){
+    bl += (*fRawDataBuffer)[x].size;
+  }
+  fBufferLength = bl; 
   fBufferMutex.unlock();  
 }
 
@@ -207,9 +230,8 @@ void DAQController::OpenProcessingThreads(){
 
   for(int i=0; i<fNProcessingThreads; i++){
     processingThread p;
-    p.inserter = new MongoInserter();
-    std::cout<<"IN THREAD: "<<fOptions->GetString("mongo_uri")<<std::endl;
-    p.inserter->Initialize(fOptions, this);
+    p.inserter = new MongoInserter();    
+    p.inserter->Initialize(fOptions, fLog, this);
     p.pthread = new std::thread(ProcessingThreadWrapper,
 			       static_cast<void*>(p.inserter));
     fProcessingThreads.push_back(p);

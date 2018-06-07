@@ -22,7 +22,7 @@ class DAQController{
   */
   
 public:
-  DAQController();
+  DAQController(MongoLog *log=NULL);
   ~DAQController();
 
   int InitializeElectronics(string opts);
@@ -37,7 +37,8 @@ public:
   int buffer_length(){
     return fBufferLength;
   };
-
+  std::string run_mode();    
+  
   void Start();
   void Stop();
   void ReadData();
@@ -50,7 +51,7 @@ public:
   static void* ProcessingThreadWrapper(void* data);
 
   u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;};
-  
+
 private:
   void AppendData(vector<data_packet> d);
   
@@ -60,7 +61,8 @@ private:
   
   std::vector <V1724*> fDigitizers;
   std::mutex fBufferMutex;
-
+  MongoLog *fLog;
+  
   bool fReadLoop;
   Options *fOptions;
   DAXHelpers *fHelper;
@@ -71,6 +73,7 @@ private:
   u_int64_t fDatasize;
   
   V2718 *fRunStartController;
+  
 };
 
 #endif

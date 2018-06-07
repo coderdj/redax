@@ -6,15 +6,17 @@ MongoInserter::MongoInserter(){
   fDataSource = NULL;
   fActive = true;
   fBulkInsertSize=100;
+  fLog = NULL;
 }
 
 MongoInserter::~MongoInserter(){
 }
 
-int MongoInserter::Initialize(Options *options, DAQController *dataSource){
+int MongoInserter::Initialize(Options *options, MongoLog *log,  DAQController *dataSource){
   fOptions = options;
   fBulkInsertSize = fOptions->GetInt("bulk_insert_size", 100);
   fDataSource = dataSource;
+  fLog = log;
   return 0;
 }
 
@@ -45,6 +47,9 @@ void MongoInserter::ParseDocuments(
       //u_int32_t event_size = buff[idx]&0xFFFF; // In bytes
       u_int32_t channel_mask = buff[idx+1]&0xFF; // Channels in event
       u_int32_t board_fail  = buff[idx+1]&0x4000000; //Board failed. Never saw this set.
+
+      // I've never seen this happe but afraid to put it into the mongo log
+      // since this call is in a loop
       if(board_fail==1)
 	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
       

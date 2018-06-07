@@ -1,6 +1,5 @@
 #include <iostream>
 #include <string>
-#include <limits.h>
 #include "V1724.hh"
 #include "DAQController.hh"
 
@@ -9,12 +8,12 @@ int main(int argc, char** argv){
   // Need to create a mongocxx instance and it must exist for
   // the entirety of the program. So here seems good.
   mongocxx::instance instance{};
-
+  
   // We will consider commands addressed to this PC's hostname
   char hostname[HOST_NAME_MAX];
   gethostname(hostname, HOST_NAME_MAX);
   std::cout<<"Found hostname: "<<hostname<<std::endl;
-
+  
   // Accept just one command line argument, which is a URI
   if(argc==1){
     std::cout<<"Welcome to DAX. Run with a single argument: a valid mongodb URI"<<std::endl;
@@ -32,10 +31,18 @@ int main(int argc, char** argv){
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
+
+  // Logging
+  MongoLog *logger = new MongoLog();
+  int ret = logger->Initialize(suri, "dax", "log", true);
+  if(ret!=0){
+    std::cout<<"Exiting"<<std::endl;
+    exit(-1);
+  }
   
   // The DAQController object is responsible for passing commands to the
   // boards and tracking the status
-  DAQController *controller = new DAQController();  
+  DAQController *controller = new DAQController(logger);  
   thread *readoutThread = NULL;
   
   // Main program loop. Scan the database and look for commands addressed
@@ -56,21 +63,27 @@ int main(int argc, char** argv){
       }
       catch (const std::exception &e){
 	//LOG
-	std::cout << "ERROR MALFORMED COMMAND: " << bsoncxx::to_json(doc) << "\n";
+	std::stringstream err;
+	err<<"Received malformed command: "<< bsoncxx::to_json(doc);
+	logger->Entry(err.str(), MongoLog::Warning);
       }
 
       
       // Process commands
       if(command == "start"){
 
-	if(controller->status() == 2)	  
-	  controller->Start();       
+	if(controller->status() == 2) {
+	  controller->Start();
+	  logger->Entry("Received start command from user "+
+			doc["user"].get_utf8().value.to_string(), MongoLog::Message);
+	}
 	else
-	  std::cout<<"Cannot start DAQ if not in armed state"<<std::endl;
+	  logger->Entry("Cannot start DAQ since not in ARMED state", MongoLog::Debug);
       }
       else if(command == "stop"){
 	// "stop" is also a general reset command and can be called any time
-	std::cout<<"Run stop not implemented"<<std::endl;
+	logger->Entry("Received stop command from user "+
+		      doc["user"].get_utf8().value.to_string(), MongoLog::Message);
 	controller->Stop();
 	if(readoutThread!=NULL){
 	  readoutThread->join();
@@ -86,23 +99,26 @@ int main(int argc, char** argv){
 	  string options = "";
 	  try{
 	    string option_name = doc["mode"].get_utf8().value.to_string();
-	    std::cout<<"option_name: "<<option_name<<std::endl;
+	    logger->Entry("Loading options " + option_name, MongoLog::Debug);
 	    
 	    bsoncxx::stdx::optional<bsoncxx::document::value> trydoc =
 	      options_collection.find_one(bsoncxx::builder::stream::document{}<<
 					  "name" << option_name.c_str() <<
 					  bsoncxx::builder::stream::finalize);
+	    logger->Entry("Received arm command from user "+
+			  doc["user"].get_utf8().value.to_string() +
+			  " for mode " + option_name, MongoLog::Message);
 	    if(trydoc){
 	      options = bsoncxx::to_json(*trydoc);
 	      if(controller->InitializeElectronics(options)!=0){
-		std::cout<<"Failed to initialize electronics"<<std::endl;
+		logger->Entry("Failed to initialized electronics", MongoLog::Error);
 	      }
 	      else{
-		std::cout<<"Initialized electronics"<<std::endl;
+		logger->Entry("Initialized electronics", MongoLog::Debug);
 	      }
 	      
 	      if(readoutThread!=NULL){
-		std::cout<<"Can't start DAQ with active readout thread. Reset first."<<std::endl;
+		logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
 	      }
 	      else
 		readoutThread = new std::thread(DAQController::ReadThreadWrapper,
@@ -110,12 +126,12 @@ int main(int argc, char** argv){
 	    }	  
 	  }
 	  catch( const std::exception &e){
-	    std::cout<<"Want to arm boards but no valid mode provided"<<std::endl;
+	    logger->Entry("Want to arm boards but no valid mode provided", MongoLog::Warning);
 	    options = "";	  
 	  }
 	}
 	else
-	  std::cout<<"Cannot ARM DAQ when it's in 'running' or 'error' state."<<std::endl;
+	  logger->Entry("Cannot arm DAQ while not 'Idle'", MongoLog::Warning);
       }
 
 
@@ -124,14 +140,17 @@ int main(int argc, char** argv){
 			 doc["_id"].get_oid() << bsoncxx::builder::stream::finalize);
     }
 
-    // No need to hammer DB
-    status.insert_one(bsoncxx::builder::stream::document{} << "host" << hostname
-		      << "rate" << controller->GetDataSize()/1e6 << "status" << controller->status()
-		      << "buffer_length" << controller->buffer_length() <<
+    // Insert some information on this readout node back to the monitor DB
+    status.insert_one(bsoncxx::builder::stream::document{} <<
+		      "host" << hostname <<
+		      "rate" << controller->GetDataSize()/1e6 <<
+		      "status" << controller->status() <<
+		      "buffer_length" << controller->buffer_length()/1e6 <<
+		      "run_mode" << controller->run_mode() <<
 		      bsoncxx::builder::stream::finalize);
     usleep(1000000);
   }
-  
+  delete logger;
   exit(0);
   
 

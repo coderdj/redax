@@ -24,6 +24,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address=0){
 }
 
 int V1724::WriteRegister(unsigned int reg, unsigned int value){
+  std::cout<<"Writing reg:val: "<<hex<<reg<<":"<<value<<dec<<std::endl;
   if(CAENVME_WriteCycle(fBoardHandle,fBaseAddress+reg,
 			&value,cvA32_U_DATA,cvD32) != cvSuccess){
     cout<<"Failed to write register 0x"<<hex<<reg<<dec<<" to board "<<fBID<<

@@ -1,7 +1,6 @@
 #ifndef _MONGOINSERTER_HH_
 #define _MONGOINSERTER_HH_
 
-#include <unistd.h>
 #include <cstdlib>
 #include <cstdarg>
 #include <cstring>
@@ -13,6 +12,7 @@
 #include <mongocxx/collection.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include "Options.hh"
+#include "MongoLog.hh"
 
 class DAQController;
 
@@ -32,7 +32,7 @@ public:
   MongoInserter();
   ~MongoInserter();
   
-  int  Initialize(Options *options, DAQController *dataSource);
+  int  Initialize(Options *options, MongoLog *log, DAQController *dataSource);
   void Close();
   
   int ReadAndInsertData();
@@ -46,6 +46,7 @@ private:
 			   const std::string pw);
   u_int32_t fBulkInsertSize;
   Options *fOptions;
+  MongoLog *fLog;
   DAQController *fDataSource;
   bool fActive;
 };
