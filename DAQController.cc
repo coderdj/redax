@@ -47,7 +47,7 @@ int DAQController::InitializeElectronics(std::string opts){
   fStatus = 1;
   for(auto d : fOptions->GetBoards("V1724")){
     
-    V1724 *digi = new V1724();
+    V1724 *digi = new V1724(fLog);
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
       fDigitizers.push_back(digi);
       std::stringstream mess;
@@ -160,7 +160,21 @@ void DAQController::ReadData(){
       d.buff=NULL;
       d.size=0;
       d.bid = fDigitizers[x]->bid();
-      d.size = fDigitizers[x]->ReadMBLT(d.buff);      
+      d.size = fDigitizers[x]->ReadMBLT(d.buff);
+
+      // Here's the fancy part. We gotta grab the header of the first
+      // event in the buffer and get the clock reset counter from the
+      // board. This gets shipped off with the buffer.
+      u_int32_t idx=0;
+      while(idx < d.size/sizeof(u_int32_t)){
+	if(d.buff[idx]>>20==0xA00){
+	  d.header_time = d.buff[idx+3]&0x7FFFFFFF;
+	  d.clock_counter = fDigitizers[x]->GetClockCounter(d.header_time);
+	  break;
+	}
+	idx++;
+      }
+      
       lastRead += d.size;
       
       if(d.size<0){
@@ -225,6 +239,22 @@ void* DAQController::ProcessingThreadWrapper(void* data){
   return data;
 }
 
+bool DAQController::CheckErrors(){
+
+  // This checks for errors from the threads by checking the
+  // error flag in each object. It's appropriate to poll this
+  // on the order of ~second(s) and initialize a STOP in case
+  // the function returns "true"
+
+  for(unsigned int i=0; i<fProcessingThreads.size(); i++){
+    if(fProcessingThreads[i].inserter->CheckError()){
+      fLog->Entry("Error found in processing thread.", MongoLog::Error);
+      fStatus=4;
+      return true;
+    }
+  }
+  return false;
+}
 
 void DAQController::OpenProcessingThreads(){
 

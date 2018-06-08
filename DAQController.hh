@@ -51,7 +51,9 @@ public:
   static void* ProcessingThreadWrapper(void* data);
 
   u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;};
-
+  bool CheckErrors();
+  
+  
 private:
   void AppendData(vector<data_packet> d);
   

@@ -1,6 +1,6 @@
 import pymongo
 import os
-uri = "mongodb://daq:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"]
+uri = "mongodb://admin:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"]
 client = pymongo.MongoClient(uri)
 db = client['dax']
 collection = db['options']
@@ -9,7 +9,7 @@ run_mode = {
     "name": "test",
     "user": "coderre",
     "description": "Initial test mode",
-    "mongo_uri": "mongodb://daq:%s@127.0.0.1:27017/admin",
+    "mongo_uri": "mongodb://reader:%s@127.0.0.1:27017/dax",
     "mongo_database": "data",
     "mongo_collection": "test",
     "boards":

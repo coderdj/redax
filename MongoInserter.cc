@@ -7,6 +7,7 @@ MongoInserter::MongoInserter(){
   fActive = true;
   fBulkInsertSize=100;
   fLog = NULL;
+  fErrorBit = false;
 }
 
 MongoInserter::~MongoInserter(){
@@ -17,6 +18,7 @@ int MongoInserter::Initialize(Options *options, MongoLog *log,  DAQController *d
   fBulkInsertSize = fOptions->GetInt("bulk_insert_size", 100);
   fDataSource = dataSource;
   fLog = log;
+  fErrorBit = false;
   return 0;
 }
 
@@ -33,10 +35,21 @@ std::string MongoInserter::FormatString(const std::string format,
 
 void MongoInserter::ParseDocuments(
 		    std::vector<bsoncxx::document::value> &doc_array,
-		    u_int32_t *buff, u_int32_t size, u_int32_t bid){
+		    data_packet dp){
   // Take a buffer and break it up into one document per channel
   // Put these documents into doc array
 
+  // Unpack the things from the data packet
+  u_int32_t bid = dp.bid;
+  vector<u_int32_t> clock_counters;
+  for(int i=0; i<8; i++)
+    clock_counters.push_back(dp.clock_counter);
+  vector<u_int32_t> last_times_seen = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
+				       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
+  u_int32_t size = dp.size;
+  u_int32_t *buff = dp.buff;
+  
+  
   u_int32_t idx = 0;
   while(idx < size/sizeof(u_int32_t) &&
 	buff[idx] != 0xFFFFFFFF){
@@ -62,6 +75,31 @@ void MongoInserter::ParseDocuments(
 	idx++;
 	u_int32_t channel_time = buff[idx]&0x7FFFFFFF;
 	idx++;
+
+	// OK. Here's the logic for the clock reset, and I realize this is the
+	// second place in the code where such weird logic is needed but that's it
+	// First, on the first instance of a channel we gotta check if
+	// the channel clock rolled over BEFORE this clock and adjust the counter
+	if(channel_time > 15e8 && dp.header_time<5e8 &&
+	   last_times_seen[channel] == 0xFFFFFFFF){
+	  clock_counters[channel]--;
+	}
+	// Now check the opposite
+	else if(channel_time <5e8 && dp.header_time > 15e8 &&
+		last_times_seen[channel] == 0xFFFFFFFF){
+	  clock_counters[channel]++;
+	}
+
+	// Now check if this time < last time (indicates rollover)
+	if(channel_time < last_times_seen[channel] &&
+	   last_times_seen[channel]!=0xFFFFFFFF)
+	  clock_counters[channel]++;
+
+	last_times_seen[channel] = channel_time;
+	
+	int iBitShift = 31;
+	int64_t Time64 = ((unsigned long)clock_counters[channel] <<
+			    iBitShift) + channel_time;
 	
 	u_int32_t *channel_payload = new u_int32_t[channel_size-2];
 
@@ -75,6 +113,7 @@ void MongoInserter::ParseDocuments(
 			      "channel_time" << static_cast<int32_t>(channel_time) <<
 			      "size" << static_cast<int32_t>((channel_size-2)*
 							     sizeof(u_int32_t)) <<
+			      "time" << Time64 <<
 			      "data" << bsoncxx::types::b_binary {
 				bsoncxx::binary_sub_type::k_binary,
 				  static_cast<u_int32_t>((channel_size-2)*
@@ -149,12 +188,20 @@ int MongoInserter::ReadAndInsertData(){
 			<< bsoncxx::builder::stream::finalize);
 	*/
 	// Bulk Inserts
-	ParseDocuments(documents, (*readVector)[i].buff, (*readVector)[i].size,
-		       (*readVector)[i].bid);
+	ParseDocuments(documents, (*readVector)[i]);
 
 	if(documents.size()>fBulkInsertSize){
-	  coll.insert_many(documents);
-	  documents.clear();
+	  try{
+	    coll.insert_many(documents);
+	    documents.clear();
+	  }
+	  catch(const std::exception &e){
+	    fLog->Entry("Failure to insert raw data into database. Quitting. Error follows.",
+			MongoLog::Error);
+	    fLog->Entry(e.what(), MongoLog::Error);
+	    fErrorBit = true;
+	    documents.clear();
+	  }
 	}
 	
 	//coll.insert_one(bsoncxx::builder::stream::document{} <<

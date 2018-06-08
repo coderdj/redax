@@ -19,6 +19,8 @@ class DAQController;
 struct data_packet{
   u_int32_t *buff;
   u_int32_t size;
+  u_int32_t clock_counter;
+  u_int32_t header_time;
   int bid;
 };
 
@@ -36,10 +38,10 @@ public:
   void Close();
   
   int ReadAndInsertData();
-  
+  bool CheckError(){ return fErrorBit; };
 private:  
   static void ParseDocuments(std::vector<bsoncxx::document::value> &doc_array,
-		      u_int32_t *buff, u_int32_t size, u_int32_t bid);
+			     data_packet dp);
   
   //std::string FormatString(const std::string& format, ...);
   std::string FormatString(const std::string format,
@@ -49,6 +51,7 @@ private:
   MongoLog *fLog;
   DAQController *fDataSource;
   bool fActive;
+  bool fErrorBit;
 };
 
 #endif

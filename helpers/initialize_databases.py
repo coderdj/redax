@@ -1,7 +1,7 @@
 import pymongo
 import os
 
-client = pymongo.MongoClient("mongodb://daq:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"])
+client = pymongo.MongoClient("mongodb://admin:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"])
 db = client['dax']
 
 # Create capped collection 'status' of about 50MB

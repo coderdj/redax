@@ -13,6 +13,7 @@ int main(int argc, char** argv){
   char hostname[HOST_NAME_MAX];
   gethostname(hostname, HOST_NAME_MAX);
   std::cout<<"Found hostname: "<<hostname<<std::endl;
+  std::string current_run_id="none";
   
   // Accept just one command line argument, which is a URI
   if(argc==1){
@@ -59,7 +60,7 @@ int main(int argc, char** argv){
       // Get the command out of the doc
       string command = "";
       try{
-	command = doc["command"].get_utf8().value.to_string();
+	command = doc["command"].get_utf8().value.to_string();	
       }
       catch (const std::exception &e){
 	//LOG
@@ -74,6 +75,20 @@ int main(int argc, char** argv){
 
 	if(controller->status() == 2) {
 	  controller->Start();
+
+	  // Nested tried cause of nice C++ typing
+	  try{
+	    current_run_id = doc["run_identifier"].get_utf8().value.to_string();	    
+	  }
+	  catch(const std::exception &e){
+	    try{
+	      current_run_id = std::to_string(doc["run_identifier"].get_int32());
+	    }
+	    catch(const std::exception &e){
+	      current_run_id = "na";
+	    }
+	  }
+	  
 	  logger->Entry("Received start command from user "+
 			doc["user"].get_utf8().value.to_string(), MongoLog::Message);
 	}
@@ -85,6 +100,7 @@ int main(int argc, char** argv){
 	logger->Entry("Received stop command from user "+
 		      doc["user"].get_utf8().value.to_string(), MongoLog::Message);
 	controller->Stop();
+	current_run_id = "none";
 	if(readoutThread!=NULL){
 	  readoutThread->join();
 	  delete readoutThread;
@@ -141,13 +157,16 @@ int main(int argc, char** argv){
     }
 
     // Insert some information on this readout node back to the monitor DB
+    controller->CheckErrors();
     status.insert_one(bsoncxx::builder::stream::document{} <<
 		      "host" << hostname <<
 		      "rate" << controller->GetDataSize()/1e6 <<
 		      "status" << controller->status() <<
 		      "buffer_length" << controller->buffer_length()/1e6 <<
 		      "run_mode" << controller->run_mode() <<
+		      "current_run_id" << current_run_id <<
 		      bsoncxx::builder::stream::finalize);
+    
     usleep(1000000);
   }
   delete logger;
