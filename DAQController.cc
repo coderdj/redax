@@ -39,11 +39,17 @@ std::string DAQController::run_mode(){
   }
 }
 
-int DAQController::InitializeElectronics(std::string opts){
+int DAQController::InitializeElectronics(std::string opts, std::string override){
 
+  // Load options including override if any
   if(fOptions != NULL)
     delete fOptions;
   fOptions = new Options(opts);
+  if(override!=""){
+    fOptions->Override(bsoncxx::from_json(override).view());
+  }
+
+  // Initialize digitizers
   fStatus = 1;
   for(auto d : fOptions->GetBoards("V1724")){
     
@@ -63,6 +69,7 @@ int DAQController::InitializeElectronics(std::string opts){
     }
   }
   
+  // Load registers into digitizers
   for(auto digi : fDigitizers){
     int success=0;
     for(auto regi : fOptions->GetRegisters(digi->bid())){
@@ -77,9 +84,14 @@ int DAQController::InitializeElectronics(std::string opts){
       return -1;
     }
   }
+
+  // Look at this later! This initializes all boards to SW controlled
+  // and inactive. Will need option for HW control.
   for(unsigned int x=0;x<fDigitizers.size();x++)
     fDigitizers[x]->WriteRegister(0x8100, 0x0);
   fStatus = 2;
+
+  std::cout<<fOptions->ExportToString()<<std::endl;
   return 0;
 }
 

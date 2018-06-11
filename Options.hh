@@ -12,6 +12,7 @@
 #include <bsoncxx/json.hpp>
 #include <bsoncxx/document/view.hpp>
 #include <bsoncxx/document/value.hpp>
+#include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
 #include "DAXHelpers.hh"
 
@@ -46,6 +47,8 @@ public:
   std::vector<RegisterType> GetRegisters(int board=-1);
 
   std::string ExportToString();
+  int Override(bsoncxx::document::view override_opts);
+  
 private:
   std::string defaultPath = "defaults/daxOptions.json";
   DAXHelpers *fHelper;

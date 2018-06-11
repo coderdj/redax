@@ -46,10 +46,7 @@ std::string Options::ExportToString(){
 
 int Options::Load(std::string opts){
   try{
-    // Holy cow. So the whole pointer thing is some lengths I went to to
-    // keep the stupid value in scope. You can't have a member variable with
-    // a non-pointer value since there is no way to initialize a default 'value'.
-    // So needs to be a pointer. Needs to stay in scope for as long as you might
+    // This needs to be a pointer. Needs to stay in scope for as long as you might
     // want to see the view.
     bson_value = new bsoncxx::document::value(bsoncxx::from_json(opts).view());
     bson_options = bson_value->view();
@@ -65,27 +62,73 @@ int Options::Load(std::string opts){
   return 0;
 }
 
+int Options::Override(bsoncxx::document::view override_opts){
+
+  // Here's the best way I can find to do this. We create a new doc, which
+  // is a concatenation of the two old docs (original first). Then we
+  // use the concatenation object to initialize a 'new' value for the
+  // combined doc and delete the orginal. A new view will point to the new value.
+
+  using bsoncxx::builder::stream::document;
+  using bsoncxx::builder::stream::finalize;
+  
+  //using bsoncxx::builder::concatenate;
+
+  auto doc = document{};
+  bsoncxx::document::value *new_value = new bsoncxx::document::value
+    ( document{}<<bsoncxx::builder::concatenate_doc{bson_options}<<
+      "override_doc" << bsoncxx::builder::stream::open_document<<
+      bsoncxx::builder::concatenate_doc{override_opts}<<
+      bsoncxx::builder::stream::close_document<<
+      finalize);
+  //builder<<concatenate(bson_options);
+  //builder<<concatenate(override_opts);
+  //doc<<finalize;
+  
+  // Create a new doc
+  //bsoncxx::document::value *new_value = new bsoncxx::document::value(doc.extract());
+
+  // Delete the original
+  delete bson_value;
+
+  // Set to new
+  bson_value = new_value;
+  bson_options = bson_value->view();
+
+  return 0;  
+}
+
 int Options::GetInt(std::string path, int default_value){
 
   try{
-    return bson_options[path.c_str()].get_int32();
+    return bson_options["override_doc"][path.c_str()].get_int32();
   }
   catch (const std::exception &e){
-    //LOG
-    std::cout<<e.what()<<std::endl;
-    return default_value;
+    try{
+      return bson_options[path.c_str()].get_int32();
+    }
+    catch (const std::exception &e){
+      //LOG
+      std::cout<<e.what()<<std::endl;
+      return default_value;
+    }
   }
   return -1;  
 }
 
 std::string Options::GetString(std::string path, std::string default_value){
   try{
-    return bson_options[path.c_str()].get_utf8().value.to_string();
+    return bson_options["override_doc"][path.c_str()].get_utf8().value.to_string();
   }
-  catch (const std::exception &e){
-    //LOG
-    std::cout<<e.what()<<std::endl;
-    return default_value;
+  catch(const std::exception &e){
+    try{
+      return bson_options[path.c_str()].get_utf8().value.to_string();
+    }
+    catch (const std::exception &e){
+      //LOG
+      std::cout<<e.what()<<std::endl;
+      return default_value;
+    }
   }
   return "";
 }

@@ -112,39 +112,52 @@ int main(int argc, char** argv){
 	// Can only arm if we're in the idle, arming, or armed state
 	if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
 	  controller->End();
+
+	  // Try to pull options from database and store in an 'optional' object
 	  string options = "";
+	  bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
 	  try{
 	    string option_name = doc["mode"].get_utf8().value.to_string();
 	    logger->Entry("Loading options " + option_name, MongoLog::Debug);
 	    
-	    bsoncxx::stdx::optional<bsoncxx::document::value> trydoc =
-	      options_collection.find_one(bsoncxx::builder::stream::document{}<<
-					  "name" << option_name.c_str() <<
-					  bsoncxx::builder::stream::finalize);
+	    trydoc = options_collection.find_one(bsoncxx::builder::stream::document{}<<
+						 "name" << option_name.c_str() <<
+						 bsoncxx::builder::stream::finalize);
 	    logger->Entry("Received arm command from user "+
 			  doc["user"].get_utf8().value.to_string() +
 			  " for mode " + option_name, MongoLog::Message);
-	    if(trydoc){
-	      options = bsoncxx::to_json(*trydoc);
-	      if(controller->InitializeElectronics(options)!=0){
-		logger->Entry("Failed to initialized electronics", MongoLog::Error);
-	      }
-	      else{
-		logger->Entry("Initialized electronics", MongoLog::Debug);
-	      }
-	      
-	      if(readoutThread!=NULL){
-		logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
-	      }
-	      else
-		readoutThread = new std::thread(DAQController::ReadThreadWrapper,
-						(static_cast<void*>(controller))); 
-	    }	  
 	  }
-	  catch( const std::exception &e){
+	  catch(const std::exception &e){
 	    logger->Entry("Want to arm boards but no valid mode provided", MongoLog::Warning);
-	    options = "";	  
+	    options = "";
 	  }
+
+	  // Get an override doc from the 'options_override' field if it exists
+	  std::string override_json = "";
+	  try{
+	    bsoncxx::document::view oopts = doc["options_override"].get_document().view();
+	    override_json = bsoncxx::to_json(oopts);
+	  }
+	  catch(const std::exception &e){
+	    logger->Entry("No override options provided, continue without.", MongoLog::Debug);
+	  }
+
+	  if(trydoc){
+	    options = bsoncxx::to_json(*trydoc);
+	    if(controller->InitializeElectronics(options, override_json)!=0){
+	      logger->Entry("Failed to initialized electronics", MongoLog::Error);
+	    }
+	    else{
+	      logger->Entry("Initialized electronics", MongoLog::Debug);
+	    }
+	    
+	    if(readoutThread!=NULL){
+	      logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
+	    }
+	    else
+	      readoutThread = new std::thread(DAQController::ReadThreadWrapper,
+					      (static_cast<void*>(controller))); 
+	  }	  
 	}
 	else
 	  logger->Entry("Cannot arm DAQ while not 'Idle'", MongoLog::Warning);

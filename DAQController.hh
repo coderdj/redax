@@ -25,7 +25,7 @@ public:
   DAQController(MongoLog *log=NULL);
   ~DAQController();
 
-  int InitializeElectronics(string opts);
+  int InitializeElectronics(std::string opts, std::string override = "");
 
   // Get data (return new buffer and size)
   double data_rate(){
