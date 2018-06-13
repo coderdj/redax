@@ -41,7 +41,7 @@ public:
   bool CheckError(){ return fErrorBit; };
 private:  
   static void ParseDocuments(std::vector<bsoncxx::document::value> &doc_array,
-			     data_packet dp);
+			     data_packet dp, std::vector<u_int32_t*> &pointer_arr);
   
   //std::string FormatString(const std::string& format, ...);
   std::string FormatString(const std::string format,

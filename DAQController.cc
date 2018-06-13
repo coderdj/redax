@@ -127,8 +127,11 @@ void DAQController::End(){
   fStatus = 0;
 
   if(fRawDataBuffer != NULL){
-    fLog->Entry("Deleting uncleared data buffer",
-		MongoLog::Debug);
+    std::stringstream warn_entry;
+    warn_entry<<"Deleting uncleared data buffer of size "<<
+      fRawDataBuffer->size();
+    fLog->Entry(warn_entry.str(),
+		MongoLog::Warning);
     for(unsigned int i=0; i<fRawDataBuffer->size(); i++){
       delete[] (*fRawDataBuffer)[i].buff;
     }

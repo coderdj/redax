@@ -35,7 +35,7 @@ std::string MongoInserter::FormatString(const std::string format,
 
 void MongoInserter::ParseDocuments(
 		    std::vector<bsoncxx::document::value> &doc_array,
-		    data_packet dp){
+		    data_packet dp, std::vector<u_int32_t*>&pointer_arr){
   // Take a buffer and break it up into one document per channel
   // Put these documents into doc array
 
@@ -121,10 +121,11 @@ void MongoInserter::ParseDocuments(
 				  reinterpret_cast<unsigned char*>(channel_payload)}
 			      << bsoncxx::builder::stream::finalize);
 	  
-	  
+	  pointer_arr.push_back(channel_payload);
 	}
 	else{
 	  std::cout<<"FAIL HARD"<<std::endl;
+	  delete[] channel_payload;
 	}
 	idx+=channel_size-2;
       }
@@ -164,6 +165,7 @@ int MongoInserter::ReadAndInsertData(){
   std::vector <data_packet> *readVector=NULL;
   int read_length = fDataSource->GetData(readVector);
   std::vector<bsoncxx::document::value> documents;
+  std::vector<u_int32_t*> pointer_arr;
   
   while(fActive || read_length>0){
     if(readVector != NULL){
@@ -188,7 +190,7 @@ int MongoInserter::ReadAndInsertData(){
 			<< bsoncxx::builder::stream::finalize);
 	*/
 	// Bulk Inserts
-	ParseDocuments(documents, (*readVector)[i]);
+	ParseDocuments(documents, (*readVector)[i], pointer_arr);
 
 	if(documents.size()>fBulkInsertSize){
 	  try{
@@ -202,6 +204,9 @@ int MongoInserter::ReadAndInsertData(){
 	    fErrorBit = true;
 	    documents.clear();
 	  }
+	  for(unsigned int i=0; i<pointer_arr.size(); i++)
+	    delete[] pointer_arr[i];
+	  pointer_arr.clear();
 	}
 	
 	//coll.insert_one(bsoncxx::builder::stream::document{} <<
@@ -214,6 +219,9 @@ int MongoInserter::ReadAndInsertData(){
     if(documents.size()>0){
       coll.insert_many(documents);
       documents.clear();
+      for(unsigned int i=0; i<pointer_arr.size(); i++)
+	delete[] pointer_arr[i];
+      pointer_arr.clear();
     }
     usleep(10000); // 10ms sleep
     read_length = fDataSource->GetData(readVector);
