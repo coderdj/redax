@@ -43,7 +43,7 @@ public:
   int GetInt(std::string key, int default_value=-1);
   std::string GetString(std::string key, std::string default_value="");
 
-  std::vector<BoardType> GetBoards(std::string type="");
+  std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
   std::vector<RegisterType> GetRegisters(int board=-1);
 
   std::string ExportToString();

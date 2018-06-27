@@ -1,5 +1,6 @@
 #include <iostream>
 #include <string>
+#include <iomanip>
 #include "V1724.hh"
 #include "DAQController.hh"
 
@@ -10,8 +11,9 @@ int main(int argc, char** argv){
   mongocxx::instance instance{};
   
   // We will consider commands addressed to this PC's hostname
-  char hostname[HOST_NAME_MAX];
-  gethostname(hostname, HOST_NAME_MAX);
+  char chostname[HOST_NAME_MAX];
+  gethostname(chostname, HOST_NAME_MAX);
+  std::string hostname=chostname;
   std::cout<<"Found hostname: "<<hostname<<std::endl;
   std::string current_run_id="none";
   
@@ -33,6 +35,15 @@ int main(int argc, char** argv){
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
 
+  // We want multiple readout node per host support
+  // So do it this way. User supplied index as the second command line
+  // argument. If it's present we read here and modify 'hostname'
+  if(argc>2){    
+    string node_index = argv[2];
+    hostname += "_";
+    hostname += node_index;
+  }
+  
   // Logging
   MongoLog *logger = new MongoLog();
   int ret = logger->Initialize(suri, "dax", "log", true);
@@ -43,20 +54,38 @@ int main(int argc, char** argv){
   
   // The DAQController object is responsible for passing commands to the
   // boards and tracking the status
-  DAQController *controller = new DAQController(logger);  
-  thread *readoutThread = NULL;
+  DAQController *controller = new DAQController(logger, hostname);  
+  std::vector<std::thread*> readoutThreads;
   
   // Main program loop. Scan the database and look for commands addressed
-  // either to this hostname or with no hostname specified. Note: if you
-  // send commands with no hostname specified the FIRST client to find the
-  // command will run and delete it. So only do this if you have 1 client.
+  // to this hostname. 
   while(1){
 
-    mongocxx::cursor cursor = control.find(
-        bsoncxx::builder::stream::document{} << "host" << hostname
-	<< bsoncxx::builder::stream::finalize);
+    mongocxx::cursor cursor = control.find
+      (
+       bsoncxx::builder::stream::document{} << "host" <<
+       bsoncxx::builder::stream::open_document << "$in" <<
+       bsoncxx::builder::stream::open_array<< hostname << bsoncxx::builder::stream::close_array <<
+       bsoncxx::builder::stream::close_document << "acknowledged" <<
+       bsoncxx::builder::stream::open_document << "$nin" <<
+       bsoncxx::builder::stream::open_array<< hostname << bsoncxx::builder::stream::close_array <<
+       bsoncxx::builder::stream::close_document <<
+       bsoncxx::builder::stream::finalize
+       );
     for(auto doc : cursor) {
 
+      // Very first thing: acknowledge we've seen the command. If the command
+      // fails then we still acknowledge it because we tried
+      control.update_one
+	(
+	 bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
+	 bsoncxx::builder::stream::finalize,
+	 bsoncxx::builder::stream::document{} << "$push" <<
+	 bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
+	 bsoncxx::builder::stream::close_document <<
+	 bsoncxx::builder::stream::finalize
+	 );
+      
       // Get the command out of the doc
       string command = "";
       try{
@@ -101,10 +130,12 @@ int main(int argc, char** argv){
 		      doc["user"].get_utf8().value.to_string(), MongoLog::Message);
 	controller->Stop();
 	current_run_id = "none";
-	if(readoutThread!=NULL){
-	  readoutThread->join();
-	  delete readoutThread;
-	  readoutThread=NULL;
+	if(readoutThreads.size()!=0){
+	  for(auto t : readoutThreads){
+	    t->join();
+	    delete t;
+	  }
+	  readoutThreads.clear();	
 	}
 	controller->End();
       }
@@ -144,19 +175,28 @@ int main(int argc, char** argv){
 
 	  if(trydoc){
 	    options = bsoncxx::to_json(*trydoc);
-	    if(controller->InitializeElectronics(options, override_json)!=0){
+	    std::vector<int> links;
+	    if(controller->InitializeElectronics(options, links, override_json) != 0){
 	      logger->Entry("Failed to initialized electronics", MongoLog::Error);
 	    }
 	    else{
 	      logger->Entry("Initialized electronics", MongoLog::Debug);
 	    }
-	    
-	    if(readoutThread!=NULL){
+
+	    if(readoutThreads.size()!=0){
 	      logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
 	    }
-	    else
-	      readoutThread = new std::thread(DAQController::ReadThreadWrapper,
-					      (static_cast<void*>(controller))); 
+	    else{
+	      for(unsigned int i=0; i<links.size(); i++){
+		std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
+		std:: thread *readoutThread = new std::thread
+		  (
+		   DAQController::ReadThreadWrapper,
+		   (static_cast<void*>(controller)), links[i]
+		   );
+		readoutThreads.push_back(readoutThread);
+	      }
+	    }
 	  }	  
 	}
 	else
@@ -164,9 +204,19 @@ int main(int argc, char** argv){
       }
 
 
-      // This command was processed (or failed) so remove it
-      control.delete_one(bsoncxx::builder::stream::document{} << "_id" <<
-			 doc["_id"].get_oid() << bsoncxx::builder::stream::finalize);
+      // This is in order to ensure concurrency. ALL documents will be purged if len(hosts)
+      // is equal to len(acknowledged), i.e. every node acknowledged the command.
+      // Note: usually '$where' is frowned upon due to it performing a collection scan each
+      // time, but in this case it's totally fine since this collection will contain at most
+      // like a few docs.
+      try{
+	control.delete_many(bsoncxx::builder::stream::document{} << "$where" <<
+			    "this.host.length == this.acknowledged.length" <<
+			    bsoncxx::builder::stream::finalize);
+      }
+      catch(const std::exception &e){
+	std::cout<<"Error in delete_many "<<e.what()<<std::endl;
+      }
     }
 
     // Insert some information on this readout node back to the monitor DB
@@ -179,7 +229,6 @@ int main(int argc, char** argv){
 		      "run_mode" << controller->run_mode() <<
 		      "current_run_id" << current_run_id <<
 		      bsoncxx::builder::stream::finalize);
-    
     usleep(1000000);
   }
   delete logger;
@@ -187,6 +236,8 @@ int main(int argc, char** argv){
   
 
 }
+
+
 
 
 

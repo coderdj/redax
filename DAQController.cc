@@ -7,7 +7,7 @@
 // 3-running
 // 4-error
 
-DAQController::DAQController(MongoLog *log){
+DAQController::DAQController(MongoLog *log, std::string hostname){
   fLog=log;
   fHelper = new DAXHelpers();
   fOptions = NULL;
@@ -18,6 +18,7 @@ DAQController::DAQController(MongoLog *log){
   fRunStartController = NULL;
   fRawDataBuffer = NULL;
   fDatasize=0.;
+  fHostname = hostname;
 }
 
 DAQController::~DAQController(){
@@ -39,7 +40,7 @@ std::string DAQController::run_mode(){
   }
 }
 
-int DAQController::InitializeElectronics(std::string opts, std::string override){
+int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys, std::string override){
 
   // Load options including override if any
   if(fOptions != NULL)
@@ -51,14 +52,18 @@ int DAQController::InitializeElectronics(std::string opts, std::string override)
 
   // Initialize digitizers
   fStatus = 1;
-  for(auto d : fOptions->GetBoards("V1724")){
+  for(auto d : fOptions->GetBoards("V1724", fHostname)){
     
     V1724 *digi = new V1724(fLog);
-    if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
-      fDigitizers.push_back(digi);
-      std::stringstream mess;
-      mess<<"Initialized digitizer "<<d.board;
-      fLog->Entry(mess.str(), MongoLog::Debug);
+    if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){      
+	fDigitizers[d.link].push_back(digi);
+	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){
+	  std::cout<<"Defining new optical link "<<d.link<<std::endl;
+	  keys.push_back(d.link);
+	}    
+	std::stringstream mess;
+	mess<<"Initialized digitizer "<<d.board;
+	fLog->Entry(mess.str(), MongoLog::Debug);
     }
     else{
       std::stringstream err;
@@ -70,25 +75,30 @@ int DAQController::InitializeElectronics(std::string opts, std::string override)
   }
   
   // Load registers into digitizers
-  for(auto digi : fDigitizers){
-    int success=0;
-    for(auto regi : fOptions->GetRegisters(digi->bid())){
-      unsigned int reg = fHelper->StringToHex(regi.reg);
-      unsigned int val = fHelper->StringToHex(regi.val);
-      success+=digi->WriteRegister(reg, val);
-    }
-    if(success!=0){
-      //LOG
-      fStatus = 0;
+  for( auto const& link : fDigitizers )    {
+    for(auto digi : link.second){
+      int success=0;
+      for(auto regi : fOptions->GetRegisters(digi->bid())){
+	unsigned int reg = fHelper->StringToHex(regi.reg);
+	unsigned int val = fHelper->StringToHex(regi.val);
+	success+=digi->WriteRegister(reg, val);
+      }
+      if(success!=0){
+	//LOG
+	fStatus = 0;
       fLog->Entry("Failed to write registers.", MongoLog::Warning);
       return -1;
+      }
     }
   }
 
   // Look at this later! This initializes all boards to SW controlled
   // and inactive. Will need option for HW control.
-  for(unsigned int x=0;x<fDigitizers.size();x++)
-    fDigitizers[x]->WriteRegister(0x8100, 0x0);
+  for( auto const& link : fDigitizers ) {
+    for(auto digi : link.second){
+      digi->WriteRegister(0x8100, 0x0);
+    }
+  }
   fStatus = 2;
 
   std::cout<<fOptions->ExportToString()<<std::endl;
@@ -97,8 +107,10 @@ int DAQController::InitializeElectronics(std::string opts, std::string override)
 
 void DAQController::Start(){
   if(fRunStartController==NULL){
-    for(unsigned int x=0;x<fDigitizers.size(); x++){            
-      fDigitizers[x]->WriteRegister(0x8100, 0x4);
+    for( auto const& link : fDigitizers ){      
+      for(auto digi : link.second){
+	digi->WriteRegister(0x8100, 0x4);
+      }
     }
   }
   fStatus = 3;
@@ -108,8 +120,11 @@ void DAQController::Start(){
 void DAQController::Stop(){
 
   if(fRunStartController==NULL){
-    for(unsigned int x=0;x<fDigitizers.size();x++)
-      fDigitizers[x]->WriteRegister(0x8100, 0x0);
+    for( auto const& link : fDigitizers ){      
+      for(auto digi : link.second){
+	digi->WriteRegister(0x8100, 0x0);
+      }
+    }    
   }
   fLog->Entry("Stopped digitizers", MongoLog::Debug);
 
@@ -119,10 +134,12 @@ void DAQController::Stop(){
 }
 void DAQController::End(){
   CloseProcessingThreads();
-  for(unsigned int x=0; x<fDigitizers.size(); x++){
-    fDigitizers[x]->End();
-    delete fDigitizers[x];
-  }
+  for( auto const& link : fDigitizers ){
+    for(auto digi : link.second){
+      digi->End();
+      delete digi;
+    }
+  } 
   fDigitizers.clear();
   fStatus = 0;
 
@@ -140,13 +157,13 @@ void DAQController::End(){
   }
 }
 
-void* DAQController::ReadThreadWrapper(void* data){
+void* DAQController::ReadThreadWrapper(void* data, int link){
   DAQController *dc = static_cast<DAQController*>(data);
-  dc->ReadData();
+  dc->ReadData(link);
   return dc;
 }  
 
-void DAQController::ReadData(){
+void DAQController::ReadData(int link){
   fReadLoop = true;
   CloseProcessingThreads();
   OpenProcessingThreads();
@@ -170,12 +187,12 @@ void DAQController::ReadData(){
     //lastRead = 0;
     
     vector<data_packet> local_buffer;
-    for(unsigned int x=0; x<fDigitizers.size(); x++){
+    for(unsigned int x=0; x<fDigitizers[link].size(); x++){
       data_packet d;
       d.buff=NULL;
       d.size=0;
-      d.bid = fDigitizers[x]->bid();
-      d.size = fDigitizers[x]->ReadMBLT(d.buff);
+      d.bid = fDigitizers[link][x]->bid();
+      d.size = fDigitizers[link][x]->ReadMBLT(d.buff);
 
       // Here's the fancy part. We gotta grab the header of the first
       // event in the buffer and get the clock reset counter from the
@@ -184,7 +201,7 @@ void DAQController::ReadData(){
       while(idx < d.size/sizeof(u_int32_t)){
 	if(d.buff[idx]>>20==0xA00){
 	  d.header_time = d.buff[idx+3]&0x7FFFFFFF;
-	  d.clock_counter = fDigitizers[x]->GetClockCounter(d.header_time);
+	  d.clock_counter = fDigitizers[link][x]->GetClockCounter(d.header_time);
 	  break;
 	}
 	idx++;

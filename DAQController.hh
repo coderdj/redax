@@ -22,10 +22,11 @@ class DAQController{
   */
   
 public:
-  DAQController(MongoLog *log=NULL);
+  DAQController(MongoLog *log=NULL, std::string hostname="DEFAULT");
   ~DAQController();
 
-  int InitializeElectronics(std::string opts, std::string override = "");
+  int InitializeElectronics(std::string opts, std::vector<int> &keys,
+			    std::string override = "");
 
   // Get data (return new buffer and size)
   double data_rate(){
@@ -41,13 +42,13 @@ public:
   
   void Start();
   void Stop();
-  void ReadData();
+  void ReadData(int link);
   void End();
 
   int GetData(std::vector <data_packet> *&retVec);
     
   // Statis wrapper so we can call ReadData in a std::thread
-  static void* ReadThreadWrapper(void* data);
+  static void* ReadThreadWrapper(void* data, int link);
   static void* ProcessingThreadWrapper(void* data);
 
   u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;};
@@ -61,7 +62,7 @@ private:
   void OpenProcessingThreads();
   void CloseProcessingThreads();
   
-  std::vector <V1724*> fDigitizers;
+  std::map<int, std::vector <V1724*>> fDigitizers;
   std::mutex fBufferMutex;
   MongoLog *fLog;
   
@@ -73,6 +74,7 @@ private:
   int fNProcessingThreads;
   u_int64_t fBufferLength;
   u_int64_t fDatasize;
+  string fHostname;
   
   V2718 *fRunStartController;
   

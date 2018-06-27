@@ -10,9 +10,10 @@ V1724::~V1724(){
 }
 
 int V1724::Init(int link, int crate, int bid, unsigned int address=0){  
-  if(CAENVME_Init(cvV2718, link, crate, &fBoardHandle)
-     != cvSuccess){
-    cout<<"Failed to init board"<<endl;
+  int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
+  if(a != cvSuccess){
+    cout<<"Failed to init board, error code: "<<a<<", handle: "<<fBoardHandle<<
+      " at link "<<link<<" and bdnum "<<crate<<endl;
     fBoardHandle = -1;
     return -1;
   }
@@ -97,7 +98,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
 }
 
 int V1724::WriteRegister(unsigned int reg, unsigned int value){
-  std::cout<<"Writing reg:val: "<<hex<<reg<<":"<<value<<dec<<std::endl;
+  //std::cout<<"Writing reg:val: "<<hex<<reg<<":"<<value<<dec<<std::endl;
   if(CAENVME_WriteCycle(fBoardHandle,fBaseAddress+reg,
 			&value,cvA32_U_DATA,cvD32) != cvSuccess){
     std::stringstream err;
@@ -178,6 +179,106 @@ int V1724::ConfigureBaselines(int nominal_value,
 			      int ntries,
 			      vector <unsigned int> start_values,
 			      vector <unsigned int> &end_values){
+
+  // Baseline configuration routine. The V1724 has a DAC offset setting that
+  // biases the ADC, allowing you to effectively move the 'zero level' of the
+  // acquisition up or down. But keep in mind this is a bit limited. It's not
+  // designed to correct large offsets O(~volts) (i.e. your detector ground very far
+  // from ADC ground) but rather to move the baseline to the location best
+  // suited to your acquisition (positive, negative, bipolar logic)
+
+  // n.b. hard-coding guess to 16000 for testing
+  u_int32_t target_value = 16000;
+  int max_deviation = 5;
+
+  // We can adjust a DAC offset register, which is 0xffff in range, is inversely
+  // proportional to the baseline position, and has ~5% overshoot on either end.
+  // So we use this information to get starting values:
+  u_int32_t starting_value = u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
+  int nChannels = 8;
+  vector<u_int32_t> dac_values(nChannels, starting_value);
+  vector<bool> channel_finished(nChannels, false);
+  
+  // Now we need to load a simple configuration to the board in order to read
+  // some data. try/catch cause CAENVMElib fails poorly (segfault) sometimes
+  // in case the hardware has an issue.
+  write_success = 0;
+  try{    
+    write_success += WriteRegister(0x8000, 0x10);      // Channel configuration
+    write_success += WriteRegister(0x8080, 0x800000);  // DPP
+    write_success += WriteRegister(0x8100, 0x0);       // Acq. control
+    write_success += WriteRegister(0x810C, 0x80000000);// Trigger source
+    write_success += WriteRegister(0xEF24, 0x1);       // Global reset
+    write_success += WriteRegister(0xEF1C, 0x1);       // BERR
+    write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
+    write_success += WriteRegister(0x8120, 0xFF);      // Channel mask
+  }
+  catch(const std::exception &e){
+    std::stringstream error;
+    error<<"Digitizer "<<fBID<<" CAEN fault during initial register adjustment in baseline routine";
+    fLog->Entry(error.str(), MongoLog::Error);
+    return -1;
+  }
+
+  // Slightly more palatable error, at least CAENVMElib is recognizing a failure
+  // and not just seg faulting
+  if(write_success!=0){
+    std::stringstream error;
+    error<<"Digitizer "<<fBID<<" unable to load registers for baselines.";
+    fLog->Entry(error.str(), MongoLog::Error);
+    return -1;
+  }
+
+  // Now we'll iterate for a while. It should be pretty quick since starting values
+  // should be quite close to true.
+  int currentIteration = 0;
+  int maxIterations = 100;
+  while(currentIteration < maxIterations){
+    currentIteration++;
+    bool breakout = true;
+    
+    for(unsigned int channel=0; channel<nChannels; channel++){
+      if(channel_finished[channel])
+	continue;
+      breakout = false;
+
+      // Load DAC for this channel
+      if(LoadDAC(channel, dac_values[channel])!=0){
+	std::stringstream error;
+	error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to load DAC in baseline routine.";
+	fLog->Entry(error.str(), MongoLog::Error);
+	return -1;
+      }
+
+      // Tell board to read out this channel only
+      unsigned short channel_mask = 1 << channel;
+      if(WriteRegister(0x8120, channel_mask)!=0){
+	stringstream error;
+	error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to set channel mask in baseline.";
+	fLog->Entry(error.str(), MongoLog::Error);
+	return -1;
+      }
+
+      // Trigger the board with software trigger
+      WriteRegister(CBV1724_AcquisitionControlReg,0x24);
+      WriteRegister(CBV1724_SoftwareTriggerReg,0x1);
+      usleep(50); // paranoia. Like, you need some time to acquire right?
+      WriteRegister(CBV1724_AcquisitionControlReg,0x0);
+
+      
+      // Sample Samples
+      // Good? then finish
+      // Else twiddle DAC offset
+      // Repeat
+    }
+
+    if(breakout)
+      break;
+  }
+  
+    
+  // 0x1n88 channel n DAC busy 0b001 (1 - yes)
+  // 0x1n98, 0x8098 DAC value 0xffff
   cout<<"Not implemented"<<endl;
   return 0;
 }

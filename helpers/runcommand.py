@@ -4,7 +4,7 @@ from pymongo import MongoClient
 
 command = sys.argv[1]
 
-client = MongoClient("mongodb://daq:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"])
+client = MongoClient("mongodb://reader:%s@127.0.0.1:27017/dax"%os.environ["MONGO_PASSWORD"])
 db = client['dax']
 collection = db['control']
 
@@ -13,7 +13,9 @@ try:
 except:
     hostname = os.uname()[1]
     print("No hostname provided so assuming it's running locally at %s"%hostname)
-                    
+
+hostname = ['fdaq00_0', 'fdaq00_1']
+
 doc = {}
 if command == 'start':
     

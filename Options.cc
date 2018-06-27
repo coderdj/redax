@@ -133,13 +133,20 @@ std::string Options::GetString(std::string path, std::string default_value){
   return "";
 }
 
-std::vector<BoardType> Options::GetBoards(std::string type){
+std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname){
   std::vector<BoardType> ret;
   bsoncxx::array::view subarr = bson_options["boards"].get_array().value;
   
   for(bsoncxx::array::element ele : subarr){
     if(type != "" && type != ele["type"].get_utf8().value.to_string())
       continue;
+    try{
+      if(ele["host"].get_utf8().value.to_string() != hostname)
+	continue;
+    }
+    catch(const std::exception &e){
+      // If there is no host field then no biggie. Assume we have just 1 host.
+    };
     BoardType bt;
     bt.link = ele["link"].get_int32();
     bt.crate = ele["crate"].get_int32();
