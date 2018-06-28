@@ -23,10 +23,9 @@ class V1724{
   int WriteRegister(unsigned int register, unsigned int value);
   unsigned int ReadRegister(unsigned int register);
   u_int32_t ReadMBLT(u_int32_t *&buffer);
-  int ConfigureBaselines(int nominal_value,
-				int ntries,
-				vector <unsigned int> start_values,
-				vector <unsigned int> &end_values);
+  int ConfigureBaselines(vector <unsigned int> &end_values,
+			 int nominal_value=16000,
+			 int ntries=100);
   int GetClockCounter(u_int32_t timestamp);
   int End();
 
@@ -46,6 +45,8 @@ class V1724{
   bool seen_over_15;
 
   MongoLog *fLog;
+
+  int LoadDAC(vector<u_int32_t>dac_values);
 };
 
 

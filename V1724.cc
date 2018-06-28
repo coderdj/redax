@@ -117,7 +117,7 @@ unsigned int V1724::ReadRegister(unsigned int reg){
     std::stringstream err;
     err<<"Failed to read register 0x"<<hex<<reg<<dec<<" on board "<<fBID<<endl;
     fLog->Entry(err.str(), MongoLog::Warning);
-    return -1;
+    return 0xFFFFFFFF;
   }
   return temp;
 }
@@ -175,10 +175,8 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   
 }
 
-int V1724::ConfigureBaselines(int nominal_value,
-			      int ntries,
-			      vector <unsigned int> start_values,
-			      vector <unsigned int> &end_values){
+int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
+			      int nominal_value, int ntries){
 
   // Baseline configuration routine. The V1724 has a DAC offset setting that
   // biases the ADC, allowing you to effectively move the 'zero level' of the
@@ -188,8 +186,8 @@ int V1724::ConfigureBaselines(int nominal_value,
   // suited to your acquisition (positive, negative, bipolar logic)
 
   // n.b. hard-coding guess to 16000 for testing
-  u_int32_t target_value = 16000;
-  int max_deviation = 5;
+  u_int32_t target_value = nominal_value;
+  int adjustment_threshold = 2;
 
   // We can adjust a DAC offset register, which is 0xffff in range, is inversely
   // proportional to the baseline position, and has ~5% overshoot on either end.
@@ -202,7 +200,7 @@ int V1724::ConfigureBaselines(int nominal_value,
   // Now we need to load a simple configuration to the board in order to read
   // some data. try/catch cause CAENVMElib fails poorly (segfault) sometimes
   // in case the hardware has an issue.
-  write_success = 0;
+  int write_success = 0;
   try{    
     write_success += WriteRegister(0x8000, 0x10);      // Channel configuration
     write_success += WriteRegister(0x8080, 0x800000);  // DPP
@@ -211,7 +209,9 @@ int V1724::ConfigureBaselines(int nominal_value,
     write_success += WriteRegister(0xEF24, 0x1);       // Global reset
     write_success += WriteRegister(0xEF1C, 0x1);       // BERR
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
-    write_success += WriteRegister(0x8120, 0xFF);      // Channel mask
+    write_success += WriteRegister(0x8034, 0x0);       // Delay to zero
+    write_success += WriteRegister(0x8038, 0x0);       // Pre trig to zero
+    write_success += WriteRegister(0x8120, 0xFF);      // Channel mask       
   }
   catch(const std::exception &e){
     std::stringstream error;
@@ -232,26 +232,26 @@ int V1724::ConfigureBaselines(int nominal_value,
   // Now we'll iterate for a while. It should be pretty quick since starting values
   // should be quite close to true.
   int currentIteration = 0;
-  int maxIterations = 100;
+  int maxIterations = ntries;
   while(currentIteration < maxIterations){
     currentIteration++;
     bool breakout = true;
+
+    // Load DAC for this channel
+    if(LoadDAC(dac_values)!=0){
+      std::stringstream error;
+      error<<"Digitizer "<<fBID<<" failed to load DAC in baseline routine.";
+      fLog->Entry(error.str(), MongoLog::Error);
+      return -1;
+    }
     
-    for(unsigned int channel=0; channel<nChannels; channel++){
+    for(int channel=0; channel<nChannels; channel++){
       if(channel_finished[channel])
 	continue;
-      breakout = false;
-
-      // Load DAC for this channel
-      if(LoadDAC(channel, dac_values[channel])!=0){
-	std::stringstream error;
-	error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to load DAC in baseline routine.";
-	fLog->Entry(error.str(), MongoLog::Error);
-	return -1;
-      }
+      breakout = false;    
 
       // Tell board to read out this channel only
-      unsigned short channel_mask = 1 << channel;
+      unsigned short channel_mask = 0x80000000+(1 << channel);
       if(WriteRegister(0x8120, channel_mask)!=0){
 	stringstream error;
 	error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to set channel mask in baseline.";
@@ -260,28 +260,136 @@ int V1724::ConfigureBaselines(int nominal_value,
       }
 
       // Trigger the board with software trigger
-      WriteRegister(CBV1724_AcquisitionControlReg,0x24);
-      WriteRegister(CBV1724_SoftwareTriggerReg,0x1);
-      usleep(50); // paranoia. Like, you need some time to acquire right?
-      WriteRegister(CBV1724_AcquisitionControlReg,0x0);
+      //usleep(10000);
+      WriteRegister(0x8100,0x4);//x24   // Acq control reg
+      //usleep(1000);                 // Prevent zeroes in data stream
+      WriteRegister(0x8108,0x1);    // Software trig reg
+      usleep(1000); // paranoia. Like, you need some time to acquire right?
+      WriteRegister(0x8100,0x0); // Acq off
 
+      // Now read the data. Don't forget to delete buff later.
+      u_int32_t *buff=NULL;
+      u_int32_t size = ReadMBLT(buff);
+      int baseline = -1;
       
-      // Sample Samples
-      // Good? then finish
-      // Else twiddle DAC offset
-      // Repeat
-    }
+      // Parse it up. Remember we masked every channel except the one
+      // we want so should be just that one in the data.
+      unsigned int idx = 0;
+      while(idx < size/sizeof(u_int32_t)){
+	if(buff[idx]>>20==0xA00){ // header
 
+	  // Sanity check. Is this your channel?
+	  u_int32_t cmask = buff[idx+1]&0xFF;
+	  if(!((cmask>>channel)&1)){
+	    // wtf?
+	    std::cout<<"Got wrong channel in baselines."<<std::endl;
+	    break;
+	  }
+
+	  idx += 4;
+	  u_int32_t csize = buff[idx];
+	  idx+=2;
+	  int tbase = 0;
+	  u_int32_t minval=0x3fff, maxval=0;
+	  
+	  for(unsigned int i=0; i<csize-2; i++){
+	    tbase += buff[idx+i]&0xFFFF;
+	    tbase += (buff[idx+i]>>16)&0xFFFF;
+	    if((buff[idx+i]&0xFFFF)<minval)
+	      minval = buff[idx+i]&0xFFFF;
+	    if((buff[idx+i]&0xFFFF)>maxval)
+	      maxval = buff[idx+i]&0xFFFF;
+	    if(((buff[idx+i]>>16)&0xFFFF)<minval)
+	      minval=(buff[idx+i]>>16)&0xFFFF;
+	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
+	      maxval=(buff[idx+i]>>16)&0xFFFF;	  
+	  }
+	  if(abs(maxval-minval>1000)){
+	    std::cout<<"Signal in baseline, channel "<<channel
+		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
+	  }
+	  else
+	    baseline = int(tbase / ((csize-2)*2));
+	  break;
+	}
+	idx++;
+      }
+
+      if(baseline>0){
+	// Time for the **magic**. We want to see how far we are off from nominal and
+	// adjust up and down accordingly. We will always adjust just a tiny bit
+	// less than we think we need to to avoid getting into some overshoot
+	// see-saw type loop where we never hit the target.
+	float absolute_unit = float(0xffff)/float(0x3fff);
+	int adjustment = int(0.5*absolute_unit*((int(baseline)-int(target_value)))); 
+	if(abs(adjustment) < adjustment_threshold)
+	  channel_finished[channel]=true;
+	else{
+	  if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel])
+	    dac_values[channel]=0;
+	  else if(adjustment>0 &&dac_values[channel]+adjustment>0xffff)
+	    dac_values[channel]=0xffff;
+	  else
+	    dac_values[channel]+=adjustment;	  
+	}
+      }
+
+    } // end channel loop
+
+    // If all channels finished we can break out
     if(breakout)
-      break;
-  }
-  
+      break;   
     
-  // 0x1n88 channel n DAC busy 0b001 (1 - yes)
-  // 0x1n98, 0x8098 DAC value 0xffff
-  cout<<"Not implemented"<<endl;
+  }// end iteration loop
+  LoadDAC(dac_values);
+  end_values = dac_values;
   return 0;
 }
+
+int V1724::LoadDAC(vector<u_int32_t>dac_values){
+  // Loads DAC values into registers
+  
+  for(unsigned int x=0; x<dac_values.size(); x++){
+    if(x>7) // oops
+      continue;
+
+    // Define a counter to give the DAC time to be set if needed
+    int counter = 0; 
+    while(counter < 100){
+      u_int32_t data = 0x4;
+      // DAC ready register
+      data = ReadRegister((0x1088)+(0x100*x));
+      if(data == 0xffffffff ){
+	usleep(1000);
+	counter++;
+	continue;
+      }
+      if(data&0x4){
+	usleep(1000);
+	counter++;
+	continue;
+      }
+      break;
+    }
+    if(counter >= 100){
+      stringstream errorstr;
+      errorstr<<"Timed out waiting for channel "<<x<<" in DAC setting";
+      fLog->Entry(errorstr.str(), MongoLog::Error);
+      return -1;
+    }
+
+    // Now write channel DAC values
+    if(WriteRegister((0x1098)+(0x100*x), dac_values[x])!=0){
+      stringstream errorstr;
+      errorstr<<"Failed writing DAC "<<hex<<dac_values[x]<<dec<<" in channel "<<x;
+      fLog->Entry(errorstr.str(), MongoLog::Error);
+      return -1;
+    }    
+  }
+  return 0;
+  
+}
+
 int V1724::End(){
   if(fBoardHandle>=0)
     CAENVME_End(fBoardHandle);

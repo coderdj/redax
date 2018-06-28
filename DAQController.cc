@@ -77,6 +77,13 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
   // Load registers into digitizers
   for( auto const& link : fDigitizers )    {
     for(auto digi : link.second){
+
+      // Load DAC. n.b.: if you set the DAC value in your ini file you'll overwrite
+      // the fancy stuff done here!
+      vector<u_int32_t>dac_values(8, 0x1000);
+      int nominal_dac = fOptions->GetInt("baseline_value", 16000);
+      digi->ConfigureBaselines(dac_values, nominal_dac, 100);
+      
       int success=0;
       for(auto regi : fOptions->GetRegisters(digi->bid())){
 	unsigned int reg = fHelper->StringToHex(regi.reg);
