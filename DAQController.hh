@@ -7,12 +7,14 @@
 #include "DAXHelpers.hh"
 #include "Options.hh"
 #include "MongoInserter.hh"
+#include "StraxInserter.hh"
 
 class V2718; //not implemented yet
 
 struct processingThread{
   std::thread *pthread;
-  MongoInserter *inserter;
+  //MongoInserter *inserter;
+  StraxInserter *inserter;
 };
 
 class DAQController{

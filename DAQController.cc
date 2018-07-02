@@ -273,7 +273,8 @@ int DAQController::GetData(std::vector <data_packet> *&retVec){
   
 
 void* DAQController::ProcessingThreadWrapper(void* data){
-  MongoInserter *mi = static_cast<MongoInserter*>(data);
+  //MongoInserter *mi = static_cast<MongoInserter*>(data);
+  StraxInserter *mi = static_cast<StraxInserter*>(data);
   mi->ReadAndInsertData();
   return data;
 }
@@ -299,7 +300,8 @@ void DAQController::OpenProcessingThreads(){
 
   for(int i=0; i<fNProcessingThreads; i++){
     processingThread p;
-    p.inserter = new MongoInserter();    
+    //p.inserter = new MongoInserter();
+    p.inserter = new StraxInserter();
     p.inserter->Initialize(fOptions, fLog, this);
     p.pthread = new std::thread(ProcessingThreadWrapper,
 			       static_cast<void*>(p.inserter));

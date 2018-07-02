@@ -48,6 +48,8 @@ public:
 
   std::string ExportToString();
   int Override(bsoncxx::document::view override_opts);
+
+  int GetChannel(int bid, int cid){ return 0;};
   
 private:
   std::string defaultPath = "defaults/daxOptions.json";
