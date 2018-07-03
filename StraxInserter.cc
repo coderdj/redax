@@ -117,8 +117,8 @@ void StraxInserter::ParseDocuments(
 	  u_int32_t max_sample = index_in_sample + fFragmentLength/2;
 	  u_int32_t samples_this_channel = fFragmentLength/2;
 	  if(fFragmentLength/2 + (fragment_index*fFragmentLength/2) > samples_in_channel){
-	    std::cout<<dec<<"Recalculate max sample "<<samples_in_channel<<" "<<fFragmentLength<<" "<<offset<<std::endl;
-	    max_sample = index_in_sample + (samples_in_channel - (fragment_index*fFragmentLength/2));
+	    max_sample = index_in_sample + (samples_in_channel -
+					    (fragment_index*fFragmentLength/2));
 	    samples_this_channel = max_sample-index_in_sample;
 	  }
 	  
@@ -143,15 +143,7 @@ void StraxInserter::ParseDocuments(
 	  u_int8_t *reductionLevel = reinterpret_cast<u_int8_t*>(&fragment[30]);
 	  *reductionLevel=0;
 
-	  // Copy the raw buffer
-	  /*std::cout<<dec<<"OFFSET: "<<offset<<" SAMPLES IN CHANNEL: "<<samples_this_channel<<std::endl;
-	  std::cout<<"INDEX: "<<fragment_index<<" MAX_SAMPLE: "<<max_sample<<" SAMPLES_IN_CHANNEL: "<<channel_size<<" at: "<<channel_time<<std::endl;
-	  std::cout<<"CHANNEL: "<<channel<<std::endl;
-	  */
-	  //unsigned char *cpayload = reinterpret_cast<unsigned char*>(payload);
-	  //std::cout<<dec<<"Offset*2= "<<offset*2<<" copy_bytes= "<<samples_this_channel*2<<
-	  //  " fragment_total_reserved_size: "<<fFragmentLength + fStraxHeaderSize<<std::endl;
-	  //u_int16_t *nb = reinterpret_cast<u_int16_t*>(&(fragment[31]));
+	  // Copy the raw buffer	  
 	  if(samples_this_channel>fFragmentLength/2){
 	    cout<<samples_this_channel<<"!"<<std::endl;
 	    exit(-1);
@@ -161,8 +153,7 @@ void StraxInserter::ParseDocuments(
 
 	  strax_docs[chunk_id].push_back(fragment);
 	  fragment_index++;
-	  index_in_sample = max_sample;
-	  //std::cout<<"Index in sample: "<<index_in_sample<<" Samples in channel: "<<samples_in_channel<<std::endl;
+	  index_in_sample = max_sample;	  
 	}
 	// Go to next channel
 	idx+=channel_size-2;
