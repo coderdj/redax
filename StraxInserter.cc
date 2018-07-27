@@ -119,7 +119,8 @@ void StraxInserter::ParseDocuments(
 	  // How long is this fragment?
 	  u_int32_t max_sample = index_in_sample + fFragmentLength/2;
 	  u_int32_t samples_this_channel = fFragmentLength/2;
-	  if(fFragmentLength/2 + (fragment_index*fFragmentLength/2) > samples_in_channel){
+	  if((unsigned int)(fFragmentLength/2 + (fragment_index*fFragmentLength/2)) >
+	     samples_in_channel){
 	    max_sample = index_in_sample + (samples_in_channel -
 					    (fragment_index*fFragmentLength/2));
 	    samples_this_channel = max_sample-index_in_sample;
@@ -185,19 +186,10 @@ int StraxInserter::ReadAndInsertData(){
     }
     if(fragments.size()>0){
       //INSERT FRAGMENTS BUT RIGHT NOW I'M GONNA DELETE THEM
-      
-      for(auto const& chunk : fragments){
+      fStraxHandler->InsertFragments(fragments);
+      /*for(auto const& chunk : fragments){
 	auto fragments_this_chunk = chunk.second;
 	for(unsigned int i=0; i<fragments_this_chunk.size(); i++){
-
-	  if(i==0){
-	    u_int32_t *bindata = reinterpret_cast<u_int32_t*>((fragments_this_chunk)[i]);
-	    std::cout<<"BINDATA DUMP"<<std::endl;
-	    for(unsigned int x=0; x<(fFragmentLength+fStraxHeaderSize)/4; x++){
-	      std::cout<<hex<<bindata[x]<<std::endl;
-	    }
-	    std::cout<<"OVER"<<std::endl;
-	  }
 
 	  
 	 	    //for(unsigned int j=0; j<fChunkLength; j++){
@@ -208,9 +200,10 @@ int StraxInserter::ReadAndInsertData(){
 	    delete[] fragments_this_chunk[i];
 	  
 	}
-      }
+      } */     
       fragments.clear();
     }
+
     usleep(10000); // 10ms sleep
     read_length = fDataSource->GetData(readVector);
   }

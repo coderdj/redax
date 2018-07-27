@@ -13,9 +13,11 @@
 #include <bsoncxx/builder/stream/document.hpp>
 #include "Options.hh"
 #include "MongoLog.hh"
+#include "StraxInserter.hh"
 
 class DAQController;
 
+/*
 struct data_packet{
   u_int32_t *buff;
   u_int32_t size;
@@ -23,7 +25,7 @@ struct data_packet{
   u_int32_t header_time;
   int bid;
 };
-
+*/
 
 class MongoInserter{
   /*

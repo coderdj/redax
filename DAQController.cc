@@ -115,9 +115,10 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
 
   // Last thing we need to do is get our strax writer ready.
   std::string strax_output_path = fOptions->GetString("strax_output_path", "./out");
-  std::string run_name = fOptions->GetString("run_name", "run");
-  u_int32_t full_fragment_size = fOptions->GetInt("strax_header_size", 31) +
-    fOptions->GetInt("strax_fragment_length", 110*2);
+  std::string run_name = fOptions->GetString("run_identifier", "run");
+  u_int32_t full_fragment_size = (fOptions->GetInt("strax_header_size", 31) +
+				  fOptions->GetInt("strax_fragment_length", 220));
+  std::cout<<"Initializing strax with "<<full_fragment_size<<" fragment size"<<std::endl;
   fStraxHandler->Initialize(strax_output_path, run_name, full_fragment_size);
 
   return 0;

@@ -2,6 +2,7 @@
 
 StraxFileHandler::StraxFileHandler(MongoLog *log){
   fLog = log;
+  fFullFragmentSize=0;
 }
 
 StraxFileHandler::~StraxFileHandler(){
@@ -13,7 +14,9 @@ int StraxFileHandler::Initialize(std::string output_path, std::string run_name,
 
   // Clear any previous initialization
   End();
-
+  fFullFragmentSize = full_fragment_size;
+  fRunName = run_name;
+  
   // "Did this random boost function make it into std yet?" Yes it did.
   try{
     std::experimental::filesystem::path op(output_path);
@@ -26,8 +29,6 @@ int StraxFileHandler::Initialize(std::string output_path, std::string run_name,
     fLog->Entry("StraxFileHandler::Initialize tried to create output directory but failed."
 		" Check that you have permission to write here.", MongoLog::Error);
   }
-
-  fFullFragmentSize = full_fragment_size;
   
   return -1;
 }
@@ -69,7 +70,9 @@ int StraxFileHandler::InsertFragments(std::map<u_int32_t,
 
     fFileMutexes[id].lock();
     for( unsigned int i=0; i<fragments.size(); i++){
-      fFileHandles[id].write(reinterpret_cast<const char*>(fragments[i]), fFullFragmentSize);
+      //std::cout<<"Writing "<<fFullFragmentSize<<" bytes"<<std::endl;
+      fFileHandles[id].write(reinterpret_cast<const char*>(parsed_fragments[id][i]),
+			     fFullFragmentSize);
       delete[] parsed_fragments[id][i];
     }
 
