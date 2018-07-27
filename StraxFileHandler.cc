@@ -3,6 +3,7 @@
 StraxFileHandler::StraxFileHandler(MongoLog *log){
   fLog = log;
   fFullFragmentSize=0;
+  fHostname = "reader";
 }
 
 StraxFileHandler::~StraxFileHandler(){
@@ -10,12 +11,13 @@ StraxFileHandler::~StraxFileHandler(){
 }
 
 int StraxFileHandler::Initialize(std::string output_path, std::string run_name,
-				 u_int32_t full_fragment_size){
+				 u_int32_t full_fragment_size, std::string hostname){
 
   // Clear any previous initialization
   End();
   fFullFragmentSize = full_fragment_size;
   fRunName = run_name;
+  fHostname = hostname;
   
   // "Did this random boost function make it into std yet?" Yes it did.
   try{
@@ -54,7 +56,7 @@ void StraxFileHandler::End(){
   
 }
 
-int StraxFileHandler::InsertFragments(std::map<u_int32_t,
+int StraxFileHandler::InsertFragments(std::map<std::string,
 				      std::vector<unsigned char*> > parsed_fragments){
 
   for( auto const& [id, fragments] : parsed_fragments ){
@@ -63,7 +65,9 @@ int StraxFileHandler::InsertFragments(std::map<u_int32_t,
     if( fFileMutexes.find(id) == fFileMutexes.end() ){
       fFileMutexes[id].lock();
       std::experimental::filesystem::path write_path(fOutputPath);
-      write_path /= (fRunName + "_" + std::to_string(id) + ".stx");
+      write_path /= id;
+      std::experimental::filesystem::create_directory(write_path);
+      write_path /= fHostname;
       fFileHandles[id].open(write_path, std::ios::out | std::ios::binary);
       fFileMutexes[id].unlock();
     }
@@ -73,6 +77,7 @@ int StraxFileHandler::InsertFragments(std::map<u_int32_t,
       //std::cout<<"Writing "<<fFullFragmentSize<<" bytes"<<std::endl;
       fFileHandles[id].write(reinterpret_cast<const char*>(parsed_fragments[id][i]),
 			     fFullFragmentSize);
+      //std::cout<<id<<"  "<<i<<std::endl;
       delete[] parsed_fragments[id][i];
     }
 

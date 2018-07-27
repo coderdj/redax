@@ -35,12 +35,14 @@ public:
   int ReadAndInsertData();
   bool CheckError(){ return fErrorBit; };
 private:
-  void ParseDocuments(std::map<u_int32_t, std::vector<unsigned char*>> &strax_docs,
+  void ParseDocuments(std::map<std::string, std::vector<unsigned char*>> &strax_docs,
 		      data_packet dp);
   
   u_int64_t fChunkLength;
+  u_int32_t fChunkOverlap;
   u_int16_t fFragmentLength; // This is in BYTES
   u_int16_t fStraxHeaderSize; // in BYTES too
+  u_int32_t fChunkNameLength;
   Options *fOptions;
   MongoLog *fLog;
   DAQController *fDataSource;

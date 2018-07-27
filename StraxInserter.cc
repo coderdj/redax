@@ -6,6 +6,8 @@ StraxInserter::StraxInserter(){
   fDataSource = NULL;
   fActive = true;
   fChunkLength=0x7fffffff; // DAQ magic number
+  fChunkNameLength=6;
+  fChunkOverlap = 0x2FAF080;
   fFragmentLength=110*2;
   fStraxHeaderSize=31;
   fLog = NULL;
@@ -20,7 +22,8 @@ int StraxInserter::Initialize(Options *options, MongoLog *log,  StraxFileHandler
 			      DAQController *dataSource){
   fOptions = options;
   fChunkLength = fOptions->GetInt("strax_chunk_length", 0x7fffffff);
-  fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
+  fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 0x2FAF080); // default 0.5s
+  fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);  
   fDataSource = dataSource;
   fLog = log;
   fErrorBit = false;
@@ -36,7 +39,7 @@ void StraxInserter::Close(){
 
 
 void StraxInserter::ParseDocuments(
-				   std::map<u_int32_t, std::vector<unsigned char*>> &strax_docs,
+				   std::map<std::string, std::vector<unsigned char*>> &strax_docs,
 				   data_packet dp){
   // Take a buffer and break it up into one document per channel
   // Put these documents into doc array
@@ -101,7 +104,16 @@ void StraxInserter::ParseDocuments(
 	int iBitShift = 31;
 	int64_t Time64 = ((unsigned long)clock_counters[channel] <<
 			    iBitShift) + channel_time;
-	u_int32_t chunk_id = u_int32_t(Time64/fChunkLength); 
+
+	// Get the CHUNK and decide if this event also goes into a PRE/POST file
+	u_int32_t chunk_id = u_int32_t(Time64/fChunkLength);
+	bool pre=false, post=false;
+	// Here PRE means PRE this one and POST the previous one
+	if(Time64-(chunk_id*fChunkLength) < fChunkOverlap)
+	  pre=true;
+	// Here POST means POST this one and PRE the next one
+	if( ( (chunk_id+1)*fChunkLength )-Time64 < fChunkOverlap)
+	  post=true;
 
 	// We're now at the first sample of the channel's waveform. This
 	// will be beautiful. First we reinterpret the channel as 16
@@ -155,7 +167,35 @@ void StraxInserter::ParseDocuments(
 	  const char *data_loc = reinterpret_cast<const char*>(&(payload[offset+index_in_sample]));
 	  copy(data_loc, data_loc+(samples_this_channel*2),&(fragment[31]));
 
-	  strax_docs[chunk_id].push_back(fragment);
+	  // Minor mess to maintain the same width of file names and do the pre/post stuff
+	  std::string chunk_index = std::to_string(chunk_id);
+	  while(chunk_index.size() < fChunkNameLength)
+	    chunk_index.insert(0, "0");
+	  strax_docs[chunk_index].push_back(fragment);
+	  if(pre){
+	    unsigned char *pf0 = new unsigned char[fFragmentLength + fStraxHeaderSize];
+	    unsigned char *pf1 = new unsigned char[fFragmentLength + fStraxHeaderSize];
+	    copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),&(pf0[0]));
+	    copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),&(pf1[0]));
+	    strax_docs[chunk_index+"_pre"].push_back(pf0);
+	    std::string prechunk_index = std::to_string(chunk_id-1);
+	    while(prechunk_index.size() < fChunkNameLength)
+	      prechunk_index.insert(0, "0");
+	    strax_docs[prechunk_index+"_post"].push_back(pf1);
+	  }
+	  if(post){
+	    unsigned char *pf0 = new unsigned char[fFragmentLength + fStraxHeaderSize];
+            unsigned char *pf1 = new unsigned char[fFragmentLength + fStraxHeaderSize];
+            copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),&(pf0[0]));
+            copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),&(pf1[0]));
+	    strax_docs[chunk_index+"_post"].push_back(pf0);
+	    std::string postchunk_index = std::to_string(chunk_id+1);
+	    while(postchunk_index.size() < fChunkNameLength)
+	      postchunk_index.insert(0, "0");
+	    strax_docs[postchunk_index+"_pre"].push_back(pf1);
+	  }
+
+	  
 	  fragment_index++;
 	  index_in_sample = max_sample;	  
 	}
@@ -173,7 +213,7 @@ int StraxInserter::ReadAndInsertData(){
   
   std::vector <data_packet> *readVector=NULL;
   int read_length = fDataSource->GetData(readVector);
-  std::map<u_int32_t, std::vector<unsigned char*>> fragments;
+  std::map<std::string, std::vector<unsigned char*>> fragments;
   
   while(fActive || read_length>0){
     if(readVector != NULL){

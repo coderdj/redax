@@ -16,8 +16,9 @@ public:
   StraxFileHandler(MongoLog *log);
   ~StraxFileHandler();
 
-  int Initialize(std::string output_path, std::string run_name, u_int32_t full_fragment_size);
-  int InsertFragments(std::map<u_int32_t, std::vector<unsigned char*> > parsed_fragments);
+  int Initialize(std::string output_path, std::string run_name, u_int32_t full_fragment_size,
+		 std::string hostname);
+  int InsertFragments(std::map<std::string, std::vector<unsigned char*> > parsed_fragments);
   void End();
   
 private:
@@ -26,9 +27,9 @@ private:
   std::experimental::filesystem::path fOutputPath;
   std::string fRunName;
   u_int32_t fFullFragmentSize;
-  
-  std::map<u_int32_t, std::mutex>fFileMutexes;
-  std::map<u_int32_t, std::ofstream>fFileHandles;
+  std::string fHostname;
+  std::map<std::string, std::mutex>fFileMutexes;
+  std::map<std::string, std::ofstream>fFileHandles;
 };
 
 #endif

@@ -119,7 +119,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
   u_int32_t full_fragment_size = (fOptions->GetInt("strax_header_size", 31) +
 				  fOptions->GetInt("strax_fragment_length", 220));
   std::cout<<"Initializing strax with "<<full_fragment_size<<" fragment size"<<std::endl;
-  fStraxHandler->Initialize(strax_output_path, run_name, full_fragment_size);
+  fStraxHandler->Initialize(strax_output_path, run_name, full_fragment_size, fHostname);
 
   return 0;
 }
