@@ -9,19 +9,22 @@ StraxInserter::StraxInserter(){
   fFragmentLength=110*2;
   fStraxHeaderSize=31;
   fLog = NULL;
+  fStraxHandler=NULL;
   fErrorBit = false;  
 }
 
-StraxInserter::~StraxInserter(){
+StraxInserter::~StraxInserter(){  
 }
 
-int StraxInserter::Initialize(Options *options, MongoLog *log,  DAQController *dataSource){
+int StraxInserter::Initialize(Options *options, MongoLog *log,  StraxFileHandler *handler,
+			      DAQController *dataSource){
   fOptions = options;
   fChunkLength = fOptions->GetInt("strax_chunk_length", 0x7fffffff);
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
   fDataSource = dataSource;
   fLog = log;
   fErrorBit = false;
+  fStraxHandler = handler;
   return 0;
 }
 
@@ -59,7 +62,7 @@ void StraxInserter::ParseDocuments(
       u_int32_t channel_mask = buff[idx+1]&0xFF; // Channels in event
       u_int32_t board_fail  = buff[idx+1]&0x4000000; //Board failed. Never saw this set.
 
-      // I've never seen this happe but afraid to put it into the mongo log
+      // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
       if(board_fail==1)
 	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
@@ -195,6 +198,8 @@ int StraxInserter::ReadAndInsertData(){
 	    }
 	    std::cout<<"OVER"<<std::endl;
 	  }
+
+	  
 	 	    //for(unsigned int j=0; j<fChunkLength; j++){
 	    //if(j>50)
 	    //break;

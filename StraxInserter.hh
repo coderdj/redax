@@ -5,19 +5,18 @@
 #include <cstdarg>
 #include <cstring>
 #include <assert.h>
-#include "Options.hh"
-#include "MongoLog.hh"
-#include "MongoInserter.hh"
+//#include "MongoInserter.hh"
+#include "StraxFileHandler.hh"
 
 class DAQController;
 
-/*struct data_packet{
+struct data_packet{
   u_int32_t *buff;
   u_int32_t size;
   u_int32_t clock_counter;
   u_int32_t header_time;
   int bid;
-  };*/
+};
 
 
 class StraxInserter{
@@ -29,7 +28,8 @@ public:
   StraxInserter();
   ~StraxInserter();
   
-  int  Initialize(Options *options, MongoLog *log, DAQController *dataSource);
+  int  Initialize(Options *options, MongoLog *log, StraxFileHandler *handler,
+		  DAQController *dataSource);
   void Close();
   
   int ReadAndInsertData();
@@ -46,6 +46,8 @@ private:
   DAQController *fDataSource;
   bool fActive;
   bool fErrorBit;
+
+  StraxFileHandler *fStraxHandler;
 };
 
 #endif

@@ -19,6 +19,7 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fRawDataBuffer = NULL;
   fDatasize=0.;
   fHostname = hostname;
+  fStraxHandler = new StraxFileHandler(log);
 }
 
 DAQController::~DAQController(){
@@ -27,6 +28,7 @@ DAQController::~DAQController(){
     delete fOptions;
   if(fProcessingThreads.size()!=0)
     CloseProcessingThreads();
+  delete fStraxHandler;
 }
 
 std::string DAQController::run_mode(){
@@ -40,7 +42,8 @@ std::string DAQController::run_mode(){
   }
 }
 
-int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys, std::string override){
+int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys,
+					 std::string override){
 
   // Load options including override if any
   if(fOptions != NULL)
@@ -109,6 +112,14 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
   fStatus = 2;
 
   std::cout<<fOptions->ExportToString()<<std::endl;
+
+  // Last thing we need to do is get our strax writer ready.
+  std::string strax_output_path = fOptions->GetString("strax_output_path", "./out");
+  std::string run_name = fOptions->GetString("run_name", "run");
+  u_int32_t full_fragment_size = fOptions->GetInt("strax_header_size", 31) +
+    fOptions->GetInt("strax_fragment_length", 110*2);
+  fStraxHandler->Initialize(strax_output_path, run_name, full_fragment_size);
+
   return 0;
 }
 
@@ -162,6 +173,9 @@ void DAQController::End(){
     delete fRawDataBuffer;
     fRawDataBuffer = NULL;
   }
+
+  // Assume everything is read out so we can close strax
+  fStraxHandler->End();
 }
 
 void* DAQController::ReadThreadWrapper(void* data, int link){
@@ -302,7 +316,7 @@ void DAQController::OpenProcessingThreads(){
     processingThread p;
     //p.inserter = new MongoInserter();
     p.inserter = new StraxInserter();
-    p.inserter->Initialize(fOptions, fLog, this);
+    p.inserter->Initialize(fOptions, fLog, fStraxHandler, this);
     p.pthread = new std::thread(ProcessingThreadWrapper,
 			       static_cast<void*>(p.inserter));
     fProcessingThreads.push_back(p);

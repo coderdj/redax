@@ -1,7 +1,6 @@
 #ifndef _DAQCONTROLLER_HH_
 #define _DAQCONTROLLER_HH_
 
-#include <mutex>
 #include <thread>
 #include "V1724.hh"
 #include "DAXHelpers.hh"
@@ -78,6 +77,7 @@ private:
   u_int64_t fDatasize;
   string fHostname;
   
+  StraxFileHandler *fStraxHandler;
   V2718 *fRunStartController;
   
 };
