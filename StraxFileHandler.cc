@@ -137,4 +137,18 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
 
   }
 
+  // If we call this with 'force_all' it means we're ending the run
+  // so we need to put in the THE_END marker
+  if(force_all){    
+    std::experimental::filesystem::path write_path(fOutputPath);
+    write_path /= "THE_END";
+    std::cout<<"Creating END file at "<<write_path<<std::endl;
+    std::experimental::filesystem::create_directory(write_path);
+    write_path /= fHostname;
+    std::ofstream outfile;
+    outfile.open(write_path, std::ios::out);
+    outfile<<"...my only friend";
+    outfile.close();
+  }
+  
 }
