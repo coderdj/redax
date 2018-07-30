@@ -23,6 +23,9 @@ public:
   
 private:
 
+  std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
+  void CleanUp(u_int32_t back_from_id, bool force_all=false);
+  
   MongoLog *fLog;
   std::experimental::filesystem::path fOutputPath;
   std::string fRunName;
@@ -30,6 +33,7 @@ private:
   std::string fHostname;
   std::map<std::string, std::mutex>fFileMutexes;
   std::map<std::string, std::ofstream>fFileHandles;
+  u_int32_t fChunkCloseDelay, fChunkNameLength;
 };
 
 #endif

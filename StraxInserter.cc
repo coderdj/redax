@@ -21,13 +21,16 @@ StraxInserter::~StraxInserter(){
 int StraxInserter::Initialize(Options *options, MongoLog *log,  StraxFileHandler *handler,
 			      DAQController *dataSource){
   fOptions = options;
-  fChunkLength = fOptions->GetInt("strax_chunk_length", 0x7fffffff);
-  fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 0x2FAF080); // default 0.5s
+  fChunkLength = fOptions->GetLongInt("strax_chunk_length", 20e9); // default 20s
+  fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);  
   fDataSource = dataSource;
   fLog = log;
   fErrorBit = false;
   fStraxHandler = handler;
+
+  std::cout<<"Strax output initialized with "<<fChunkLength<<" ns chunks and "<<
+    fChunkOverlap<<" ns overlap time. Fragments are "<<fFragmentLength<<" bytes."<<std::endl;
   return 0;
 }
 
@@ -38,12 +41,13 @@ void StraxInserter::Close(){
 //  return u_int32_t(timestamp/fChunkLength);  
 
 
-void StraxInserter::ParseDocuments(
-				   std::map<std::string, std::vector<unsigned char*>> &strax_docs,
-				   data_packet dp){
+int StraxInserter::ParseDocuments(
+				  std::map<std::string, std::vector<unsigned char*>> &strax_docs,
+				  data_packet dp				   
+				  ){
   // Take a buffer and break it up into one document per channel
-  // Put these documents into doc array
-
+  int fragments_inserted = 0;
+  
   // Unpack the things from the data packet
   vector<u_int32_t> clock_counters;
   for(int i=0; i<8; i++)
@@ -102,14 +106,14 @@ void StraxInserter::ParseDocuments(
 	last_times_seen[channel] = channel_time;
 	
 	int iBitShift = 31;
-	int64_t Time64 = ((unsigned long)clock_counters[channel] <<
-			    iBitShift) + channel_time;
+	int64_t Time64 = 10*(((unsigned long)clock_counters[channel] <<
+			      iBitShift) + channel_time); // in ns
 
 	// Get the CHUNK and decide if this event also goes into a PRE/POST file
 	u_int32_t chunk_id = u_int32_t(Time64/fChunkLength);
 	bool pre=false, post=false;
 	// Here PRE means PRE this one and POST the previous one
-	if(Time64-(chunk_id*fChunkLength) < fChunkOverlap)
+	if(Time64-(chunk_id*fChunkLength) < fChunkOverlap && chunk_id != 0)
 	  pre=true;
 	// Here POST means POST this one and PRE the next one
 	if( ( (chunk_id+1)*fChunkLength )-Time64 < fChunkOverlap)
@@ -172,6 +176,7 @@ void StraxInserter::ParseDocuments(
 	  while(chunk_index.size() < fChunkNameLength)
 	    chunk_index.insert(0, "0");
 	  strax_docs[chunk_index].push_back(fragment);
+	  fragments_inserted++;
 	  if(pre){
 	    unsigned char *pf0 = new unsigned char[fFragmentLength + fStraxHeaderSize];
 	    unsigned char *pf1 = new unsigned char[fFragmentLength + fStraxHeaderSize];
@@ -206,6 +211,7 @@ void StraxInserter::ParseDocuments(
     else
       idx++;
   }
+  return fragments_inserted;
 }
 
 
@@ -214,39 +220,31 @@ int StraxInserter::ReadAndInsertData(){
   std::vector <data_packet> *readVector=NULL;
   int read_length = fDataSource->GetData(readVector);
   std::map<std::string, std::vector<unsigned char*>> fragments;
+  int buffered_fragments = 0;
   
   while(fActive || read_length>0){
+    //std::cout<<"Factive: "<<fActive<<" read length: "<<read_length<<std::endl;
     if(readVector != NULL){
-      for(unsigned int i=0; i<readVector->size(); i++){	
-	ParseDocuments(fragments, (*readVector)[i]);		
+      for(unsigned int i=0; i<readVector->size(); i++){
+	buffered_fragments += ParseDocuments(fragments, (*readVector)[i]);
 	delete[] (*readVector)[i].buff;
       }
       delete readVector;
       readVector=NULL;
     }
-    if(fragments.size()>0){
-      //INSERT FRAGMENTS BUT RIGHT NOW I'M GONNA DELETE THEM
+    if(buffered_fragments>1000){
       fStraxHandler->InsertFragments(fragments);
-      /*for(auto const& chunk : fragments){
-	auto fragments_this_chunk = chunk.second;
-	for(unsigned int i=0; i<fragments_this_chunk.size(); i++){
-
-	  
-	 	    //for(unsigned int j=0; j<fChunkLength; j++){
-	    //if(j>50)
-	    //break;
-	    //std::cout<<hex<<fragments_this_chunk[i]<<std::endl;
-	    //}
-	    delete[] fragments_this_chunk[i];
-	  
-	}
-      } */     
       fragments.clear();
+      buffered_fragments=0;
     }
 
-    usleep(10000); // 10ms sleep
+    //usleep(10000); // 10ms sleep
     read_length = fDataSource->GetData(readVector);
   }
+
+  // At end of run insert whatever is left
+  if(fragments.size()>0)
+    fStraxHandler->InsertFragments(fragments);
   return 0;  
 }
 

@@ -41,6 +41,7 @@ public:
   int Load(std::string opts);
   
   int GetInt(std::string key, int default_value=-1);
+  long int GetLongInt(std::string key, long int default_value=-1);
   std::string GetString(std::string key, std::string default_value="");
 
   std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");

@@ -98,6 +98,31 @@ int Options::Override(bsoncxx::document::view override_opts){
   return 0;  
 }
 
+long int Options::GetLongInt(std::string path, long int default_value){
+  try{
+    return bson_options["override_doc"][path.c_str()].get_int64();
+  }
+  catch (const std::exception &e){
+    try{
+      return bson_options[path.c_str()].get_int64();
+    }
+    catch (const std::exception &e){
+      std::cout<<e.what()<<std::endl;
+
+      // Some APIs autoconvert big ints to doubles. Why? I don't know.
+      // But we can handle this here rather than chase those silly things
+      // around in each implementation.
+      try{
+	return (long int)(bson_options[path.c_str()].get_double());
+      }
+      catch(const std::exception &e){
+	return default_value;
+      }
+    }
+  }
+  return -1;
+}
+
 int Options::GetInt(std::string path, int default_value){
 
   try{

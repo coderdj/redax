@@ -6,6 +6,13 @@
 #include <cstring>
 #include <assert.h>
 //#include "MongoInserter.hh"
+
+//for debugging
+#include <sys/types.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+#define gettid() syscall(SYS_gettid)
+
 #include "StraxFileHandler.hh"
 
 class DAQController;
@@ -35,11 +42,11 @@ public:
   int ReadAndInsertData();
   bool CheckError(){ return fErrorBit; };
 private:
-  void ParseDocuments(std::map<std::string, std::vector<unsigned char*>> &strax_docs,
+  int ParseDocuments(std::map<std::string, std::vector<unsigned char*>> &strax_docs,
 		      data_packet dp);
   
-  u_int64_t fChunkLength;
-  u_int32_t fChunkOverlap;
+  u_int64_t fChunkLength; // ns
+  u_int32_t fChunkOverlap; // ns
   u_int16_t fFragmentLength; // This is in BYTES
   u_int16_t fStraxHeaderSize; // in BYTES too
   u_int32_t fChunkNameLength;
