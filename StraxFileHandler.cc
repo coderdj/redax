@@ -18,6 +18,7 @@ int StraxFileHandler::Initialize(std::string output_path, std::string run_name,
   // Clear any previous initialization
   End();
   fFullFragmentSize = full_fragment_size;
+  std::cout<<"Defining full strax fragment size as "<<fFullFragmentSize<<std::endl;
   fRunName = run_name;
   fHostname = hostname;
   
@@ -50,39 +51,42 @@ void StraxFileHandler::End(){
 }
 
 int StraxFileHandler::InsertFragments(std::map<std::string,
-				      std::vector<unsigned char*> > parsed_fragments){
+				      std::vector<char*> > parsed_fragments){
 
   // Store the lowest ID that's been inserted this round
   int lowest_id = -1;
   
-  for( auto const& [id, fragments] : parsed_fragments ){
+  for( auto const& idit : parsed_fragments ){
 
     // Here we insist that the 'id' string must begin with fChunkNameLength characters
     // that parse to an integer
+    std::string id = idit.first;
     std::string idnr = id.substr(0, fChunkNameLength);
     int idnrint = std::stoi(idnr);
     if(idnrint < lowest_id || lowest_id == -1)
       lowest_id = idnrint;      
     
     // Create outfile and mutex pair in case they don't exist
-    if( fFileMutexes.find(id) == fFileMutexes.end() ){
+    if( fFileMutexes.find(id) == fFileMutexes.end()){
       fFileMutexes[id].lock();
       std::experimental::filesystem::path write_path(fOutputPath);
       write_path /= id;
       std::experimental::filesystem::create_directory(write_path);
       write_path = GetFilePath(id, true);
-      std::cout<<"Seems that file doesn't exist, so opening. ID: "<<id<<
-	" Path: "<<write_path<<std::endl;
+      //std::cout<<"Seems that file doesn't exist, so opening. ID: "<<id<<
+      //" Path: "<<write_path<<std::endl;
       fFileHandles[id].open(write_path, std::ios::out | std::ios::binary);
       fFileMutexes[id].unlock();
     }
 
     fFileMutexes[id].lock();
-    fFileHandles[id].write(reinterpret_cast<const char*>(&(parsed_fragments[id][0])),
-			   fragments.size()*fFullFragmentSize);
-    for( unsigned int i=0; i<fragments.size(); i++){
-      //fFileHandles[id].write(reinterpret_cast<const char*>(parsed_fragments[id][i]),
-      //fFullFragmentSize);
+    //std::streamsize write_size = (std::streamsize)(idit.second.size()*fFullFragmentSize);
+    //fFileHandles[id].write((parsed_fragments[id][0]), write_size);
+    
+    // END DELETE    
+    for( unsigned int i=0; i<idit.second.size(); i++){
+      fFileHandles[id].write(reinterpret_cast<const char*>(parsed_fragments[id][i]),
+			     fFullFragmentSize);
       delete[] parsed_fragments[id][i];
     }
 

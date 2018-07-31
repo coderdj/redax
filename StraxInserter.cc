@@ -31,20 +31,21 @@ int StraxInserter::Initialize(Options *options, MongoLog *log,  StraxFileHandler
 
   std::cout<<"Strax output initialized with "<<fChunkLength<<" ns chunks and "<<
     fChunkOverlap<<" ns overlap time. Fragments are "<<fFragmentLength<<" bytes."<<std::endl;
+
   return 0;
 }
 
 void StraxInserter::Close(){
   fActive = false;
-}
 
-//  return u_int32_t(timestamp/fChunkLength);  
+}
 
 
 int StraxInserter::ParseDocuments(
-				  std::map<std::string, std::vector<unsigned char*>> &strax_docs,
+				  std::map<std::string, std::vector<char*>> &strax_docs,
 				  data_packet dp				   
 				  ){
+  
   // Take a buffer and break it up into one document per channel
   int fragments_inserted = 0;
   
@@ -130,7 +131,7 @@ int StraxInserter::ParseDocuments(
 	u_int16_t fragment_index = 0;
 	
 	while(index_in_sample < samples_in_channel){
-	  unsigned char *fragment = new unsigned char[fFragmentLength + fStraxHeaderSize];
+	  char *fragment = new char[fFragmentLength + fStraxHeaderSize];
 
 	  // How long is this fragment?
 	  u_int32_t max_sample = index_in_sample + fFragmentLength/2;
@@ -178,10 +179,12 @@ int StraxInserter::ParseDocuments(
 	  strax_docs[chunk_index].push_back(fragment);
 	  fragments_inserted++;
 	  if(pre){
-	    unsigned char *pf0 = new unsigned char[fFragmentLength + fStraxHeaderSize];
-	    unsigned char *pf1 = new unsigned char[fFragmentLength + fStraxHeaderSize];
-	    copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),&(pf0[0]));
-	    copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),&(pf1[0]));
+	    char *pf0 = new char[fFragmentLength + fStraxHeaderSize];
+	    char *pf1 = new char[fFragmentLength + fStraxHeaderSize];
+	    copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),
+		 &(pf0[0]));
+	    copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),
+		 &(pf1[0]));
 	    strax_docs[chunk_index+"_pre"].push_back(pf0);
 	    std::string prechunk_index = std::to_string(chunk_id-1);
 	    while(prechunk_index.size() < fChunkNameLength)
@@ -189,17 +192,18 @@ int StraxInserter::ParseDocuments(
 	    strax_docs[prechunk_index+"_post"].push_back(pf1);
 	  }
 	  if(post){
-	    unsigned char *pf0 = new unsigned char[fFragmentLength + fStraxHeaderSize];
-            unsigned char *pf1 = new unsigned char[fFragmentLength + fStraxHeaderSize];
-            copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),&(pf0[0]));
-            copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),&(pf1[0]));
+	    char *pf0 = new char[fFragmentLength + fStraxHeaderSize];
+            char *pf1 = new char[fFragmentLength + fStraxHeaderSize];
+            copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),
+		 &(pf0[0]));
+            copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),
+		 &(pf1[0]));
 	    strax_docs[chunk_index+"_post"].push_back(pf0);
 	    std::string postchunk_index = std::to_string(chunk_id+1);
 	    while(postchunk_index.size() < fChunkNameLength)
 	      postchunk_index.insert(0, "0");
 	    strax_docs[postchunk_index+"_pre"].push_back(pf1);
 	  }
-
 	  
 	  fragment_index++;
 	  index_in_sample = max_sample;	  
@@ -211,6 +215,8 @@ int StraxInserter::ParseDocuments(
     else
       idx++;
   }
+  
+  //blosc_destroy();
   return fragments_inserted;
 }
 
@@ -219,7 +225,7 @@ int StraxInserter::ReadAndInsertData(){
   
   std::vector <data_packet> *readVector=NULL;
   int read_length = fDataSource->GetData(readVector);
-  std::map<std::string, std::vector<unsigned char*>> fragments;
+  std::map<std::string, std::vector<char*>> fragments;
   int buffered_fragments = 0;
   
   while(fActive || read_length>0){

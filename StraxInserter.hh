@@ -5,6 +5,8 @@
 #include <cstdarg>
 #include <cstring>
 #include <assert.h>
+#include <blosc.h>
+
 //#include "MongoInserter.hh"
 
 //for debugging
@@ -42,7 +44,7 @@ public:
   int ReadAndInsertData();
   bool CheckError(){ return fErrorBit; };
 private:
-  int ParseDocuments(std::map<std::string, std::vector<unsigned char*>> &strax_docs,
+  int ParseDocuments(std::map<std::string, std::vector<char*>> &strax_docs,
 		      data_packet dp);
   
   u_int64_t fChunkLength; // ns
