@@ -50,8 +50,7 @@ void StraxFileHandler::End(){
   
 }
 
-int StraxFileHandler::InsertFragments(std::map<std::string,
-				      std::vector<char*> > parsed_fragments){
+int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> parsed_fragments){
 
   // Store the lowest ID that's been inserted this round
   int lowest_id = -1;
@@ -80,15 +79,15 @@ int StraxFileHandler::InsertFragments(std::map<std::string,
     }
 
     fFileMutexes[id].lock();
-    //std::streamsize write_size = (std::streamsize)(idit.second.size()*fFullFragmentSize);
-    //fFileHandles[id].write((parsed_fragments[id][0]), write_size);
-    
+    std::streamsize write_size = (std::streamsize)(idit.second->size());   
+    fFileHandles[id].write( &((*parsed_fragments[id])[0]), write_size);
+    delete parsed_fragments[id];
     // END DELETE    
-    for( unsigned int i=0; i<idit.second.size(); i++){
-      fFileHandles[id].write(reinterpret_cast<const char*>(parsed_fragments[id][i]),
-			     fFullFragmentSize);
-      delete[] parsed_fragments[id][i];
-    }
+    //for( unsigned int i=0; i<idit.second.size(); i++){
+    // fFileHandles[id].write(reinterpret_cast<const char*>(parsed_fragments[id][i]),
+    //			     fFullFragmentSize);
+    //delete[] parsed_fragments[id][i];
+    //}
 
     fFileMutexes[id].unlock();    
   }

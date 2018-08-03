@@ -42,7 +42,7 @@ void StraxInserter::Close(){
 
 
 int StraxInserter::ParseDocuments(
-				  std::map<std::string, std::vector<char*>> &strax_docs,
+				  std::map<std::string, std::string*> &strax_docs,
 				  data_packet dp				   
 				  ){
   
@@ -131,8 +131,9 @@ int StraxInserter::ParseDocuments(
 	u_int16_t fragment_index = 0;
 	
 	while(index_in_sample < samples_in_channel){
-	  char *fragment = new char[fFragmentLength + fStraxHeaderSize];
-
+	  //char *fragment = new char[fFragmentLength + fStraxHeaderSize];
+	  std::string fragment;
+	  
 	  // How long is this fragment?
 	  u_int32_t max_sample = index_in_sample + fFragmentLength/2;
 	  u_int32_t samples_this_channel = fFragmentLength/2;
@@ -143,7 +144,41 @@ int StraxInserter::ParseDocuments(
 	    samples_this_channel = max_sample-index_in_sample;
 	  }
 	  
-	  
+
+	  // Cast everything to char so we can put it in our buffer.
+	  u_int16_t cl = u_int16_t(fOptions->GetChannel(dp.bid, channel));
+	  char *channelLoc = reinterpret_cast<char*> (&cl);
+	  fragment.append(channelLoc, 2);
+
+	  u_int16_t sw = 10;
+	  char *sampleWidth = reinterpret_cast<char*> (&sw);
+	  fragment.append(sampleWidth, 2);
+
+	  char *pulseTime = reinterpret_cast<char*> (&Time64);
+	  fragment.append(pulseTime, 8);
+
+	  u_int32_t ft = fFragmentLength/2;
+	  char *fragmenttime = reinterpret_cast<char*> (&ft);
+	  fragment.append(fragmenttime, 4);
+
+	  u_int32_t tii0 = 0;
+	  char *thisoneiszero = reinterpret_cast<char*>(&tii0);
+	  fragment.append(thisoneiszero, 4);
+
+	  char *samplesthischannel = reinterpret_cast<char*> (&samples_this_channel);
+	  fragment.append(samplesthischannel, 4);
+
+	  char *fragmentindex = reinterpret_cast<char*> (&fragment_index);
+	  fragment.append(fragmentindex, 2);
+
+	  char *anotherzero = reinterpret_cast<char*> (&tii0);
+	  fragment.append(anotherzero, 4);
+
+	  u_int8_t rl = 0;
+	  char *reductionLevel = reinterpret_cast<char*> (&rl);
+	  fragment.append(reductionLevel, 1);
+
+	  /*
 	  // Ugh. Types.
 	  u_int16_t *channelLoc = reinterpret_cast<u_int16_t*>(&fragment[0]);
 	  *channelLoc = u_int16_t(fOptions->GetChannel(dp.bid, channel));
@@ -163,46 +198,56 @@ int StraxInserter::ParseDocuments(
 	  *anotherzero = 0;
 	  u_int8_t *reductionLevel = reinterpret_cast<u_int8_t*>(&fragment[30]);
 	  *reductionLevel=0;
-
+	  */
+	  
 	  // Copy the raw buffer	  
 	  if(samples_this_channel>fFragmentLength/2){
 	    cout<<samples_this_channel<<"!"<<std::endl;
 	    exit(-1);
 	  }
-	  const char *data_loc = reinterpret_cast<const char*>(&(payload[offset+index_in_sample]));
-	  copy(data_loc, data_loc+(samples_this_channel*2),&(fragment[31]));
 
+	  const char *data_loc = reinterpret_cast<const char*>(&(payload[offset+index_in_sample]));
+	  fragment.append(data_loc, samples_this_channel*2);
+	  while(fragment.size()<fFragmentLength+fStraxHeaderSize)
+	    fragment.append("0");	  
+
+	  //copy(data_loc, data_loc+(samples_this_channel*2),&(fragment[31]));
+
+	  
 	  // Minor mess to maintain the same width of file names and do the pre/post stuff
 	  std::string chunk_index = std::to_string(chunk_id);
 	  while(chunk_index.size() < fChunkNameLength)
 	    chunk_index.insert(0, "0");
-	  strax_docs[chunk_index].push_back(fragment);
+
+	  if(strax_docs.find(chunk_index) == strax_docs.end())
+	    strax_docs[chunk_index] = new std::string();	    
+	  strax_docs[chunk_index]->append(fragment);
 	  fragments_inserted++;
+
 	  if(pre){
-	    char *pf0 = new char[fFragmentLength + fStraxHeaderSize];
-	    char *pf1 = new char[fFragmentLength + fStraxHeaderSize];
-	    copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),
-		 &(pf0[0]));
-	    copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),
-		 &(pf1[0]));
-	    strax_docs[chunk_index+"_pre"].push_back(pf0);
+	    if(strax_docs.find(chunk_index+"_pre") == strax_docs.end())
+	      strax_docs[chunk_index+"_pre"] = new std::string();
+	    strax_docs[chunk_index+"_pre"]->append(fragment);
+	    
 	    std::string prechunk_index = std::to_string(chunk_id-1);
 	    while(prechunk_index.size() < fChunkNameLength)
 	      prechunk_index.insert(0, "0");
-	    strax_docs[prechunk_index+"_post"].push_back(pf1);
+	    if(strax_docs.find(prechunk_index+"_post") == strax_docs.end())
+	      strax_docs[prechunk_index+"_post"] = new std::string();	    
+	    strax_docs[prechunk_index+"_post"]->append(fragment);
 	  }
 	  if(post){
-	    char *pf0 = new char[fFragmentLength + fStraxHeaderSize];
-            char *pf1 = new char[fFragmentLength + fStraxHeaderSize];
-            copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),
-		 &(pf0[0]));
-            copy(fragment, fragment+(fFragmentLength+fStraxHeaderSize),
-		 &(pf1[0]));
-	    strax_docs[chunk_index+"_post"].push_back(pf0);
+	    if(strax_docs.find(chunk_index+"_post") == strax_docs.end())
+	      strax_docs[chunk_index+"_post"] = new std::string();
+	    strax_docs[chunk_index+"_post"]->append(fragment);
+
 	    std::string postchunk_index = std::to_string(chunk_id+1);
 	    while(postchunk_index.size() < fChunkNameLength)
 	      postchunk_index.insert(0, "0");
-	    strax_docs[postchunk_index+"_pre"].push_back(pf1);
+	    if(strax_docs.find(postchunk_index+"_pre") == strax_docs.end())
+	      strax_docs[postchunk_index+"_pre"] = new std::string();
+	    strax_docs[postchunk_index+"_pre"]->append(fragment);
+
 	  }
 	  
 	  fragment_index++;
@@ -225,7 +270,7 @@ int StraxInserter::ReadAndInsertData(){
   
   std::vector <data_packet> *readVector=NULL;
   int read_length = fDataSource->GetData(readVector);
-  std::map<std::string, std::vector<char*>> fragments;
+  std::map<std::string, std::string*> fragments; 
   int buffered_fragments = 0;
   
   while(fActive || read_length>0){
