@@ -1,5 +1,5 @@
-# DAX
-D. Coderre, 2018. See license in LISCENSE file.
+# REDAX
+D. Coderre, 2018. See license in LICENSE file.
 
 ## Prerequisites
 
