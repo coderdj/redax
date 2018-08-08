@@ -112,13 +112,11 @@ int StraxInserter::ParseDocuments(
 
 	// Get the CHUNK and decide if this event also goes into a PRE/POST file
 	u_int32_t chunk_id = u_int32_t(Time64/fChunkLength);
-	bool pre=false, post=false;
-	// Here PRE means PRE this one and POST the previous one
-	if(Time64-(chunk_id*fChunkLength) < fChunkOverlap && chunk_id != 0)
-	  pre=true;
-	// Here POST means POST this one and PRE the next one
-	if( ( (chunk_id+1)*fChunkLength )-Time64 < fChunkOverlap)
-	  post=true;
+	bool nextpre=false, prevpost=false;
+	if(((chunk_id+1)*fChunkLength)-Time64 < fChunkOverlap)
+	  nextpre=true;
+	if(Time64-(fChunkLength*chunk_id) < fChunkOverlap && chunk_id!=0)
+	  prevpost=true;
 
 	// We're now at the first sample of the channel's waveform. This
 	// will be beautiful. First we reinterpret the channel as 16
@@ -224,29 +222,23 @@ int StraxInserter::ParseDocuments(
 	  strax_docs[chunk_index]->append(fragment);
 	  fragments_inserted++;
 
-	  if(pre){
-	    if(strax_docs.find(chunk_index+"_pre") == strax_docs.end())
-	      strax_docs[chunk_index+"_pre"] = new std::string();
-	    strax_docs[chunk_index+"_pre"]->append(fragment);
-	    
-	    std::string prechunk_index = std::to_string(chunk_id-1);
-	    while(prechunk_index.size() < fChunkNameLength)
-	      prechunk_index.insert(0, "0");
-	    if(strax_docs.find(prechunk_index+"_post") == strax_docs.end())
-	      strax_docs[prechunk_index+"_post"] = new std::string();	    
-	    strax_docs[prechunk_index+"_post"]->append(fragment);
-	  }
-	  if(post){
-	    if(strax_docs.find(chunk_index+"_post") == strax_docs.end())
-	      strax_docs[chunk_index+"_post"] = new std::string();
-	    strax_docs[chunk_index+"_post"]->append(fragment);
+	  if(nextpre){
+	    std::string nextchunk_index = std::to_string(chunk_id+1);
+	    while(nextchunk_index.size() < fChunkNameLength)
+	      nextchunk_index.insert(0, "0");
 
-	    std::string postchunk_index = std::to_string(chunk_id+1);
-	    while(postchunk_index.size() < fChunkNameLength)
-	      postchunk_index.insert(0, "0");
-	    if(strax_docs.find(postchunk_index+"_pre") == strax_docs.end())
-	      strax_docs[postchunk_index+"_pre"] = new std::string();
-	    strax_docs[postchunk_index+"_pre"]->append(fragment);
+	    if(strax_docs.find(nextchunk_index+"_pre") == strax_docs.end())
+	      strax_docs[nextchunk_index+"_pre"] = new std::string();
+	    strax_docs[nextchunk_index+"_pre"]->append(fragment);	    
+	  }
+	  if(prevpost){
+	    std::string prevchunk_index = std::to_string(chunk_id-1);
+	    while(prevchunk_index.size() < fChunkNameLength)
+	      prevchunk_index.insert(0, "0");	    
+
+	    if(strax_docs.find(prevchunk_index+"_post") == strax_docs.end())
+	      strax_docs[prevchunk_index+"_post"] = new std::string();
+	    strax_docs[prevchunk_index+"_post"]->append(fragment);
 
 	  }
 	  
