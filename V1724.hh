@@ -33,6 +33,8 @@ class V1724{
     return fBID;
   };
 
+  int LoadDAC(vector<u_int32_t>dac_values);
+  
  private:
   int fBoardHandle;
   int fLink, fCrate, fBID;
@@ -46,7 +48,6 @@ class V1724{
 
   MongoLog *fLog;
 
-  int LoadDAC(vector<u_int32_t>dac_values);
 };
 
 

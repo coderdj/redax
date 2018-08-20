@@ -9,25 +9,29 @@ int main(int argc, char** argv){
   // Need to create a mongocxx instance and it must exist for
   // the entirety of the program. So here seems good.
   mongocxx::instance instance{};
-  
-  // We will consider commands addressed to this PC's hostname
-  char chostname[HOST_NAME_MAX];
-  gethostname(chostname, HOST_NAME_MAX);
-  std::string hostname=chostname;
-  std::cout<<"Found hostname: "<<hostname<<std::endl;
+   
   std::string current_run_id="none";
   
   // Accept just one command line argument, which is a URI
   if(argc==1){
     std::cout<<"Welcome to DAX. Run with a single argument: a valid mongodb URI"<<std::endl;
-    std::cout<<"e.g. ./dax mongodb://user:pass@host:port/authDB"<<std::endl;
+    std::cout<<"e.g. ./dax ID mongodb://user:pass@host:port/authDB"<<std::endl;
     std::cout<<"...exiting"<<std::endl;
     exit(0);
   }
 
+  // We will consider commands addressed to this PC's ID 
+  char chostname[HOST_NAME_MAX];
+  gethostname(chostname, HOST_NAME_MAX);
+  std::string hostname=chostname;
+  hostname+= "_reader_";
+  string sid = argv[1];
+  hostname += sid;
+  std::cout<<"Reader starting with ID: "<<hostname<<std::endl;
+  
   // MongoDB Connectivity for control database. Bonus for later:
   // exception wrap the URI parsing and client connection steps
-  string suri = argv[1];  
+  string suri = argv[2];  
   mongocxx::uri uri(suri.c_str());
   mongocxx::client client(uri);
   mongocxx::database db = client["dax"];
@@ -46,7 +50,7 @@ int main(int argc, char** argv){
   
   // Logging
   MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(suri, "dax", "log", true);
+  int ret = logger->Initialize(suri, "dax", "log", hostname, true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
     exit(-1);

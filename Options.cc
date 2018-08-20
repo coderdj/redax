@@ -70,9 +70,7 @@ int Options::Override(bsoncxx::document::view override_opts){
   // combined doc and delete the orginal. A new view will point to the new value.
 
   using bsoncxx::builder::stream::document;
-  using bsoncxx::builder::stream::finalize;
-  
-  //using bsoncxx::builder::concatenate;
+  using bsoncxx::builder::stream::finalize;    
 
   auto doc = document{};
   bsoncxx::document::value *new_value = new bsoncxx::document::value
@@ -81,13 +79,7 @@ int Options::Override(bsoncxx::document::view override_opts){
       bsoncxx::builder::concatenate_doc{override_opts}<<
       bsoncxx::builder::stream::close_document<<
       finalize);
-  //builder<<concatenate(bson_options);
-  //builder<<concatenate(override_opts);
-  //doc<<finalize;
   
-  // Create a new doc
-  //bsoncxx::document::value *new_value = new bsoncxx::document::value(doc.extract());
-
   // Delete the original
   delete bson_value;
 

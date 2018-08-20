@@ -2,15 +2,13 @@
 
 MongoLog::MongoLog(){
   fLogLevel = 0;
-  
-  char hostname[HOST_NAME_MAX];
-  gethostname(hostname, HOST_NAME_MAX);
-  fHostname = std::string(hostname);
+  fHostname = "_host_not_set";
 }
 MongoLog::~MongoLog(){};
 
 int  MongoLog::Initialize(std::string connection_string,
-		std::string db, std::string collection, bool debug){
+			  std::string db, std::string collection,
+			  std::string host, bool debug){
   try{
     mongocxx::uri uri{connection_string};
     fMongoClient = mongocxx::client(uri);
@@ -21,6 +19,8 @@ int  MongoLog::Initialize(std::string connection_string,
     return -1;
   }
 
+  fHostname = host;
+  
   if(debug)
     fLogLevel = 1;
   else

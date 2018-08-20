@@ -185,9 +185,8 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
   // from ADC ground) but rather to move the baseline to the location best
   // suited to your acquisition (positive, negative, bipolar logic)
 
-  // n.b. hard-coding guess to 16000 for testing
   u_int32_t target_value = nominal_value;
-  int adjustment_threshold = 2;
+  int adjustment_threshold = 10;
 
   // We can adjust a DAC offset register, which is 0xffff in range, is inversely
   // proportional to the baseline position, and has ~5% overshoot on either end.
@@ -259,10 +258,8 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
 	return -1;
       }
 
-      // Trigger the board with software trigger
-      //usleep(10000);
+      // Trigger the board with software trigger      
       WriteRegister(0x8100,0x4);//x24   // Acq control reg
-      //usleep(1000);                 // Prevent zeroes in data stream
       WriteRegister(0x8108,0x1);    // Software trig reg
       usleep(1000); // paranoia. Like, you need some time to acquire right?
       WriteRegister(0x8100,0x0); // Acq off
@@ -315,7 +312,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
 	idx++;
       }
 
-      if(baseline>0){
+      if(baseline>=0){
 	// Time for the **magic**. We want to see how far we are off from nominal and
 	// adjust up and down accordingly. We will always adjust just a tiny bit
 	// less than we think we need to to avoid getting into some overshoot
@@ -332,6 +329,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
 	  else
 	    dac_values[channel]+=adjustment;	  
 	}
+	//std::cout<<"Channel "<<channel<<": baseline "<<baseline<<" and value "<<hex<<dac_values[channel]<<dec<<std::endl;
       }
 
     } // end channel loop
@@ -341,6 +339,17 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
       break;   
     
   }// end iteration loop
+
+  for(unsigned int x=0; x<channel_finished.size(); x++){
+    if(channel_finished[x]!=true){
+      std::stringstream error;
+      error<<"Baseline routine did not finish for channel "<<x<<" (and maybe others)."<<std::endl;
+      fLog->Entry(error.str(), MongoLog::Error);
+      return -1;
+    }
+  }
+
+  
   LoadDAC(dac_values);
   end_values = dac_values;
   return 0;

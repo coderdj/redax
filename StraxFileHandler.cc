@@ -14,9 +14,10 @@ StraxFileHandler::~StraxFileHandler(){
 
 int StraxFileHandler::Initialize(std::string output_path, std::string run_name,
 				 u_int32_t full_fragment_size, std::string hostname){
-
+  
   // Clear any previous initialization
   End();
+
   fFullFragmentSize = full_fragment_size;
   std::cout<<"Defining full strax fragment size as "<<fFullFragmentSize<<std::endl;
   fRunName = run_name;
@@ -68,26 +69,18 @@ int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> parsed
     // Create outfile and mutex pair in case they don't exist
     if( fFileMutexes.find(id) == fFileMutexes.end()){
       fFileMutexes[id].lock();
-      std::experimental::filesystem::path write_path(fOutputPath);
-      write_path /= id;
+      std::experimental::filesystem::path write_path = GetDirectoryPath(id, true);//(fOutputPath);
+      //write_path /= id;
       std::experimental::filesystem::create_directory(write_path);
       write_path = GetFilePath(id, true);
-      //std::cout<<"Seems that file doesn't exist, so opening. ID: "<<id<<
-      //" Path: "<<write_path<<std::endl;
       fFileHandles[id].open(write_path, std::ios::out | std::ios::binary);
       fFileMutexes[id].unlock();
     }
-
-    fFileMutexes[id].lock();
-    std::streamsize write_size = (std::streamsize)(idit.second->size());   
+    
+    std::streamsize write_size = (std::streamsize)(idit.second->size());
+    fFileMutexes[id].lock();    
     fFileHandles[id].write( &((*parsed_fragments[id])[0]), write_size);
     delete parsed_fragments[id];
-    // END DELETE    
-    //for( unsigned int i=0; i<idit.second.size(); i++){
-    // fFileHandles[id].write(reinterpret_cast<const char*>(parsed_fragments[id][i]),
-    //			     fFullFragmentSize);
-    //delete[] parsed_fragments[id][i];
-    //}
 
     fFileMutexes[id].unlock();    
   }
@@ -98,12 +91,19 @@ int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> parsed
   return 0;
 }
 
-std::experimental::filesystem::path StraxFileHandler::GetFilePath(std::string id, bool temp){
+std::experimental::filesystem::path StraxFileHandler::GetDirectoryPath(std::string id,
+								       bool temp){
   std::experimental::filesystem::path write_path(fOutputPath);
   write_path /= id;
-  std::string filename = fHostname;
   if(temp)
-    filename+="_TEMP";
+    write_path+="_temp";
+  return write_path;
+}
+
+std::experimental::filesystem::path StraxFileHandler::GetFilePath(std::string id, bool temp){
+  std::experimental::filesystem::path write_path = GetDirectoryPath(id, temp);
+  
+  std::string filename = fHostname;  
   write_path /= filename;
   return write_path;
 }
@@ -128,10 +128,41 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
       // Close this chunk!
       fFileHandles[mutex_itr.first].close();
 
+      // ZIP it up!
+      std::ifstream ifs(GetFilePath(mutex_itr.first, true), std::ios::binary);
+      std::filebuf* pbuf = ifs.rdbuf();
+      std::size_t size = pbuf->pubseekoff (0,ifs.end,ifs.in);
+      pbuf->pubseekpos (0,ifs.in);
+
+      // allocate memory to contain file data
+      char* buffer=new char[size];
+
+      // get file data
+      pbuf->sgetn (buffer,size);
+
+      // blosc it
+      char *out_buffer = new char[size+BLOSC_MAX_OVERHEAD];
+      int wsize = blosc_compress(5, 1, sizeof(float), size, buffer,
+				 out_buffer, size+BLOSC_MAX_OVERHEAD);
+
+      delete[] buffer;
+      ifs.close();
+
+      // I am afraid to stream to the 'finished' version so gonna remove the temp file,
+      // then stream compressed data to it, then rename
+      std::experimental::filesystem::remove(GetFilePath(mutex_itr.first, true));
+      
+      std::ofstream outfile(GetFilePath(mutex_itr.first, true), std::ios::binary);
+      outfile.write(out_buffer, wsize);
+      delete[] out_buffer;
+      outfile.close();
+      
       // Move this chunk from *_TEMP to the same path without TEMP
+      if(!std::experimental::filesystem::exists(GetDirectoryPath(mutex_itr.first, false)))
+	std::experimental::filesystem::create_directory(GetDirectoryPath(mutex_itr.first, false));
       std::experimental::filesystem::rename(GetFilePath(mutex_itr.first, true),
 					    GetFilePath(mutex_itr.first, false));
-
+      std::experimental::filesystem::remove(GetDirectoryPath(mutex_itr.first, true));
       // Don't remove this mutex in this case, destroy the entries
       fFileHandles.erase(mutex_itr.first);
       fFileMutexes.erase(mutex_itr.first);

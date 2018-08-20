@@ -5,6 +5,8 @@ D. Coderre, 2018. See license in LICENSE file.
 
 mongodb cxx driver
 CAENVMElib v2.5+
+libblosc-dev (on ubuntu)
+C++17-compatible compiler. Tested on gcc 7.3.0
 Driver for your CAEN PCI card
 A DAQ hardware setup
 A MongoDB deployment

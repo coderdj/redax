@@ -24,7 +24,7 @@ public:
   
   int  Initialize(std::string connection_string,
 		  std::string db, std::string collection,
-		  bool debug=false);
+		  std::string host, bool debug=false);
 
   const static int Debug   = 0;  // Verbose output
   const static int Message = 1;  // Normal output

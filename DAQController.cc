@@ -85,14 +85,17 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
       // the fancy stuff done here!
       vector<u_int32_t>dac_values(8, 0x1000);
       int nominal_dac = fOptions->GetInt("baseline_value", 16000);
-      digi->ConfigureBaselines(dac_values, nominal_dac, 100);
+      int success = digi->ConfigureBaselines(dac_values, nominal_dac, 100);
       
-      int success=0;
       for(auto regi : fOptions->GetRegisters(digi->bid())){
 	unsigned int reg = fHelper->StringToHex(regi.reg);
 	unsigned int val = fHelper->StringToHex(regi.val);
 	success+=digi->WriteRegister(reg, val);
       }
+
+      // Load the baselines you just configured
+      success += digi->LoadDAC(dac_values);
+      
       if(success!=0){
 	//LOG
 	fStatus = 0;
