@@ -13,7 +13,7 @@ int main(int argc, char** argv){
   std::string current_run_id="none";
   
   // Accept just one command line argument, which is a URI
-  if(argc==1){
+  if(argc<3){
     std::cout<<"Welcome to DAX. Run with a single argument: a valid mongodb URI"<<std::endl;
     std::cout<<"e.g. ./dax ID mongodb://user:pass@host:port/authDB"<<std::endl;
     std::cout<<"...exiting"<<std::endl;
@@ -38,15 +38,6 @@ int main(int argc, char** argv){
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
-
-  // We want multiple readout node per host support
-  // So do it this way. User supplied index as the second command line
-  // argument. If it's present we read here and modify 'hostname'
-  if(argc>2){    
-    string node_index = argv[2];
-    hostname += "_";
-    hostname += node_index;
-  }
   
   // Logging
   MongoLog *logger = new MongoLog();
@@ -65,14 +56,15 @@ int main(int argc, char** argv){
   // to this hostname. 
   while(1){
 
+    // An array of strings should be query-able just like a normal field
     mongocxx::cursor cursor = control.find
       (
-       bsoncxx::builder::stream::document{} << "host" <<
-       bsoncxx::builder::stream::open_document << "$in" <<
-       bsoncxx::builder::stream::open_array<< hostname << bsoncxx::builder::stream::close_array <<
-       bsoncxx::builder::stream::close_document << "acknowledged" <<
-       bsoncxx::builder::stream::open_document << "$nin" <<
-       bsoncxx::builder::stream::open_array<< hostname << bsoncxx::builder::stream::close_array <<
+       bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged" <<
+       //bsoncxx::builder::stream::open_document << "$in" <<
+       //bsoncxx::builder::stream::open_array<< hostname << bsoncxx::builder::stream::close_array <<
+       //bsoncxx::builder::stream::close_document << "acknowledged" <<
+       bsoncxx::builder::stream::open_document << "$ne" << hostname <<
+       //bsoncxx::builder::stream::open_array<< hostname << bsoncxx::builder::stream::close_array <<
        bsoncxx::builder::stream::close_document <<
        bsoncxx::builder::stream::finalize
        );
