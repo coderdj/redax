@@ -60,16 +60,12 @@ int main(int argc, char** argv){
     mongocxx::cursor cursor = control.find
       (
        bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged" <<
-       //bsoncxx::builder::stream::open_document << "$in" <<
-       //bsoncxx::builder::stream::open_array<< hostname << bsoncxx::builder::stream::close_array <<
-       //bsoncxx::builder::stream::close_document << "acknowledged" <<
-       bsoncxx::builder::stream::open_document << "$ne" << hostname <<
-       //bsoncxx::builder::stream::open_array<< hostname << bsoncxx::builder::stream::close_array <<
-       bsoncxx::builder::stream::close_document <<
+       bsoncxx::builder::stream::open_document << "$ne" << hostname <<       
+       bsoncxx::builder::stream::close_document << 
        bsoncxx::builder::stream::finalize
        );
     for(auto doc : cursor) {
-
+      std::cout<<"Found a doc!"<<std::endl;
       // Very first thing: acknowledge we've seen the command. If the command
       // fails then we still acknowledge it because we tried
       control.update_one
