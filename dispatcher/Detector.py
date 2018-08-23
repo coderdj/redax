@@ -7,7 +7,9 @@ class Detector:
         self.arming = False
         self.arm_timestamp = None
         self.pending_command = None
-
+        self.current_number = None
+        self.aggregate = {}
+        
     def readers(self):
         return list(self.detector_config['readers'])
 
@@ -30,3 +32,4 @@ class Detector:
         self.arming = False
         self.arm_timestamp = None
         self.pending_command = None
+

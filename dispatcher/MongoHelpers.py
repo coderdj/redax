@@ -32,18 +32,29 @@ class MongoLog:
 
 class ControlDB:
 
-    def __init__(self, URI, db_name, log):
+    def __init__(self, URI, db_name, log, runs_db):
         self.uri = URI
         self.client = MongoClient(URI)
         self.db = self.client[db_name]
         self.log = log
+        self.runs_db = runs_db
 
+    def SetAggregateStatus(self, detector_name, detector):
+        indoc = {
+            "detector": detector_name,
+            "status": detector.status,
+            "time": datetime.datetime.utcnow()
+        }
+        self.db['aggregate_status'].insert(indoc)
+        
     def GetStatus(self, readers, client_timeout):
         # Get status of this detector
         status = -1
+        rate = 0.
+        buff = 0.
         for node in readers:
-            cursor = self.db['status'].find({"host": node}).sort("_id", -1).limit(1)
-
+            cursor = self.db['status'].find({"host": node}).sort("_id", -1).limit(1)            
+            
             # Node present?
             try:
                 doc = list(cursor)[0]
@@ -51,6 +62,9 @@ class ControlDB:
             except:
                 status = 4
                 break
+
+            rate += doc['rate']
+            buff += doc['buffer_length']
 
             # Node timing out?
             if (datetime.datetime.now().timestamp() -
@@ -66,8 +80,12 @@ class ControlDB:
                 break
             elif status != doc['status']:
                 status = 6
-
-        return status
+        ret = {
+            "rate": rate,
+            "buff": buff,
+            "status": status
+        }
+        return ret
 
     def GetDispatcherCommands(self):
         return self.db['command_queue'].find({            
@@ -99,14 +117,20 @@ class ControlDB:
             # considered a 'reset'            
             self.db['control'].insert(insert_doc)
             update_status = 'processed'
+
+            if detectors[command_doc['detector']].status == 3:
+                self.runs_db.SetStopTime(detectors[command_doc['detector']].current_number)
+                print("Set end time for %i"%detectors[command_doc['detector']].current_number)
+                detectors[command_doc['detector']].current_number = None
+                
         elif command_doc['command'] == 'start':
             if "mode" not in command_doc.keys():
                 update_status = "error"
                 self.log.entry("Tried to start the DAQ without specifying a run mode",
                                MongoLog.error)
             else:
-                self.log.entry("Processing start command for %s "%(command_doc['detector']),
-                               "in run mode %s"%command_doc['mode'])
+                self.log.entry(("Processing start command for %s "%(command_doc['detector']) +
+                                "in run mode %s"%command_doc['mode']), MongoLog.message)
                 
                 # Detector must be in "Idle" statue to arm
                 if detectors[command_doc['detector']].status == 0:
@@ -122,7 +146,12 @@ class ControlDB:
                                MongoLog.message)
                 insert_doc['command'] = 'start'
                 insert_doc['host'].append(detectors[command_doc['detector']].crate_controller())
-                self.db['control'].insert(insert_doc)            
+                self.db['control'].insert(insert_doc)
+                update_status = "running"
+                if 'number' in insert_doc.keys():
+                    detectors[command_doc['detector']].current_number = command_doc['number']
+                    self.db['command_queue'].update_one({"_id": command_doc['_id']},
+                                               {"$set": {"number": command_doc['number']}})
             
         else:
             self.log.entry("Received unknown command %s"%command_doc['detector'])
@@ -132,3 +161,59 @@ class ControlDB:
             self.db['command_queue'].update_one({"_id": command_doc['_id']},
                                                {"$set": {"status": update_status}})
         return
+
+
+class RunsDB:
+
+    def __init__(self, runs_uri, db_name, collection_name, control_uri, log):
+        self.uri = runs_uri
+        self.client = MongoClient(runs_uri)
+        self.db = self.client[db_name]
+        self.collection = self.db[collection_name]
+        self.control_client = MongoClient(control_uri)
+        self.log = log
+
+    def GetNextRunNumber(self, detector):
+        cursor = self.collection.find({'detector': detector}).sort("_id", -1).limit(1)
+        try:
+            last_doc = list(cursor)[0]
+        except:
+            self.log.entry("Didn't find any runs in your database so assuming you're "
+                           "starting with run 0. Congratulations and good luck.",
+                           MongoLog.message)
+            last_doc = {"number": -1}
+        return (last_doc['number']+1)
+
+    def InsertRunDoc(self, number, run_start_doc):
+        run_doc = {
+            "number": number,
+            "detector": run_start_doc['detector'],
+            "user": run_start_doc['user'],
+            "start": datetime.datetime.utcnow(),
+            "daq_mode": run_start_doc['mode']
+        }
+
+        ini = self.control_client['dax']['options'].find_one({"name": run_start_doc['mode']})
+        run_doc['reader'] = ini
+
+        if "comment" in run_start_doc.keys():
+            run_doc['comments'] = [{
+                "user": run_start_doc['user'],
+                "date": datetime.datetime.now(),
+                "comment": run_start_doc['comment']
+            }]
+
+        # Create initial data entry
+        if 'strax_output_path' in ini:
+            run_doc['data'] = [{
+                "type": "untriggered",
+                "host": "daq",
+                "location": ini['strax_output_path']
+            }]
+
+        self.collection.insert_one(run_doc)
+
+    def SetStopTime(self, number):
+        if number is None:
+            return
+        self.collection.update({"number": number}, {"$set":{"stop": datetime.datetime.now()}})

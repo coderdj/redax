@@ -31,9 +31,15 @@ try:
     logger = MongoHelpers.MongoLog(
         config['DEFAULT']['ControlDatabaseURI']%os.environ["MONGO_PASSWORD"],
         'dax', HOSTNAME)
+    runs_db = MongoHelpers.RunsDB(
+        config['DEFAULT']['RunsDatabaseURI']%os.environ["MONGO_PASSWORD"],
+        'run', 'run',
+        config['DEFAULT']['ControlDatabaseURI']%os.environ["MONGO_PASSWORD"],
+        logger)
     control_db = MongoHelpers.ControlDB(
         config['DEFAULT']['ControlDatabaseURI']%os.environ["MONGO_PASSWORD"],
-        'dax', logger)    
+        'dax', logger, runs_db)
+
 except Exception as E:
     print("Failed to initialize database objects. Did you set your mongo "
           "password in the MONGO_PASSWORD environment variable? The "
@@ -63,8 +69,8 @@ poll_frequency = config.getint('DEFAULT', 'PollFrequency')
 while(1):
     
     for detector_name, detector in detectors.items():
-        detector.status=control_db.GetStatus(detector.readers(), node_timeout)
-
+        detector.aggregate=control_db.GetStatus(detector.readers(), node_timeout)
+        detector.status = detector.aggregate['status']
         print("Detector %s has status %s"%(detector_name, STATUS[detector.status]))
 
     
@@ -82,14 +88,19 @@ while(1):
             # Arm completed successfully
             if detector.status == 2:
                 detector.pending_command['command'] = 'send_start_signal'
-                control_db.ProcessCommand(detector.pending_command, detectors)
+                number = runs_db.GetNextRunNumber(detector_name)
+                detector.pending_command['number'] = number
+                control_db.ProcessCommand(detector.pending_command, detectors)                
+                runs_db.InsertRunDoc(number, detector.pending_command)
                 detector.clear_arm()
+
             # Arm timed out
             elif detector.check_arm_fail(datetime.datetime.now().timestamp(), node_timeout):
                 logger.entry("Failed to arm detector %s. Arm command timed out."%detector_name,
                              logger.error)
                 detector.clear_arm()
-            
+                
+        control_db.SetAggregateStatus(detector_name, detector)
                 
     
     time.sleep(poll_frequency)
