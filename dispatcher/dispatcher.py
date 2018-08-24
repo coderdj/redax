@@ -98,6 +98,8 @@ while(1):
             elif detector.check_arm_fail(datetime.datetime.now().timestamp(), node_timeout):
                 logger.entry("Failed to arm detector %s. Arm command timed out."%detector_name,
                              logger.error)
+                # Update doc to say we failed
+                control_db.UpdateCommandDoc(detector.pending_command['_id'], "failed")
                 detector.clear_arm()
                 
         control_db.SetAggregateStatus(detector_name, detector)

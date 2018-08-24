@@ -89,8 +89,12 @@ class ControlDB:
 
     def GetDispatcherCommands(self):
         return self.db['command_queue'].find({            
-            "status": {"$exists": False}}).sort("_id", -1)
-    
+            "$or": [{"status": {"$exists": False}},
+                    {"status": "queued"}]}).sort("_id", 1)
+
+    def UpdateCommandDoc(self, cid, status):
+        self.db['command_queue'].update({"_id": cid}, {"$set": {"status": status}})
+        
     def ProcessCommand(self, command_doc, detectors):
 
         print("Received command %s for detector %s"%(command_doc['command'],
@@ -133,12 +137,15 @@ class ControlDB:
                                 "in run mode %s"%command_doc['mode']), MongoLog.message)
                 
                 # Detector must be in "Idle" statue to arm
-                if detectors[command_doc['detector']].status == 0:
+                if (detectors[command_doc['detector']].status == 0 and
+                    not detectors[command_doc['detector']].arming):
                     insert_doc['command'] = 'arm'
                     self.db['control'].insert(insert_doc)
                     detectors[command_doc['detector']].start_arm(
                         datetime.datetime.now().timestamp(), command_doc)
                     update_status = 'initializing'
+                else:
+                    update_status = "queued"
             
         elif command_doc['command'] == 'send_start_signal':            
             if detectors[command_doc['detector']].status == 2:
@@ -147,7 +154,7 @@ class ControlDB:
                 insert_doc['command'] = 'start'
                 insert_doc['host'].append(detectors[command_doc['detector']].crate_controller())
                 self.db['control'].insert(insert_doc)
-                update_status = "running"
+                update_status = "processed"
                 if 'number' in insert_doc.keys():
                     detectors[command_doc['detector']].current_number = command_doc['number']
                     self.db['command_queue'].update_one({"_id": command_doc['_id']},
