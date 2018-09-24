@@ -2,7 +2,7 @@ SHELL   = /bin/bash -O extglob -c
 CC	= g++
 CFLAGS	= -Wall -g -DLINUX -fPIC -std=c++17 -pthread $(shell pkg-config --cflags libmongocxx)
 LDFLAGS = -lCAENVME -lstdc++fs -lblosc $(shell pkg-config --libs libmongocxx) $(shell pkg-config --libs libbsoncxx)
-SOURCES_SLAVE = $(shell echo !(ccontrol)+(.cc))
+SOURCES_SLAVE = $(shell echo !(ccontrol|CControl*)+(.cc))
 OBJECTS_SLAVE = $(SOURCES_SLAVE: .cc=.o)
 CPP_SLAVE = main
 EXEC_SLAVE = main

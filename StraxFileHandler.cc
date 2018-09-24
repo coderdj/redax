@@ -162,7 +162,8 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
 	std::experimental::filesystem::create_directory(GetDirectoryPath(mutex_itr.first, false));
       std::experimental::filesystem::rename(GetFilePath(mutex_itr.first, true),
 					    GetFilePath(mutex_itr.first, false));
-      std::experimental::filesystem::remove(GetDirectoryPath(mutex_itr.first, true));
+
+      // std::experimental::filesystem::remove(GetDirectoryPath(mutex_itr.first, true));
       // Don't remove this mutex in this case, destroy the entries
       fFileHandles.erase(mutex_itr.first);
       fFileMutexes.erase(mutex_itr.first);
@@ -176,13 +177,28 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
   if(force_all){    
     std::experimental::filesystem::path write_path(fOutputPath);
     write_path /= "THE_END";
-    std::cout<<"Creating END file at "<<write_path<<std::endl;
-    std::experimental::filesystem::create_directory(write_path);
+    if(!std::experimental::filesystem::exists(write_path)){
+      std::cout<<"Creating END directory at "<<write_path<<std::endl;
+      try{
+	std::experimental::filesystem::create_directory(write_path);
+      }
+      catch(...){};
+    }
     write_path /= fHostname;
     std::ofstream outfile;
     outfile.open(write_path, std::ios::out);
     outfile<<"...my only friend";
     outfile.close();
-  }
+
+    // Prune _TEMP directories
+    for(auto& p: std::experimental::filesystem::directory_iterator(fOutputPath)){
+      std::string fss = p.path().string();
+      if(fss.substr( fss.length() - 5 ) == "_TEMP"){
+	try{
+	  std::experimental::filesystem::remove(fss);
+	}catch(...){};
+      }
+    }
+  } // end force_all
   
 }

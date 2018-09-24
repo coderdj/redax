@@ -172,7 +172,7 @@ std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname
     bt.vme_address = fHelper->StringToHex(ele["vme_address"].get_utf8().value.to_string());
     ret.push_back(bt);
   }
-  std::cout<<"Got boards"<<std::endl;
+  
   return ret;
 }
     

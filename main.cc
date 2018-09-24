@@ -12,9 +12,9 @@ int main(int argc, char** argv){
    
   std::string current_run_id="none";
   
-  // Accept just one command line argument, which is a URI
+  // Accept 2 arguments
   if(argc<3){
-    std::cout<<"Welcome to DAX. Run with a single argument: a valid mongodb URI"<<std::endl;
+    std::cout<<"Welcome to DAX. Run with a unique ID and a valid mongodb URI"<<std::endl;
     std::cout<<"e.g. ./dax ID mongodb://user:pass@host:port/authDB"<<std::endl;
     std::cout<<"...exiting"<<std::endl;
     exit(0);
@@ -65,7 +65,7 @@ int main(int argc, char** argv){
        bsoncxx::builder::stream::finalize
        );
     for(auto doc : cursor) {
-      std::cout<<"Found a doc!"<<std::endl;
+      std::cout<<"Found a doc with command "<<doc["command"].get_utf8().value.to_string()<<std::endl;
       // Very first thing: acknowledge we've seen the command. If the command
       // fails then we still acknowledge it because we tried
       control.update_one
@@ -142,7 +142,6 @@ int main(int argc, char** argv){
 	  try{
 	    string option_name = doc["mode"].get_utf8().value.to_string();
 	    logger->Entry("Loading options " + option_name, MongoLog::Debug);
-	    
 	    trydoc = options_collection.find_one(bsoncxx::builder::stream::document{}<<
 						 "name" << option_name.c_str() <<
 						 bsoncxx::builder::stream::finalize);
@@ -154,7 +153,7 @@ int main(int argc, char** argv){
 	    logger->Entry("Want to arm boards but no valid mode provided", MongoLog::Warning);
 	    options = "";
 	  }
-
+	  
 	  // Get an override doc from the 'options_override' field if it exists
 	  std::string override_json = "";
 	  try{
@@ -165,18 +164,24 @@ int main(int argc, char** argv){
 	    logger->Entry("No override options provided, continue without.", MongoLog::Debug);
 	  }
 
+	  bool initialized = false;
 	  if(trydoc){
 	    options = bsoncxx::to_json(*trydoc);
 	    std::vector<int> links;
 	    if(controller->InitializeElectronics(options, links, override_json) != 0){
-	      logger->Entry("Failed to initialized electronics", MongoLog::Error);
+	      logger->Entry("Failed to initialize electronics", MongoLog::Error);
+	      controller->End();
 	    }
 	    else{
+	      initialized = true;
 	      logger->Entry("Initialized electronics", MongoLog::Debug);
 	    }
 
 	    if(readoutThreads.size()!=0){
 	      logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
+	    }
+	    else if(!initialized){
+	      cout<<"Skipping readout configuration since init failed"<<std::endl;
 	    }
 	    else{
 	      for(unsigned int i=0; i<links.size(); i++){
@@ -210,7 +215,6 @@ int main(int argc, char** argv){
 	std::cout<<"Error in delete_many "<<e.what()<<std::endl;
       }
     }
-
     // Insert some information on this readout node back to the monitor DB
     controller->CheckErrors();
     status.insert_one(bsoncxx::builder::stream::document{} <<

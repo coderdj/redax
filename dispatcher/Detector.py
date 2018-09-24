@@ -8,7 +8,9 @@ class Detector:
         self.arm_timestamp = None
         self.pending_command = None
         self.current_number = None
-        self.aggregate = {}
+        self.mode = None
+        self.n_readers = len(self.detector_config['readers'])
+        self.aggregate = {"rate": 0, "buff": 0, "status": 0}
         
     def readers(self):
         return list(self.detector_config['readers'])
@@ -21,6 +23,7 @@ class Detector:
     def start_arm(self, timestamp, doc):
         self.arming = True
         self.arm_timestamp = timestamp
+        self.mode = doc['mode']
         self.pending_command = dict(doc)
 
     def check_arm_fail(self, timestamp, tolerance):

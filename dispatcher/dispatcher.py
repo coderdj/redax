@@ -63,8 +63,6 @@ for detector in detector_config.keys():
 node_timeout = config.getint('DEFAULT', 'ClientTimeout')
 poll_frequency = config.getint('DEFAULT', 'PollFrequency')
 
-
-
 # Main program loop
 while(1):
     
@@ -80,8 +78,12 @@ while(1):
     for doc in command_cursor:
         control_db.ProcessCommand(doc, detectors)
 
-    # Special check to see if any detector is finished arming and should
-    # be started
+    # We have a two-step process for starting and stopping runs. Starting requires you
+    # first arm all readers, then start the crate controller. Stopping requires you
+    # first stop the crate controller, then stop all readers. We do not want to block while
+    # waiting for either/or to process a command since this could block infinitely in
+    # case of crashes (in which case we want to report the error but stay alive). So
+    # we implement it as a two step process here. 
     for detector_name, detector in detectors.items():
         if detector.arming:
 
@@ -92,6 +94,7 @@ while(1):
                 detector.pending_command['number'] = number
                 control_db.ProcessCommand(detector.pending_command, detectors)                
                 runs_db.InsertRunDoc(number, detector.pending_command)
+                detector.current_number = number
                 detector.clear_arm()
 
             # Arm timed out
@@ -100,8 +103,9 @@ while(1):
                              logger.error)
                 # Update doc to say we failed
                 control_db.UpdateCommandDoc(detector.pending_command['_id'], "failed")
+                detector.mode = None
                 detector.clear_arm()
-                
+        
         control_db.SetAggregateStatus(detector_name, detector)
                 
     

@@ -9,3 +9,6 @@ db.create_collection("status", capped=True, size=52428800)
 
 # Create capped collection 'aggregate_status' with same size
 db.create_collection("aggregate_status", capped=True, size=52428800)
+
+# Create capped collection 'system monitor' with same size
+db.create_collection("system_monitor", capped=True, size=52428800)

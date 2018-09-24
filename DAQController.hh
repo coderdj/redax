@@ -8,8 +8,6 @@
 #include "MongoInserter.hh"
 #include "StraxInserter.hh"
 
-class V2718; //not implemented yet
-
 struct processingThread{
   std::thread *pthread;
   //MongoInserter *inserter;
@@ -77,8 +75,7 @@ private:
   u_int64_t fDatasize;
   string fHostname;
   
-  StraxFileHandler *fStraxHandler;
-  V2718 *fRunStartController;
+  StraxFileHandler *fStraxHandler;  
   
 };
 

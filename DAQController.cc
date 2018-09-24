@@ -15,7 +15,6 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fReadLoop = false;
   fNProcessingThreads=8;
   fBufferLength = 0;
-  fRunStartController = NULL;
   fRawDataBuffer = NULL;
   fDatasize=0.;
   fHostname = hostname;
@@ -53,10 +52,12 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
     fOptions->Override(bsoncxx::from_json(override).view());
   }
 
+  std::cout<<"Initializing digitizers"<<std::endl;
+  
   // Initialize digitizers
   fStatus = 1;
   for(auto d : fOptions->GetBoards("V1724", fHostname)){
-    
+    std::cout<<"New digitizer "<<d.board<<std::endl;
     V1724 *digi = new V1724(fLog);
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){      
 	fDigitizers[d.link].push_back(digi);
@@ -128,7 +129,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
 }
 
 void DAQController::Start(){
-  if(fRunStartController==NULL){
+  if(fOptions->GetInt("run_start", 0) == 0){
     for( auto const& link : fDigitizers ){      
       for(auto digi : link.second){
 	digi->WriteRegister(0x8100, 0x4);
@@ -141,13 +142,12 @@ void DAQController::Start(){
 
 void DAQController::Stop(){
 
-  if(fRunStartController==NULL){
-    for( auto const& link : fDigitizers ){      
-      for(auto digi : link.second){
-	digi->WriteRegister(0x8100, 0x0);
-      }
-    }    
-  }
+  std::cout<<"Deactivating boards"<<std::endl;
+  for( auto const& link : fDigitizers ){      
+    for(auto digi : link.second){
+      digi->WriteRegister(0x8100, 0x0);
+    }
+  }      
   fLog->Entry("Stopped digitizers", MongoLog::Debug);
 
   fReadLoop = false; // at some point.
@@ -155,8 +155,10 @@ void DAQController::Stop(){
   return;
 }
 void DAQController::End(){
+  std::cout<<"Closing Processing Threads"<<std::endl;
   CloseProcessingThreads();
-  for( auto const& link : fDigitizers ){
+  std::cout<<"Closing Digitizers"<<std::endl;
+  for( auto const& link : fDigitizers ){    
     for(auto digi : link.second){
       digi->End();
       delete digi;
@@ -177,9 +179,10 @@ void DAQController::End(){
     delete fRawDataBuffer;
     fRawDataBuffer = NULL;
   }
-
+  std::cout<<"Closing strax output"<<std::endl;
   // Assume everything is read out so we can close strax
   fStraxHandler->End();
+  std::cout<<"Finished end"<<std::endl;
 }
 
 void* DAQController::ReadThreadWrapper(void* data, int link){
