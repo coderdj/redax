@@ -114,6 +114,15 @@ class ControlDB:
                                     {"$set": {"status": "error"}})
             return -1
 
+        # Set Hosts for detector
+        if 'mode' in command_doc:
+            run_mode = self.db['options'].find_one({"name": mode})
+            if run_mode is None:
+                print("Requested run mode not in options DB!")
+                return -1
+            detectors[command_doc['detector']].set_readers(run_mode)
+            detectors[command_doc['detector']].set_crate_controller(run_mode)
+        
         update_status = None
         insert_doc = copy.deepcopy(dict(command_doc))
 
@@ -188,6 +197,7 @@ class ControlDB:
                 insert_doc['command'] = 'start'               
                 self.db['control'].insert(insert_doc)
                 update_status = "processed"
+                detectors[command_doc['detector']].running_since = datetime.datetime.now()
                 if 'number' in insert_doc.keys():
                     detectors[command_doc['detector']].current_number = command_doc['number']
                     self.db['command_queue'].update_one({"_id": command_doc['_id']},

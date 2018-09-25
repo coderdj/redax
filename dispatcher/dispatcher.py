@@ -3,6 +3,7 @@ import argparse
 from pymongo import MongoClient
 import MongoHelpers
 from Detector import Detector
+from Manager import Manager
 import os
 import json
 import datetime
@@ -39,7 +40,8 @@ try:
     control_db = MongoHelpers.ControlDB(
         config['DEFAULT']['ControlDatabaseURI']%os.environ["MONGO_PASSWORD"],
         'dax', logger, runs_db)
-
+    manager = Manager(config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'],'dax')
+    
 except Exception as E:
     print("Failed to initialize database objects. Did you set your mongo "
           "password in the MONGO_PASSWORD environment variable? The "
@@ -65,13 +67,16 @@ poll_frequency = config.getint('DEFAULT', 'PollFrequency')
 
 # Main program loop
 while(1):
+
+    
     
     for detector_name, detector in detectors.items():
         detector.aggregate=control_db.GetStatus(detector.readers(), node_timeout)
         detector.status = detector.aggregate['status']
         print("Detector %s has status %s"%(detector_name, STATUS[detector.status]))
 
-    
+    manager.manage(detectors)
+        
     # Check command DB for commands addressed to the dispatcher and
     # process in the order they are received
     command_cursor = control_db.GetDispatcherCommands()
