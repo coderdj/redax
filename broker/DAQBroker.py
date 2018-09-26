@@ -19,14 +19,16 @@ class DAQBroker():
             det = doc['detector']
             
             # Case 1: doc is not active, detector not here, ignore
-            if doc['active'] == 'false' and det not in self.dets.keys():
+            if doc['active'] == 'false' and det not in self.dets.keys():                
                 continue
 
             # Case 2: doc says not active, detector is in self.dets.
             # means we just stopped the run manually
             elif doc['active'] == 'false' and det in self.dets.keys():
+                # print("CASE 2")
                 self.dets[det]['active'] = 'false'
-                
+                self.dets[det]['rate'] = 0
+                self.dets[det]['buff'] = 0
                 # If not running or armed just ignore
                 if self.dets[det]['status'] not in [self.status_codes["ARMED"],
                                                     self.status_codes["RUNNING"],
@@ -34,8 +36,13 @@ class DAQBroker():
                     self.dets[det]['diagnosis'] = 'goal'                        
                     continue
 
-                self.dets[det]['diagnosis'] = 'processing'
+                # If no hosts, continue
+                if len(self.dets[det]['hosts']) == 0:
+                    continue
                 
+                self.dets[det]['diagnosis'] = 'processing'
+                # print(det)
+                # print(self.dets[det]['status'])
                 # If crate controller exists, send stop there
                 if 'crate_controller' in self.dets[det]:
                     pending_commands.append({
@@ -65,7 +72,7 @@ class DAQBroker():
                 det_doc = { "mode": doc['mode'], 'status': self.status_codes["IDLE"],
                             'stop_after': doc['stop_after'], 'active': doc['active'],
                             "user": doc['user'], "comment": doc['comment'], "hosts": [],
-                            "diagnosis": "processing"}
+                            "diagnosis": "processing", "rate": 0, "buff": 0}
                 self.dets[det] = det_doc
 
                 
@@ -128,7 +135,7 @@ class DAQBroker():
                     # Set the detector status to ARMING and set the armed_at flag
                     # and set the other stff
                     self.dets[det]['status'] = self.status_codes["ARMING"]
-                    self.dets[det]['armed_at'] = datetime.datetime.now()
+                    self.dets[det]['armed_at'] = datetime.datetime.utcnow()
                     self.dets[det]['mode'] = doc['mode']
                     if 'stop_after' in doc:
                         self.dets[det]['stop_after'] = doc['stop_after']
@@ -158,17 +165,18 @@ class DAQBroker():
                     })
 
                     # update det start time
-                    self.dets[det]['started_at'] = datetime.datetime.now()
+                    self.dets[det]['started_at'] = datetime.datetime.utcnow()
                     self.db.InsertRunDoc(self.dets[det], doc)
                     
                 # If RUNNING, check how long we've been running and send the
                 #             stop command in case we've hit our desired run length
-                elif self.dets[det]['status'] == self.status_codes["RUNNING"]:
-
+                elif (self.dets[det]['status'] == self.status_codes["RUNNING"] and
+                      self.dets[det]['started_at']!=None):
+                    # print("CASE 4")
                     self.dets[det]['diagnosis'] = 'goal'
                     send_stop = False
                     if self.dets[det]['stop_after'] is not None:
-                        t = (datetime.datetime.now() -
+                        t = (datetime.datetime.utcnow() -
                              self.dets[det]['started_at']).total_seconds()
                         if t > int(self.dets[det]['stop_after'])*60:
                             send_stop = True
@@ -200,7 +208,7 @@ class DAQBroker():
                             
                 # If ARMING, check if timed out
                 elif self.dets[det]['status'] == self.status_codes["ARMING"]:
-                    t = (datetime.datetime.now() - self.dets[det]['armed_at']).total_seconds()
+                    t = (datetime.datetime.utcnow() - self.dets[det]['armed_at']).total_seconds()
                     self.dets[det]['diagnosis'] = 'processing'
                     if t > self.arm_timeout:
                         self.dets[det]['diagnosis'] = 'error'
@@ -211,6 +219,7 @@ class DAQBroker():
                 elif self.dets[det]['status'] in [self.status_codes['ERROR'],
                                                self.status_codes['TIMEOUT'],
                                                self.status_codes['UNDECIDED']]:
+                    # print("CASE 5")
                     self.dets[det]['diagnosis'] = 'error'
                     if ("stopped_at" not in self.dets[det].keys()):
                         # Send stop command
@@ -219,7 +228,7 @@ class DAQBroker():
                             "host": self.dets[det]['hosts'],
                             "command": "stop"
                         })
-                        self.dets[det]['stopped_at'] = datetime.datetime.now()
+                        self.dets[det]['stopped_at'] = datetime.datetime.utcnow()
             
                 
         # For persistence we update self.dets to the database
@@ -241,7 +250,9 @@ class DAQBroker():
             # If the detector is "ARMING" then we give it this flag, otherwise it
             # would always say 'undecided'
             arming = False
-            if doc['status'] == c["ARMING"]:
+            rate = 0
+            buff = 0
+            if doc['status'] == c["ARMING"] or doc['status'] == c['ARMED']:
                 arming = True
 
             if 'hosts' not in doc or len(doc['hosts'])==0:
@@ -251,6 +262,8 @@ class DAQBroker():
             for host in doc['hosts']:
                 for host_stat in HostStatus:
                     if host == host_stat['host']:
+                        rate += host_stat['rate']
+                        buff += host_stat['buffer_length']
                         if status == -1:
                             status = host_stat['status']
                             break
@@ -277,5 +290,22 @@ class DAQBroker():
             if status in [c['IDLE'], c['ARMED'], c['RUNNING']] and 'stopped_at' in self.dets[det]:
                 del self.dets[det]['stopped_at']
             self.dets[det]['status'] = status
+            self.dets[det]['rate'] = rate
+            self.dets[det]['buffer'] = buff
             
         
+    def GetAggregateStatus(self):
+
+        ret = []
+        for det, doc in self.dets.items():
+            ret.append({
+                "status": doc['status'],
+                "number": doc['number'],
+                "detector": det,
+                "rate": doc['rate'],
+                "readers": len(doc['hosts']),
+                "time": datetime.datetime.utcnow(),
+                "buff": doc['buff'],
+                "mode": doc['mode']
+            })
+        return ret

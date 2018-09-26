@@ -59,6 +59,10 @@ while(1):
             s = 'inactive'
         print("Detector %s in %s state (%s/%s)"%(det, doc['diagnosis'],
                                                  state_codes[doc['status']], s))
+
+    astat = DBroke.GetAggregateStatus()
+    if len(astat) > 0:
+        DBInt.InsertAggregateStatus(astat)
     # print(DAQStatus)
 
     time.sleep(1)

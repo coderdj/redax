@@ -15,6 +15,7 @@ class DBInterface():
             "incoming": self.dax_db["detector_control"],
             "status": self.dax_db["status"],
             "aggregate_status": self.dax_db["dispatcher_status"],
+            "actual_aggregate_status": self.dax_db['aggregate_status'],
             "outgoing": self.dax_db["control"],
             "log": self.log_db["log"],
             "run": self.runs_db["run"],
@@ -102,3 +103,6 @@ class DBInterface():
 
         self.collections['run'].insert_one(run_doc)
 
+    def InsertAggregateStatus(self, status):
+        for s in status:
+            self.collections['actual_aggregate_status'].insert(s)
