@@ -77,6 +77,7 @@ int main(int argc, char** argv){
 	 bsoncxx::builder::stream::close_document <<
 	 bsoncxx::builder::stream::finalize
 	 );
+      std::cout<<"Updated doc"<<std::endl;
       
       // Get the command out of the doc
       string command = "";
@@ -153,6 +154,8 @@ int main(int argc, char** argv){
 	    logger->Entry("Want to arm boards but no valid mode provided", MongoLog::Warning);
 	    options = "";
 	  }
+
+	  std::cout<<"Made it past options"<<std::endl;
 	  
 	  // Get an override doc from the 'options_override' field if it exists
 	  std::string override_json = "";
@@ -164,10 +167,13 @@ int main(int argc, char** argv){
 	    logger->Entry("No override options provided, continue without.", MongoLog::Debug);
 	  }
 
+	  std::cout<<"Overrode JSON"<<std::endl;
+	  
 	  bool initialized = false;
 	  if(trydoc){
 	    options = bsoncxx::to_json(*trydoc);
 	    std::vector<int> links;
+	    std::cout<<"About to initialize electronics"<<std::endl;
 	    if(controller->InitializeElectronics(options, links, override_json) != 0){
 	      logger->Entry("Failed to initialize electronics", MongoLog::Error);
 	      controller->End();
@@ -206,6 +212,7 @@ int main(int argc, char** argv){
       // Note: usually '$where' is frowned upon due to it performing a collection scan each
       // time, but in this case it's totally fine since this collection will contain at most
       // like a few docs.
+      // Note to self. Do we need this or just cap collection?
       try{
 	control.delete_many(bsoncxx::builder::stream::document{} << "$where" <<
 			    "this.host.length == this.acknowledged.length" <<

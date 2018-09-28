@@ -39,6 +39,7 @@ class DBInterface():
         self.collections['outgoing'].insert(command)
 
     def GetHostsForMode(self, mode):
+        print("Getting hosts for mode %s"%mode)
         if mode is None:
             return [], None
         doc = self.collections["options"].find_one({"name": mode})
@@ -47,7 +48,10 @@ class DBInterface():
         cc = None
         if 'crate_controller' in doc.keys():
             cc = mode['crate_controller']
-            
+
+        print("MODE")
+        print(mode)
+        print([a['host'] for a in doc['boards']])
         return [a['host'] for a in doc['boards']], cc
 
     def LoadDispatcherStatus(self):
@@ -106,3 +110,6 @@ class DBInterface():
     def InsertAggregateStatus(self, status):
         for s in status:
             self.collections['actual_aggregate_status'].insert(s)
+
+    def UpdateEndTime(self, run):
+        self.collections['run'].update({"number": run}, {"$set": {"end": datetime.datetime.utcnow()}})

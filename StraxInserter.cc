@@ -273,7 +273,7 @@ int StraxInserter::ReadAndInsertData(){
       buffered_fragments=0;
     }
 
-    //usleep(10000); // 10ms sleep
+    usleep(10); // 10ms sleep
     read_length = fDataSource->GetData(readVector);
   }
 
