@@ -55,7 +55,7 @@ public:
   
   
 private:
-  void AppendData(vector<data_packet> d);
+  void AppendData(vector<data_packet> &d);
   
   vector <processingThread> fProcessingThreads;
   void OpenProcessingThreads();

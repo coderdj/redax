@@ -126,14 +126,24 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   // Initialize
   unsigned int blt_bytes=0;
   int nb=0,ret=-5;
+  // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
+  // the other, V1724G, has 512 MS/channel = 1MB/channel
   unsigned int BLT_SIZE=8*8388608; // 8MB buffer size
   u_int32_t *tempBuffer = new u_int32_t[BLT_SIZE/4];
 
   int count = 0;
   do{
-    ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
-				   ((unsigned char*)tempBuffer)+blt_bytes,
-				   BLT_SIZE, cvA32_U_BLT, cvD32, &nb);
+    try{
+      ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
+				     ((unsigned char*)tempBuffer)+blt_bytes,
+				     BLT_SIZE, cvA32_U_BLT, cvD32, &nb);
+    }catch(std::exception E){
+      std::cout<<fBoardHandle<<" sucks"<<std::endl;
+      std::cout<<"BLT_BYTES: "<<blt_bytes<<std::endl;
+      std::cout<<"nb: "<<nb<<std::endl;
+      std::cout<<E.what()<<std::endl;
+      throw;
+    };
     if( (ret != cvSuccess) && (ret != cvBusError) ){
       stringstream err;
       err<<"Read error in board "<<fBID<<" after "<<count<<" reads.";

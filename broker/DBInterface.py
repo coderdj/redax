@@ -10,7 +10,7 @@ class DBInterface():
             config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])['log']
         self.runs_db = MongoClient(
             config['DEFAULT']['RunsDatabaseURI']%os.environ['MONGO_PASSWORD'])['run']
-
+        self.STATUSES = ["Idle", "Arming", "Armed", "Running", "Error", "Timeout", "Unknown"]
         self.collections = {
             "incoming": self.dax_db["detector_control"],
             "status": self.dax_db["status"],
@@ -38,6 +38,7 @@ class DBInterface():
     def SendCommand(self, command):
         self.collections['outgoing'].insert(command)
 
+        
     def GetHostsForMode(self, mode):
         print("Getting hosts for mode %s"%mode)
         if mode is None:
@@ -64,12 +65,14 @@ class DBInterface():
     def UpdateDispatcherStatus(self, status):
         for det, doc in status.items():
             doc['detector'] = det
+            doc['human_readable_status'] = self.STATUSES[doc['status']]
+            doc['update_time'] = datetime.datetime.now()
             self.collections["aggregate_status"].update({"detector": det},
                                                         doc, upsert=True)
         return
 
     def GetNextRunNumber(self):
-        cursor = self.collections["run"].find().sort("_id", -1).limit(1)
+        cursor = self.collections["run"].find().sort("number", -1).limit(1)
         if cursor.count() == 0:
             print("wtf, first run?")
             return 0

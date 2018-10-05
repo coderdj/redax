@@ -94,10 +94,10 @@ class DAQBroker():
 
                     self.dets[det]['diagnosis'] = 'processing'
                     
-                    if not self.CheckRunPlausibility(mode, det):
+                    if not self.CheckRunPlausibility(doc['mode'], det):
                         continue
 
-                    pending_commands += MakeCommand("arm", doc)                                        
+                    pending_commands += self.MakeCommand("arm", doc)                                        
                         
                 # If ARMED, send the start command
                 elif self.dets[det]['status'] == self.status_codes["ARMED"]:
@@ -184,7 +184,7 @@ class DAQBroker():
         #        needed for the run? If so, proceed. If not update the
         #        host list now and defer running any commands until the
         #        next iteration so we can properly update the status
-        needed_hosts, cc = self.db.GetHostsForMode(doc['mode'])
+        needed_hosts, cc = self.db.GetHostsForMode(mode)
         if (('hosts' not in self.dets[det]) or (len(self.dets[det]['hosts'])==0) or
             (sorted(needed_hosts) != sorted(self.dets[det]['hosts'])) or
             (self.dets[det]['crate_controller'] != cc)):
@@ -279,6 +279,7 @@ class DAQBroker():
 
         pending_commands = []
         det = state_doc['detector']
+        doc = state_doc
         
         if command == 'stop':
             # Setting started_at to None means we won't spam

@@ -48,8 +48,11 @@ while(1):
     # Process one command per iteration
     if len(pending_commands) > 0:
         DBInt.SendCommand(pending_commands[0])
+        print("COMMAND IN: %s"%pending_commands[0]['command'])
         print(pending_commands[0])
+        print("\n")
         pending_commands.pop(0)
+            
 
     # Update global status
     DAQStatus = DBroke.GetStatus()

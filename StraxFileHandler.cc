@@ -51,7 +51,7 @@ void StraxFileHandler::End(){
   
 }
 
-int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> parsed_fragments){
+int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> &parsed_fragments){
 
   // Store the lowest ID that's been inserted this round
   int lowest_id = -1;
@@ -113,23 +113,34 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
   // should lose the TEMP marking so that the trigger can process
   // them. The only real way we know if a file is finished is if
   // it is at least 'n' id's back from the current file
-  for (auto const &mutex_itr : fFileMutexes){
+
+  // Love the auto pointer but since we want to manipulate the
+  // map within the loop easier to do it this way
+  std::map<std::string, std::mutex>::iterator mutex_itr;
+
+  //for (auto &mutex_itr : fFileMutexes){
+  for(mutex_itr=fFileMutexes.begin();
+      mutex_itr!=fFileMutexes.end(); ++mutex_itr){
 
     // Get the ID of this one
-    std::string idnr = mutex_itr.first.substr(0, fChunkNameLength);
+    std::string idnr = mutex_itr->first.substr(0, fChunkNameLength);
     u_int32_t idnrint = (u_int32_t)(std::stoi(idnr));
     if(force_all || (back_from_id > idnrint &&
 		     back_from_id - idnrint > fChunkCloseDelay)){
 
       // try_lock cause if it is being used we can skip
-      if(!fFileMutexes[mutex_itr.first].try_lock())
+      if(!mutex_itr->second.try_lock()){
+	std::cout<<"Skipping file "<<mutex_itr->first<<" since in use."<<std::endl;
 	continue;
+      }
+      std::cout<<"Closing file "<<mutex_itr->first<<std::endl;
+      std::cout<<fFileMutexes.size()<<" files remain"<<std::endl;
       
       // Close this chunk!
-      fFileHandles[mutex_itr.first].close();
+      fFileHandles[mutex_itr->first].close();
 
       // ZIP it up!
-      std::ifstream ifs(GetFilePath(mutex_itr.first, true), std::ios::binary);
+      std::ifstream ifs(GetFilePath(mutex_itr->first, true), std::ios::binary);
       std::filebuf* pbuf = ifs.rdbuf();
       std::size_t size = pbuf->pubseekoff (0,ifs.end,ifs.in);
       pbuf->pubseekpos (0,ifs.in);
@@ -150,24 +161,28 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
 
       // I am afraid to stream to the 'finished' version so gonna remove the temp file,
       // then stream compressed data to it, then rename
-      std::experimental::filesystem::remove(GetFilePath(mutex_itr.first, true));
-      
-      std::ofstream outfile(GetFilePath(mutex_itr.first, true), std::ios::binary);
+      std::experimental::filesystem::remove(GetFilePath(mutex_itr->first, true));
+      std::ofstream outfile(GetFilePath(mutex_itr->first, true), std::ios::binary);
       outfile.write(out_buffer, wsize);
       delete[] out_buffer;
       outfile.close();
       
       // Move this chunk from *_TEMP to the same path without TEMP
-      if(!std::experimental::filesystem::exists(GetDirectoryPath(mutex_itr.first, false)))
-	std::experimental::filesystem::create_directory(GetDirectoryPath(mutex_itr.first, false));
-      std::experimental::filesystem::rename(GetFilePath(mutex_itr.first, true),
-					    GetFilePath(mutex_itr.first, false));
+      if(!std::experimental::filesystem::exists(GetDirectoryPath(mutex_itr->first, false)))
+	std::experimental::filesystem::create_directory(GetDirectoryPath(mutex_itr->first, false));
+      std::experimental::filesystem::rename(GetFilePath(mutex_itr->first, true),
+					    GetFilePath(mutex_itr->first, false));
 
-      // std::experimental::filesystem::remove(GetDirectoryPath(mutex_itr.first, true));
+      
+      // std::experimental::filesystem::remove(GetDirectoryPath(mutex_itr->first, true));
       // Don't remove this mutex in this case, destroy the entries
-      fFileHandles.erase(mutex_itr.first);
-      fFileMutexes.erase(mutex_itr.first);
-      continue;
+      fFileHandles.erase(mutex_itr->first);
+      mutex_itr = fFileMutexes.erase(mutex_itr);
+
+      if(fFileMutexes.size()>0)
+	continue;
+      else
+	break;
     }
 
   }

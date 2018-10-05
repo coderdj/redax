@@ -135,7 +135,10 @@ int main(int argc, char** argv){
       else if(command == "arm"){
 	// Can only arm if we're in the idle, arming, or armed state
 	if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
-	  controller->End();
+
+	  // Clear up any previously failed things
+	  if(controller->status() != 0)
+	    controller->End();
 
 	  // Try to pull options from database and store in an 'optional' object
 	  string options = "";

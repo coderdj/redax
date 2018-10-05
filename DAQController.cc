@@ -155,6 +155,7 @@ void DAQController::Stop(){
   return;
 }
 void DAQController::End(){
+  Stop();
   std::cout<<"Closing Processing Threads"<<std::endl;
   CloseProcessingThreads();
   std::cout<<"Closing Digitizers"<<std::endl;
@@ -255,7 +256,7 @@ void DAQController::ReadData(int link){
 
 }
 
-void DAQController::AppendData(vector<data_packet> d){
+void DAQController::AppendData(vector<data_packet> &d){
   // Blocks!
   fBufferMutex.lock();
   if(fRawDataBuffer==NULL)
