@@ -66,7 +66,7 @@ class DBInterface():
         for det, doc in status.items():
             doc['detector'] = det
             doc['human_readable_status'] = self.STATUSES[doc['status']]
-            doc['update_time'] = datetime.datetime.now()
+            doc['update_time'] = datetime.datetime.utcnow()
             self.collections["aggregate_status"].update({"detector": det},
                                                         doc, upsert=True)
         return

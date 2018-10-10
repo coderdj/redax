@@ -200,7 +200,8 @@ class DAQBroker():
                 continue
             for host in det_doc['hosts']:
                 if host in self.dets[det]['hosts']:
-                    self.log.feedback_loop("Host conflict. Can't start detector %s"%det)
+                    print("Host conflict, can't start detector %s"%det)
+                    #self.log.feedback_loop("Host conflict. Can't start detector %s"%det)
                     return False
         return True
         

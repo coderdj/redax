@@ -56,21 +56,33 @@ int main(int argc, char** argv){
   // to this hostname. 
   while(1){
 
-    // An array of strings should be query-able just like a normal field
-    mongocxx::cursor cursor = control.find
-      (
-       bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged" <<
-       bsoncxx::builder::stream::open_document << "$ne" << hostname <<       
-       bsoncxx::builder::stream::close_document << 
-       bsoncxx::builder::stream::finalize
-       );
-    for(auto doc : cursor) {
-      std::cout<<"Found a doc with command "<<doc["command"].get_utf8().value.to_string()<<std::endl;
+    // Try to poll for commands
+    bsoncxx::stdx::optional<bsoncxx::document::value> querydoc;
+    try{
+      //   mongocxx::cursor cursor = control.find 
+      querydoc = control.find_one
+	(
+	 bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged" <<
+	 bsoncxx::builder::stream::open_document << "$ne" << hostname <<       
+	 bsoncxx::builder::stream::close_document << 
+	 bsoncxx::builder::stream::finalize
+	 );
+    }catch(const std::exception &e){
+      std::cout<<e.what()<<std::endl;
+      std::cout<<"Can't connect to DB so will continue what I'm doing"<<std::endl;
+    }
+    
+    
+    //for(auto doc : cursor) {
+    if(querydoc){
+      auto doc = querydoc->view();
+      std::cout<<"Found a doc with command "<<
+	doc["command"].get_utf8().value.to_string()<<std::endl;
       // Very first thing: acknowledge we've seen the command. If the command
       // fails then we still acknowledge it because we tried
       control.update_one
 	(
-	 bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
+	 bsoncxx::builder::stream::document{} << "_id" << (doc)["_id"].get_oid() <<
 	 bsoncxx::builder::stream::finalize,
 	 bsoncxx::builder::stream::document{} << "$push" <<
 	 bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
@@ -82,7 +94,7 @@ int main(int argc, char** argv){
       // Get the command out of the doc
       string command = "";
       try{
-	command = doc["command"].get_utf8().value.to_string();	
+	command = (doc)["command"].get_utf8().value.to_string();	
       }
       catch (const std::exception &e){
 	//LOG
@@ -90,21 +102,21 @@ int main(int argc, char** argv){
 	err<<"Received malformed command: "<< bsoncxx::to_json(doc);
 	logger->Entry(err.str(), MongoLog::Warning);
       }
-
+      
       
       // Process commands
       if(command == "start"){
-
+	
 	if(controller->status() == 2) {
 	  controller->Start();
-
+	  
 	  // Nested tried cause of nice C++ typing
 	  try{
-	    current_run_id = doc["run_identifier"].get_utf8().value.to_string();	    
+	    current_run_id = (doc)["run_identifier"].get_utf8().value.to_string();	    
 	  }
 	  catch(const std::exception &e){
 	    try{
-	      current_run_id = std::to_string(doc["run_identifier"].get_int32());
+	      current_run_id = std::to_string((doc)["run_identifier"].get_int32());
 	    }
 	    catch(const std::exception &e){
 	      current_run_id = "na";
@@ -112,7 +124,7 @@ int main(int argc, char** argv){
 	  }
 	  
 	  logger->Entry("Received start command from user "+
-			doc["user"].get_utf8().value.to_string(), MongoLog::Message);
+			(doc)["user"].get_utf8().value.to_string(), MongoLog::Message);
 	}
 	else
 	  logger->Entry("Cannot start DAQ since not in ARMED state", MongoLog::Debug);
@@ -120,7 +132,7 @@ int main(int argc, char** argv){
       else if(command == "stop"){
 	// "stop" is also a general reset command and can be called any time
 	logger->Entry("Received stop command from user "+
-		      doc["user"].get_utf8().value.to_string(), MongoLog::Message);
+		      (doc)["user"].get_utf8().value.to_string(), MongoLog::Message);
 	controller->Stop();
 	current_run_id = "none";
 	if(readoutThreads.size()!=0){
@@ -135,41 +147,41 @@ int main(int argc, char** argv){
       else if(command == "arm"){
 	// Can only arm if we're in the idle, arming, or armed state
 	if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
-
+	  
 	  // Clear up any previously failed things
 	  if(controller->status() != 0)
 	    controller->End();
-
+	  
 	  // Try to pull options from database and store in an 'optional' object
 	  string options = "";
 	  bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
 	  try{
-	    string option_name = doc["mode"].get_utf8().value.to_string();
+	    string option_name = (doc)["mode"].get_utf8().value.to_string();
 	    logger->Entry("Loading options " + option_name, MongoLog::Debug);
 	    trydoc = options_collection.find_one(bsoncxx::builder::stream::document{}<<
 						 "name" << option_name.c_str() <<
 						 bsoncxx::builder::stream::finalize);
 	    logger->Entry("Received arm command from user "+
-			  doc["user"].get_utf8().value.to_string() +
+			  (doc)["user"].get_utf8().value.to_string() +
 			  " for mode " + option_name, MongoLog::Message);
 	  }
 	  catch(const std::exception &e){
 	    logger->Entry("Want to arm boards but no valid mode provided", MongoLog::Warning);
 	    options = "";
 	  }
-
+	  
 	  std::cout<<"Made it past options"<<std::endl;
 	  
 	  // Get an override doc from the 'options_override' field if it exists
 	  std::string override_json = "";
 	  try{
-	    bsoncxx::document::view oopts = doc["options_override"].get_document().view();
+	    bsoncxx::document::view oopts = (doc)["options_override"].get_document().view();
 	    override_json = bsoncxx::to_json(oopts);
 	  }
 	  catch(const std::exception &e){
 	    logger->Entry("No override options provided, continue without.", MongoLog::Debug);
 	  }
-
+	  
 	  std::cout<<"Overrode JSON"<<std::endl;
 	  
 	  bool initialized = false;
@@ -185,7 +197,7 @@ int main(int argc, char** argv){
 	      initialized = true;
 	      logger->Entry("Initialized electronics", MongoLog::Debug);
 	    }
-
+	    
 	    if(readoutThreads.size()!=0){
 	      logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
 	    }
@@ -227,14 +239,19 @@ int main(int argc, char** argv){
     }
     // Insert some information on this readout node back to the monitor DB
     controller->CheckErrors();
-    status.insert_one(bsoncxx::builder::stream::document{} <<
-		      "host" << hostname <<
-		      "rate" << controller->GetDataSize()/1e6 <<
-		      "status" << controller->status() <<
-		      "buffer_length" << controller->buffer_length()/1e6 <<
-		      "run_mode" << controller->run_mode() <<
-		      "current_run_id" << current_run_id <<
-		      bsoncxx::builder::stream::finalize);
+
+    try{
+      status.insert_one(bsoncxx::builder::stream::document{} <<
+			"host" << hostname <<
+			"rate" << controller->GetDataSize()/1e6 <<
+			"status" << controller->status() <<
+			"buffer_length" << controller->buffer_length()/1e6 <<
+			"run_mode" << controller->run_mode() <<
+			"current_run_id" << current_run_id <<
+			bsoncxx::builder::stream::finalize);
+    }catch(const std::exception &e){
+      std::cout<<"Can't connect to DB to update."<<std::endl;
+    }
     usleep(1000000);
   }
   delete logger;
