@@ -38,6 +38,15 @@ class DBInterface():
     def SendCommand(self, command):
         self.collections['outgoing'].insert(command)
 
+    def GetRunMode(self, mode):
+        if mode is None:
+            return None
+        doc = self.collections["options"].find_one({"name": mode})
+        try:
+            return doc
+        except Exception as E:
+            print(E)
+        return None
         
     def GetHostsForMode(self, mode):
         print("Getting hosts for mode %s"%mode)

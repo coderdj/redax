@@ -1,5 +1,6 @@
 import time
 import datetime
+import os
 
 class DAQBroker():
     def __init__(self, DBInt):
@@ -196,7 +197,7 @@ class DAQBroker():
         # any other detector? One process can certainly be part of two different
         # detectors, but not at the same time
         for detector, det_doc in self.dets.items():
-            if detector == det or "hosts" not in det_doc.keys():
+            if detector == det or "hosts" not in det_doc.keys() or det_doc['active'] == 'false':
                 continue
             for host in det_doc['hosts']:
                 if host in self.dets[det]['hosts']:
@@ -289,18 +290,20 @@ class DAQBroker():
 
             # Send stop
             # If crate controller exists, send stop there
-            if 'crate_controller' in self.dets[det]:
+            if 'crate_controller' in self.dets[det] and self.dets[det]['crate_controller'] is not None:
                 pending_commands.append({
                     "user": doc['user'],
                     "host": [self.dets[det]['crate_controller']],
-                    "command": "stop"
+                    "command": "stop",
+                    "detector": det
                 })
 
             # Send stop command
             pending_commands.append({
                 "user": doc['user'],
                 "host": self.dets[det]['hosts'],
-                "command": "stop"
+                "command": "stop",
+                "detector": det
             })                                                                                                                                                                                    
             
             if 'number' in self.dets[det] and self.dets[det]['number'] is not None:
@@ -308,17 +311,28 @@ class DAQBroker():
                 self.dets[det]['number'] = None
 
         elif command == 'arm':
-            # Assign a temporary run number. Will become official if this work                                                                                                                        
+            # Assign a temporary run number. Will become official if this works
             self.dets[det]['number'] = self.db.GetNextRunNumber()
-            pending_commands.append({
+            pc = {
                 'user': doc['user'],
                 'detector': det,
                 'host': self.dets[det]['hosts'],
                 'mode': doc['mode'],
                 'command': 'arm',
-                'number': self.dets[det]['number']
-            })
+                'number': self.dets[det]['number']                
+            }
 
+            options = self.db.GetRunMode(doc['mode'])
+            #if options is not None and 'strax_output_path' in options.keys():
+            #    run_folder_name = str(self.dets[det]['number']).zfill(8)
+            #    pc["options_override"] = {"strax_output_path":
+            #                              os.path.join(options['strax_output_path'], run_folder_name),
+            #                              "run_identifier": str(self.dets[det]['number'])}
+            #else:
+            pc['options_override'] = {"run_identifier": str(self.dets[det]['number']).zfill(6)}
+            
+            pending_commands.append(pc)
+            
             # Set the detector status to ARMING and set the armed_at flag
             # and set the other stuff
             self.dets[det]['status'] = self.status_codes["ARMING"]
@@ -335,7 +349,8 @@ class DAQBroker():
                 'host': self.dets[det]['hosts'],
                 'crate_controller': self.dets[det]['crate_controller'],
                 'mode': doc['mode'],
-                'number': self.dets[det]['number']
+                'number': self.dets[det]['number'],
+                "detector": det
             })
 
             # update det start time
