@@ -25,6 +25,7 @@ public:
   ~DAQController();
 
   int InitializeElectronics(std::string opts, std::vector<int> &keys,
+			    std::vector<std::string>include_json,
 			    std::string override = "");
 
   // Get data (return new buffer and size)

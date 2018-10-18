@@ -34,11 +34,11 @@ class Options{
 
 public:
   Options();
-  Options(std::string opts);
+  Options(std::string opts, std::vector<std::string>include_opts={});
   ~Options();
 
   int LoadFile(std::string path);
-  int Load(std::string opts);
+  int Load(std::string opts, std::vector<std::string>include_opts={});
   
   int GetInt(std::string key, int default_value=-1);
   long int GetLongInt(std::string key, long int default_value=-1);

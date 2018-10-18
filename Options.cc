@@ -7,8 +7,8 @@ Options::Options(){
   bson_value = NULL;
 }
 
-Options::Options(std::string opts){
-  if(Load(opts)!=0)
+Options::Options(std::string opts, std::vector<std::string>include_opts){
+  if(Load(opts, include_opts)!=0)
     throw std::runtime_error("Can't initialize options class");  
   fHelper = new DAXHelpers();
 }
@@ -44,7 +44,7 @@ std::string Options::ExportToString(){
   return ret;
 }
 
-int Options::Load(std::string opts){
+int Options::Load(std::string opts, std::vector<std::string>include_opts){
   try{
     // This needs to be a pointer. Needs to stay in scope for as long as you might
     // want to see the view.
@@ -59,7 +59,18 @@ int Options::Load(std::string opts){
   catch(const std::exception &e){
     std::cout<<e.what()<<std::endl;
   }
-  return 0;
+
+  // In case there are extra opts just override
+  int success = 0;
+  for(unsigned int x=0; x<include_opts.size(); x++){
+    success += Override(bsoncxx::from_json(include_opts[x]).view());
+  }
+  if(success!=0){
+    std::cout<<"Failed to override options doc with include"<<std::endl;
+    //  fLog->Entry("Failed to override options doc with includes", MongoLog::Warning);
+  }
+  
+  return success;
 }
 
 int Options::Override(bsoncxx::document::view override_opts){

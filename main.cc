@@ -153,24 +153,23 @@ int main(int argc, char** argv){
 	    controller->End();
 	  
 	  // Try to pull options from database and store in an 'optional' object
-	  string options = "";
 	  bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
 	  try{
 	    string option_name = (doc)["mode"].get_utf8().value.to_string();
 	    logger->Entry("Loading options " + option_name, MongoLog::Debug);
 	    trydoc = options_collection.find_one(bsoncxx::builder::stream::document{}<<
 						 "name" << option_name.c_str() <<
-						 bsoncxx::builder::stream::finalize);
+						 bsoncxx::builder::stream::finalize);	    
+	    
 	    logger->Entry("Received arm command from user "+
 			  (doc)["user"].get_utf8().value.to_string() +
 			  " for mode " + option_name, MongoLog::Message);
 	  }
 	  catch(const std::exception &e){
 	    logger->Entry("Want to arm boards but no valid mode provided", MongoLog::Warning);
-	    options = "";
 	  }
-	  
-	  std::cout<<"Made it past options"<<std::endl;
+
+
 	  
 	  // Get an override doc from the 'options_override' field if it exists
 	  std::string override_json = "";
@@ -186,10 +185,30 @@ int main(int argc, char** argv){
 	  
 	  bool initialized = false;
 	  if(trydoc){
-	    options = bsoncxx::to_json(*trydoc);
+
+	    // Pull all sub-docs
+	    std::vector<std::string> include_json;
+	    try{ 
+              bsoncxx::array::view include_array = (*trydoc).view()["includes"].get_array().value;
+	      for(bsoncxx::array::element ele : include_array){
+		auto sd = options_collection.find_one(bsoncxx::builder::stream::document{}<<
+						      "name" << ele.get_utf8().value.to_string() <<
+						      bsoncxx::builder::stream::finalize);
+		if(sd)
+		  include_json.push_back(bsoncxx::to_json(*sd));
+		else
+		  logger->Entry("Possible improper run config. Options include documents faulty",
+				MongoLog::Warning);
+		  		
+	      }
+	    }
+	    catch(...){};
+
+	    // Mongocxx types confusing so passing json strings around
+	    std::string options = bsoncxx::to_json(*trydoc);
 	    std::vector<int> links;
 	    std::cout<<"About to initialize electronics"<<std::endl;
-	    if(controller->InitializeElectronics(options, links, override_json) != 0){
+	    if(controller->InitializeElectronics(options, links, include_json, override_json) != 0){
 	      logger->Entry("Failed to initialize electronics", MongoLog::Error);
 	      controller->End();
 	    }

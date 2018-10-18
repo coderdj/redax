@@ -42,12 +42,13 @@ std::string DAQController::run_mode(){
 }
 
 int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys,
+					 std::vector<std::string>include_json,
 					 std::string override){
 
   // Load options including override if any
   if(fOptions != NULL)
     delete fOptions;
-  fOptions = new Options(opts);
+  fOptions = new Options(opts, include_json);
   if(override!=""){
     fOptions->Override(bsoncxx::from_json(override).view());
   }

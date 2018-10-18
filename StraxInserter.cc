@@ -157,7 +157,7 @@ int StraxInserter::ParseDocuments(
 	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
 	  fragment.append(pulseTime, 8);
 
-	  u_int32_t ft = fFragmentLength/2;
+	  //u_int32_t ft = fFragmentLength/2;
 	  char *fragmenttime = reinterpret_cast<char*> (&samples_this_channel);
 	  fragment.append(fragmenttime, 4);
 
