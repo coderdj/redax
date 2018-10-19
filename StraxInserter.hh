@@ -46,12 +46,15 @@ public:
 private:
   int ParseDocuments(std::map<std::string, std::string*> &strax_docs,
 		      data_packet dp);
+  void DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
+			   u_int16_t channels_in_event);
   
   u_int64_t fChunkLength; // ns
   u_int32_t fChunkOverlap; // ns
   u_int16_t fFragmentLength; // This is in BYTES
   u_int16_t fStraxHeaderSize; // in BYTES too
   u_int32_t fChunkNameLength;
+  int fFirmwareVersion;
   Options *fOptions;
   MongoLog *fLog;
   DAQController *fDataSource;

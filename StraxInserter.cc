@@ -12,7 +12,8 @@ StraxInserter::StraxInserter(){
   fStraxHeaderSize=31;
   fLog = NULL;
   fStraxHandler=NULL;
-  fErrorBit = false;  
+  fErrorBit = false;
+  fFirmwareVersion = -1;
 }
 
 StraxInserter::~StraxInserter(){  
@@ -23,7 +24,11 @@ int StraxInserter::Initialize(Options *options, MongoLog *log,  StraxFileHandler
   fOptions = options;
   fChunkLength = fOptions->GetLongInt("strax_chunk_length", 20e9); // default 20s
   fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
-  fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);  
+  fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
+
+  // To start we do not know which FW version we're dealing with (for data parsing)
+  fFirmwareVersion = -1;
+
   fDataSource = dataSource;
   fLog = log;
   fErrorBit = false;
@@ -66,24 +71,37 @@ int StraxInserter::ParseDocuments(
     // 0xFFFFFFFF are used as padding it seems
     
     if(buff[idx]>>20 == 0xA00){ // Found a header, start parsing
-      //u_int32_t event_size = buff[idx]&0xFFFF; // In bytes
+      u_int32_t event_size = buff[idx]&0xFFFF; // In bytes
       u_int32_t channel_mask = buff[idx+1]&0xFF; // Channels in event
+      u_int32_t channels_in_event = __builtin_popcount(channel_mask);
       u_int32_t board_fail  = buff[idx+1]&0x4000000; //Board failed. Never saw this set.
-
+      u_int32_t event_time = buff[idx+3]&0x7FFFFFFF;
+      
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
       if(board_fail==1)
 	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
       
+      // If we don't know which firmware we're using, check now
+      if(fFirmwareVersion == -1){
+	DetermineDataFormat(&(buff[idx]), event_size, channels_in_event);
+      }
+
       idx += 4; // Skip the header
       
       for(unsigned int channel=0; channel<8; channel++){
 	if(!((channel_mask>>channel)&1)) // Make sure channel in data
 	  continue;
-	u_int32_t channel_size = buff[idx]; // In words (4 bytes)
-	idx++;
-	u_int32_t channel_time = buff[idx]&0x7FFFFFFF;
-	idx++;
+
+	u_int32_t channel_size = event_size / channels_in_event;
+	u_int32_t channel_time = event_time;
+
+	if(fFirmwareVersion == 0){
+	  channel_size = buff[idx] - 2; // In words (4 bytes). The -2 is cause of header
+	  idx++;
+	  channel_time = buff[idx]&0x7FFFFFFF;
+	  idx++;
+	}
 
 	// OK. Here's the logic for the clock reset, and I realize this is the
 	// second place in the code where such weird logic is needed but that's it
@@ -124,7 +142,7 @@ int StraxInserter::ParseDocuments(
 	// bit because we want to allow also odd numbers of samples
 	// as FragmentLength
 	u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff);
-	u_int32_t samples_in_channel = (channel_size-2)*2;
+	u_int32_t samples_in_channel = (channel_size)*2;
 	u_int32_t index_in_sample = 0;
 	u_int32_t offset = idx*2;
 	u_int16_t fragment_index = 0;
@@ -238,7 +256,7 @@ int StraxInserter::ParseDocuments(
 	  index_in_sample = max_sample;	  
 	}
 	// Go to next channel
-	idx+=channel_size-2;
+	idx+=channel_size;
       }
     }
     else
@@ -283,5 +301,49 @@ int StraxInserter::ReadAndInsertData(){
   return 0;  
 }
 
+void StraxInserter::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
+					u_int16_t channels_in_event){
+  /*
+    This function should automatically sense which data format we're dealing with. 
+    It does this by looking at various control words and trying to deduce from their
+    values what this must be. We were unable to think of a 100% deterministic way to 
+    say beyond any doubt which format this is, but we think the combination of circumstance
+    required to fool this series of checks is so unlikely there is no realistic chance
+    of choosing incorrectly.
+    And if we do it will just seg fault, not explode.
+   */
 
+  // Start after header
+  unsigned int idx = 4;
+  
+  for(unsigned int ch=0; ch<channels_in_event; ch++){
+    u_int32_t channel_event_size = buff[idx];
+    u_int32_t channel_time_tag = buff[idx+1];
+
+    // Check 1: Would adding channel_event_size to idx go over size or event
+    if(channel_event_size + idx > event_size){
+      fFirmwareVersion = 1; // DEFAULT (no ZLE)
+      return;
+    }
+    
+    // Check 2: Our samples are 14-bit so if bits 14/15 or 30/31 of these words are
+    // non-zero then this must be the DPP_XENON firmware
+    if( (channel_time_tag>>14 != 0) || (channel_time_tag>>15 != 0) ||
+	(channel_time_tag>>30 != 0) || (channel_time_tag>>31 != 0) ||
+	(channel_event_size>>14 != 0) || (channel_event_size>>15 != 0) ||
+	(channel_event_size>>30 != 0) || (channel_event_size>>31 != 0) ){
+      fFirmwareVersion = 0;
+      return;
+    }
+
+    idx += channel_event_size;            
+  } // end for
+
+  if(idx == event_size-1)
+    fFirmwareVersion = 0;
+  else
+    fFirmwareVersion = 1;
+  
+  return;      
+}
 		    
