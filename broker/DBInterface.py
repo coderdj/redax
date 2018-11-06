@@ -101,7 +101,8 @@ class DBInterface():
         ini = self.collections['options'].find_one({"name": det['mode']})
         if ini is not None and 'source' in ini.keys():
             run_doc['source'] = {'type': ini['source']}
-
+        run_doc['ini'] = ini
+            
         if "comment" in doc.keys() and doc['comment'] != "":
             run_doc['comments'] = [{
                 "user": doc['user'],
