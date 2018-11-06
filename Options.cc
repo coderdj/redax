@@ -86,9 +86,9 @@ int Options::Override(bsoncxx::document::view override_opts){
   auto doc = document{};
   bsoncxx::document::value *new_value = new bsoncxx::document::value
     ( document{}<<bsoncxx::builder::concatenate_doc{bson_options}<<
-      "override_doc" << bsoncxx::builder::stream::open_document<<
+      // "override_doc" << bsoncxx::builder::stream::open_document<<
       bsoncxx::builder::concatenate_doc{override_opts}<<
-      bsoncxx::builder::stream::close_document<<
+      // bsoncxx::builder::stream::close_document<<
       finalize);
   
   // Delete the original
@@ -103,61 +103,46 @@ int Options::Override(bsoncxx::document::view override_opts){
 
 long int Options::GetLongInt(std::string path, long int default_value){
   try{
-    return bson_options["override_doc"][path.c_str()].get_int64();
+    return bson_options[path.c_str()].get_int64();
   }
   catch (const std::exception &e){
+    std::cout<<e.what()<<std::endl;
+    
+    // Some APIs autoconvert big ints to doubles. Why? I don't know.
+    // But we can handle this here rather than chase those silly things
+    // around in each implementation.
     try{
-      return bson_options[path.c_str()].get_int64();
+      return (long int)(bson_options[path.c_str()].get_double());
     }
-    catch (const std::exception &e){
-      std::cout<<e.what()<<std::endl;
-
-      // Some APIs autoconvert big ints to doubles. Why? I don't know.
-      // But we can handle this here rather than chase those silly things
-      // around in each implementation.
-      try{
-	return (long int)(bson_options[path.c_str()].get_double());
-      }
-      catch(const std::exception &e){
-	return default_value;
-      }
+    catch(const std::exception &e){
+      return default_value;
     }
-  }
+  }  
   return -1;
 }
 
 int Options::GetInt(std::string path, int default_value){
 
   try{
-    return bson_options["override_doc"][path.c_str()].get_int32();
+    return bson_options[path.c_str()].get_int32();
   }
   catch (const std::exception &e){
-    try{
-      return bson_options[path.c_str()].get_int32();
-    }
-    catch (const std::exception &e){
-      //LOG
-      std::cout<<e.what()<<std::endl;
-      return default_value;
-    }
+    //LOG
+    std::cout<<e.what()<<std::endl;
+    return default_value;    
   }
   return -1;  
 }
 
 std::string Options::GetString(std::string path, std::string default_value){
   try{
-    return bson_options["override_doc"][path.c_str()].get_utf8().value.to_string();
+    return bson_options[path.c_str()].get_utf8().value.to_string();
   }
-  catch(const std::exception &e){
-    try{
-      return bson_options[path.c_str()].get_utf8().value.to_string();
-    }
-    catch (const std::exception &e){
-      //LOG
-      std::cout<<e.what()<<std::endl;
-      return default_value;
-    }
-  }
+  catch (const std::exception &e){
+    //LOG
+    std::cout<<e.what()<<std::endl;
+    return default_value;
+  }  
   return "";
 }
 

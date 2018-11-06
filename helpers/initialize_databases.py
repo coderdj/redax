@@ -17,5 +17,7 @@ db.create_collection("aggregate_status", capped=True, size=52428800)
 # Create capped collection 'system monitor' with same size
 db.create_collection("system_monitor", capped=True, size=52428800)
 
-# Create capped 'control' collection with small size
-db.create_collection("control", capped=True, size=524288)
+# You cannot cap the control collection but you can set TTL to expire old docs
+# (this is the Mongo shell command, pymongo must be similar)
+#db.log_events.createIndex( { "createdAt": 1 }, { expireAfterSeconds: 3600 } )
+

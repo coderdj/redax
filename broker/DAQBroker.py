@@ -295,7 +295,8 @@ class DAQBroker():
                     "user": doc['user'],
                     "host": [self.dets[det]['crate_controller']],
                     "command": "stop",
-                    "detector": det
+                    "detector": det,
+                    "createdAt": datetime.datetime.utcnow()  
                 })
 
             # Send stop command
@@ -303,7 +304,8 @@ class DAQBroker():
                 "user": doc['user'],
                 "host": self.dets[det]['hosts'],
                 "command": "stop",
-                "detector": det
+                "detector": det,
+                "createdAt": datetime.datetime.utcnow()  
             })                                                                                                                                                                                    
             
             if 'number' in self.dets[det] and self.dets[det]['number'] is not None:
@@ -319,7 +321,8 @@ class DAQBroker():
                 'host': self.dets[det]['hosts'],
                 'mode': doc['mode'],
                 'command': 'arm',
-                'number': self.dets[det]['number']                
+                'number': self.dets[det]['number'],
+                "createdAt": datetime.datetime.utcnow()  
             }
 
             options = self.db.GetRunMode(doc['mode'])
@@ -350,7 +353,8 @@ class DAQBroker():
                 'crate_controller': self.dets[det]['crate_controller'],
                 'mode': doc['mode'],
                 'number': self.dets[det]['number'],
-                "detector": det
+                "detector": det,
+                "createdAt": datetime.datetime.utcnow()
             })
 
             # update det start time

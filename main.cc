@@ -240,21 +240,6 @@ int main(int argc, char** argv){
 	  logger->Entry("Cannot arm DAQ while not 'Idle'", MongoLog::Warning);
       }
 
-
-      // This is in order to ensure concurrency. ALL documents will be purged if len(hosts)
-      // is equal to len(acknowledged), i.e. every node acknowledged the command.
-      // Note: usually '$where' is frowned upon due to it performing a collection scan each
-      // time, but in this case it's totally fine since this collection will contain at most
-      // like a few docs.
-      // Note to self. Do we need this or just cap collection?
-      try{
-	control.delete_many(bsoncxx::builder::stream::document{} << "$where" <<
-			    "this.host.length == this.acknowledged.length" <<
-			    bsoncxx::builder::stream::finalize);
-      }
-      catch(const std::exception &e){
-	std::cout<<"Error in delete_many "<<e.what()<<std::endl;
-      }
     }
     // Insert some information on this readout node back to the monitor DB
     controller->CheckErrors();

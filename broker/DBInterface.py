@@ -43,8 +43,14 @@ class DBInterface():
             return None
         doc = self.collections["options"].find_one({"name": mode})
         try:
-            return doc
+            newdoc = {**dict(doc)}
+            for i in doc['includes']:
+                incdoc = self.collections["options"].find_one({"name": i})
+                newdoc = {**dict(newdoc), **dict(incdoc)}
+            print(newdoc)
+            return newdoc
         except Exception as E:
+            # LOG ERROR
             print(E)
         return None
         
@@ -52,7 +58,7 @@ class DBInterface():
         print("Getting hosts for mode %s"%mode)
         if mode is None:
             return [], None
-        doc = self.collections["options"].find_one({"name": mode})
+        doc = self.GetRunMode(mode)
         if doc is None:
             return [], None
         cc = None
@@ -98,7 +104,7 @@ class DBInterface():
             'source': 'none'
         }
 
-        ini = self.collections['options'].find_one({"name": det['mode']})
+        ini = self.GetRunMode(det['mode'])
         if ini is not None and 'source' in ini.keys():
             run_doc['source'] = {'type': ini['source']}
         run_doc['ini'] = ini

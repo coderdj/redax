@@ -80,6 +80,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
   }
   
   // Load registers into digitizers
+  std::cout<<"Loading registers"<<std::endl;
   for( auto const& link : fDigitizers )    {
     for(auto digi : link.second){
 
@@ -109,6 +110,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
 
   // Look at this later! This initializes all boards to SW controlled
   // and inactive. Will need option for HW control.
+  std::cout<<"Setting register off"<<std::endl;
   for( auto const& link : fDigitizers ) {
     for(auto digi : link.second){
       digi->WriteRegister(0x8100, 0x0);
@@ -116,6 +118,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
   }
   fStatus = 2;
 
+  std::cout<<"Printing to string"<<std::endl;
   std::cout<<fOptions->ExportToString()<<std::endl;
 
   // Last thing we need to do is get our strax writer ready.
