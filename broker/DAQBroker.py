@@ -94,11 +94,22 @@ class DAQBroker():
                 if self.dets[det]['status'] == self.status_codes["IDLE"]:
 
                     self.dets[det]['diagnosis'] = 'processing'
-                    
+
+                    # Only 1 detector can arm at once due to run number
+                    # So if another det is ARMING or ARMED just skip for now
+                    other_arming = False
+                    for other_detector in self.dets:
+                        if (self.dets[other_detector]['status'] in
+                            [self.status_codes["ARMED"], self.status_codes["ARMING"]]):
+                            other_arming = True                            
+                    if other_arming:
+                        continue
+
+                    # Can we even arm this run? As in are all the necessary nodes available?
                     if not self.CheckRunPlausibility(doc['mode'], det):
                         continue
 
-                    pending_commands += self.MakeCommand("arm", doc)                                        
+                    pending_commands += self.MakeCommand("arm", doc)
                         
                 # If ARMED, send the start command
                 elif self.dets[det]['status'] == self.status_codes["ARMED"]:
