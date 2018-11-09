@@ -11,8 +11,8 @@ DIRS=("/home/coderre/ldaq"
       "/home/coderre/api")
 
 # EXEC is the line to execute
-EXEC=("gdb -ex run --args ./main 0 mongodb://dax:EedIcigjordIam3@ds263172.mlab.com:63172/dax"
-      "gdb -ex run --args ./main 1 mongodb://dax:EedIcigjordIam3@ds263172.mlab.com:63172/dax"
+EXEC=("gdb -ex run --args ./main 0 mongodb://dax:${DAX_PASSWORD}@ds263172.mlab.com:63172/dax"
+      "gdb -ex run --args ./main 1 mongodb://dax:${DAX_PASSWORD}@ds263172.mlab.com:63172/dax"
       "python monitor.py"
       "broker.py --num=0 --config=options.ini"
       "python run.py")
