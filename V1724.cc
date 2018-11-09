@@ -226,7 +226,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
     std::stringstream error;
     error<<"Digitizer "<<fBID<<" CAEN fault during initial register adjustment in baseline routine";
     fLog->Entry(error.str(), MongoLog::Error);
-    return -1;
+    return -2;
   }
 
   // Slightly more palatable error, at least CAENVMElib is recognizing a failure
@@ -235,7 +235,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
     std::stringstream error;
     error<<"Digitizer "<<fBID<<" unable to load registers for baselines.";
     fLog->Entry(error.str(), MongoLog::Error);
-    return -1;
+    return -2;
   }
 
   // Now we'll iterate for a while. It should be pretty quick since starting values
@@ -251,7 +251,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
       std::stringstream error;
       error<<"Digitizer "<<fBID<<" failed to load DAC in baseline routine.";
       fLog->Entry(error.str(), MongoLog::Error);
-      return -1;
+      return -2;
     }
     
     for(int channel=0; channel<nChannels; channel++){
@@ -265,7 +265,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
 	stringstream error;
 	error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to set channel mask in baseline.";
 	fLog->Entry(error.str(), MongoLog::Error);
-	return -1;
+	return -2;
       }
 
       // Trigger the board with software trigger      
@@ -379,9 +379,10 @@ int V1724::LoadDAC(vector<u_int32_t>dac_values){
       // DAC ready register
       data = ReadRegister((0x1088)+(0x100*x));
       if(data == 0xffffffff ){
-	usleep(1000);
-	counter++;
-	continue;
+	//usleep(1000);
+	//counter++;
+	counter=101;
+	break;
       }
       if(data&0x4){
 	usleep(1000);

@@ -14,7 +14,7 @@ DIRS=("/home/coderre/ldaq"
 EXEC=("gdb -ex run --args ./main 0 mongodb://dax:${DAX_PASSWORD}@ds263172.mlab.com:63172/dax"
       "gdb -ex run --args ./main 1 mongodb://dax:${DAX_PASSWORD}@ds263172.mlab.com:63172/dax"
       "python monitor.py"
-      "broker.py --num=0 --config=options.ini"
+      "python broker.py --num=0 --config=options.ini"
       "python run.py")
 
 if [[ ${#SCREEN_NAMES[@]} != ${#DIRS[@]} || ${#DIRS[@]} != ${#EXEC[@]} ]]

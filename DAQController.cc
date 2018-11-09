@@ -89,6 +89,10 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
       vector<u_int32_t>dac_values(8, 0x1000);
       int nominal_dac = fOptions->GetInt("baseline_value", 16000);
       int success = digi->ConfigureBaselines(dac_values, nominal_dac, 100);
+      if(success == -2){
+	fLog->Entry("Baselines failed with digi error", MongoLog::Warning);
+	return -1;
+      }
       
       for(auto regi : fOptions->GetRegisters(digi->bid())){
 	unsigned int reg = fHelper->StringToHex(regi.reg);

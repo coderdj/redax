@@ -93,20 +93,11 @@ class DAQBroker():
                 # If IDLE, start the arm command
                 if self.dets[det]['status'] == self.status_codes["IDLE"]:
 
-                    self.dets[det]['diagnosis'] = 'processing'
-
-                    # Only 1 detector can arm at once due to run number
-                    # So if another det is ARMING or ARMED just skip for now
-                    other_arming = False
-                    for other_detector in self.dets:
-                        if (self.dets[other_detector]['status'] in
-                            [self.status_codes["ARMED"], self.status_codes["ARMING"]]):
-                            other_arming = True                            
-                    if other_arming:
-                        continue
+                    self.dets[det]['diagnosis'] = 'processing'                    
 
                     # Can we even arm this run? As in are all the necessary nodes available?
                     if not self.CheckRunPlausibility(doc['mode'], det):
+                        print("Run implausible")
                         continue
 
                     pending_commands += self.MakeCommand("arm", doc)
@@ -202,6 +193,7 @@ class DAQBroker():
             (self.dets[det]['crate_controller'] != cc)):
             self.dets[det]['hosts'] = needed_hosts
             self.dets[det]['crate_controller'] = cc
+            print("Updated host list")
             return False
 
         # Check: does the host list for this detector conflict with hosts listed in

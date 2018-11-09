@@ -44,9 +44,11 @@ class DBInterface():
         doc = self.collections["options"].find_one({"name": mode})
         try:
             newdoc = {**dict(doc)}
-            for i in doc['includes']:
-                incdoc = self.collections["options"].find_one({"name": i})
-                newdoc = {**dict(newdoc), **dict(incdoc)}
+            if "includes" in doc.keys():
+                for i in doc['includes']:
+                    incdoc = self.collections["options"].find_one({"name": i})
+                    newdoc = {**dict(newdoc), **dict(incdoc)}
+                    
             print(newdoc)
             return newdoc
         except Exception as E:
@@ -65,9 +67,9 @@ class DBInterface():
         if 'crate_controller' in doc.keys():
             cc = mode['crate_controller']
 
-        print("MODE")
-        print(mode)
-        print([a['host'] for a in doc['boards']])
+        #print("MODE")
+        #print(mode)
+        #print([a['host'] for a in doc['boards']])
         return [a['host'] for a in doc['boards']], cc
 
     def LoadDispatcherStatus(self):
