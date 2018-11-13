@@ -3,17 +3,20 @@
 
 #include "Options.hh"
 #include "MongoLog.hh"
+#include "V2718.hh"
 
-class V2718;
+
+//class V2718;
 class V1495;
 class DDC10;
 
 struct modules{
   int number;
-  V2718 *v2718 = NULL;
+  //V2718 *v2718 = NULL;
   V1495 *v1495 = NULL;
   DDC10 *ddc10 = NULL;
 };
+
 
 class CControl_Handler{
   /*
@@ -21,18 +24,21 @@ class CControl_Handler{
   */
   
 public:
-  CControl_Handler();
+  CControl_Handler(MongoLog *log=NULL);
   ~CControl_Handler();
 
   void ProcessCommand(std::string command, std::string detector,
 		      int run, std::string options="");
 
   bsoncxx::document::value GetStatusDoc(std::string hostname);
+  int CrateStart(std::string options="");
+
 
 private:
 
-  std::map<int, modules> fActiveRuns;
-
+  std::map<int, modules> fActiveRuns;  
+  Options *fOptions;
+  MongoLog *fLog;
 };
 
 #endif

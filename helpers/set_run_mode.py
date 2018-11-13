@@ -1,13 +1,18 @@
 import pymongo
+from pymongo import MongoClient
 import os
-uri = "mongodb://admin:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"]
-client = pymongo.MongoClient(uri)
+
+
+
+client = MongoClient("mongodb://dax:%s@ds129770.mlab.com:29770/dax"%os.environ["MONGO_PASSWORD"])
+#uri = "mongodb://admin:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"]
+#client = pymongo.MongoClient(uri)
 db = client['dax']
 collection = db['options']
 
 run_mode = {
     "name": "test",
-    "user": "coderre",
+    "user": "elykov",
     "description": "Initial test mode",
     "mongo_uri": "mongodb://reader:%s@127.0.0.1:27017/dax",
     "mongo_database": "data",
@@ -35,7 +40,16 @@ run_mode = {
         {"reg": "8038", "val": "12C", "board": -1},
         {"reg": "8060", "val": "3e8", "board": -1},
         {"reg": "8078", "val": "12C", "board": -1}
-    ]    
+    ],
+    "active": [{
+        "V2718" : {"led_trig" :1, 
+            "s_in" : 1, 
+            "m_veto" : 1, 
+            "n_veto" : 1, 
+            "pulser_freq" : 1},
+    "DCC10" : {"on" : 1},
+    "V1495" : {"on" : 1},
+    }]
 }
 
 if collection.find_one({"name": run_mode['name']}) is not None:
