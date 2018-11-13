@@ -4,7 +4,7 @@
 
 CControl_Handler::CControl_Handler(MongoLog *log){
   fOptions = NULL;
-  fLog=log;
+  fLog = log;
 }
 
 CControl_Handler::~CControl_Handler(){
@@ -49,20 +49,3 @@ int CControl_Handler::CrateStart(std::string opts){
 }
 	       
 
-
-//bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
-
-  // Mind the types and be thankful for the python dictionary
-  //bsoncxx::builder::stream::document builder{};
-
-
-  //auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
-  //for( auto const& el : fActiveRuns ){
-  //  auto a = in_array << bsoncxx::builder::stream::open_document << "run" << el.first;
-    // Status from V2718, V1495, DDC10
-   // in_array = a << bsoncxx::builder::stream::close_document;
-  //}
-  //auto after_array = in_array << bsoncxx::builder::stream::close_array;
-  //return after_array << bsoncxx::builder::stream::finalize;
-
-//}

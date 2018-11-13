@@ -6,6 +6,16 @@
 #include "MongoLog.hh"
 #include "Options.hh"
 
+#include <unistd.h>
+#include <cstring>
+#include <stdint.h>
+#include <vector>
+#include <iostream>
+
+using namespace std;
+
+
+
 class V2718{
  
  public:
@@ -15,11 +25,11 @@ class V2718{
 
 
  int CrateInit(int led_trig, int m_veto, int n_veto, int pulser_freq, int s_in);
- 
+ int SendStartSignal();
+ int SendStopSignal();
+
  private:
- MongoLog *fLog;
- Options *fOptions;
- 
+
  bool b_mveto_on;
  bool b_nveto_on;
  bool b_startwithsin;
@@ -27,7 +37,13 @@ class V2718{
  int  i_pulser_Hz;
  bool bStarted;
 
- 
+ int fCrate, fLink;
+ unsigned int fBaseAddress;
+
+ int fBoardHandle;
+
+ MongoLog *fLog;
+ Options *fOptions;
 
 
 };

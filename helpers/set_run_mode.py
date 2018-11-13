@@ -20,7 +20,7 @@ run_mode = {
     "boards":
     [
         {
-            "crate": 0, "link": 0, "board": 100,
+            "crate": 0, "link": 1, "board": 100,
             "vme_address": "0", "type": "V1724"}
     ],
     "registers":
@@ -46,7 +46,7 @@ run_mode = {
             "s_in" : 1, 
             "m_veto" : 1, 
             "n_veto" : 1, 
-            "pulser_freq" : 1},
+            "pulser_freq" : 10000},
     "DCC10" : {"on" : 1},
     "V1495" : {"on" : 1},
     }]

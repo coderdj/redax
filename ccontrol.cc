@@ -40,20 +40,19 @@ int main(int argc, char** argv){
   }
 
   // Holds session data
-  CControl_Handler *fHandler = new CControl_Handler();  
- // Options *fOptions = new Options();
 
+  CControl_Handler *fHandler = new CControl_Handler(logger);  
 
   while(1){
 
-    // Get documents with either "Start" or "Stop" commands
+    // Get documents with either "Arm", "Start" or "Stop" commands
     mongocxx::cursor cursor = control.find
       (
        bsoncxx::builder::stream::document{}<<
        "command" <<
        bsoncxx::builder::stream::open_document <<
        "$in" <<  bsoncxx::builder::stream::open_array <<
-       "start" << "stop" << bsoncxx::builder::stream::close_array <<
+       "start" << "stop" << "arm" << bsoncxx::builder::stream::close_array <<
        bsoncxx::builder::stream::close_document  <<
        "host" << hostname <<
        "acknowledged" <<
@@ -65,7 +64,7 @@ int main(int argc, char** argv){
     
     for (auto doc : cursor) {
       
-      // Acknowledge
+      // Acknowledge the commands
       control.update_one
         (
 	 bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
@@ -76,7 +75,7 @@ int main(int argc, char** argv){
          bsoncxx::builder::stream::finalize
          );
 
-      // Strip data from doc
+      // Strip data from the supplied doc
       int run = -1;
       std::string command = "";
       std::string detector = "";
@@ -91,6 +90,7 @@ int main(int argc, char** argv){
 	logger->Entry(bsoncxx::to_json(doc), MongoLog::Warning);
 	continue;
       }
+
       // If the command is start gonna use the options file to load the V2718, DDC10, etc...settings
       std::string mode = "";
       if(command == "start"){
@@ -105,10 +105,6 @@ int main(int argc, char** argv){
       fHandler->ProcessCommand(command, detector, run, mode);
      
 
-
-
-
-
       // Now get the options in the same way as for initialising the digitisers, etc.. 
       bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
       try{
@@ -118,19 +114,17 @@ int main(int argc, char** argv){
                                                  "name" << option_name.c_str() <<
                                                  bsoncxx::builder::stream::finalize);
       }
-      catch(const std::exception &e){
+      catch(const std::exception E){
          logger->Entry("No valid mode was provided", MongoLog::Warning);
       }
-      
-
-      
+            
       // Get an override doc from the 'options_override' field if it exists
       std::string override_json = "";
       try{
 	  bsoncxx::document::view oopts = doc["options_override"].get_document().view();
 	  override_json = bsoncxx::to_json(oopts);
       } 
-      catch(const std::exception &e){
+      catch(const std::exception E){
 	  logger->Entry("No override options provided", MongoLog::Debug);
       }	  
        std::cout<<"Overrode options JSON"<<std::endl;
@@ -152,7 +146,7 @@ int main(int argc, char** argv){
 				MongoLog::Warning);
 	   }
 	 }
-       catch(const std::exception &e){ 
+       catch(const std::exception E){ 
 	       logger->Entry("Could not get all the subdocs in options doc", MongoLog::Debug);
        }
 
