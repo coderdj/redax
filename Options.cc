@@ -191,35 +191,17 @@ std::vector<RegisterType> Options::GetRegisters(int board){
 }
 
 
-
-
 std::vector<CrateOptions> Options::GetCrateOpt(std::string device){
    std::vector<CrateOptions> ret;
-      bsoncxx::array::view subarray = bson_options["active"].get_array().value;
+      bsoncxx::array::view subarray = bson_options["V2718"].get_array().value;
          for(bsoncxx::array::element ele : subarray){
-	         if (ele.type() == bsoncxx::type::k_document) {
-	             bsoncxx::document::view subdoc{ele.get_document()};
-		     CrateOptions ct;
-		     //std::cout << bsoncxx::to_json(subdoc) << std::endl; 
-                     if (device == "V2718"){
-			 ct.s_in = subdoc["V2718"]["s_in"].get_int32().value;
-			 ct.pulser_freq = subdoc["V2718"]["pulser_freq"].get_int32().value;
-			 ct.m_veto = subdoc["V2718"]["m_veto"].get_int32().value;
-			 ct.n_veto = subdoc["V2718"]["n_veto"].get_int32().value;
-			 ct.led_trig = subdoc["V2718"]["led_trig"].get_int32().value;
-			 ret.push_back(ct);
-		     }else if (device == "V1495"){
-		         ct.on = subdoc["V1495"]["on"].get_int32().value;
-			 // etc ...
-                         ret.push_back(ct);
-		     }else if ( device == "DDC10"){
-                         ct.on = subdoc["DDC10"]["on"].get_int32().value;
-			 // etc...
-                         ret.push_back(ct);
-	             }else {
-			     std::cout << " Could not read options document" << std::endl;  
-		     }
-		 }
-         }
+	      CrateOptions ct;
+	      ct.s_in = ele["s_in"].get_int32().value;
+	      ct.pulser_freq = ele["pulser_freq"].get_int32().value;
+	      ct.m_veto = ele["m_veto"].get_int32().value;
+	      ct.n_veto = ele["n_veto"].get_int32().value;
+	      ct.led_trig = ele["led_trig"].get_int32().value;
+	      ret.push_back(ct);
+          }
     return ret;	 
 }	

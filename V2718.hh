@@ -24,10 +24,15 @@ class V2718{
 
 
 
- int CrateInit(int led_trig, int m_veto, int n_veto, int pulser_freq, int s_in);
+ int CrateInit(int led_trig, int m_veto, int n_veto, int pulser_freq, int s_in,
+		 int link, int crate);
  int SendStartSignal();
- int SendStopSignal();
+ int SendStopSignal(); 
+ 
+ //int fCrate, fLink;
+ //unsigned int fBaseAddress;
 
+ 
  private:
 
  bool b_mveto_on;
@@ -37,14 +42,13 @@ class V2718{
  int  i_pulser_Hz;
  bool bStarted;
 
- int fCrate, fLink;
- unsigned int fBaseAddress;
-
  int fBoardHandle;
+ int fCrate, fLink;
+ //unsigned int fBaseAddress;
+
 
  MongoLog *fLog;
  Options *fOptions;
-
 
 };
 

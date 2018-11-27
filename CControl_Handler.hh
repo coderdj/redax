@@ -4,7 +4,7 @@
 #include "Options.hh"
 #include "MongoLog.hh"
 #include "V2718.hh"
-
+#include <thread>
 
 class V2718;
 class V1495;
@@ -28,8 +28,9 @@ public:
 		      int run, std::string options="");
 
   bsoncxx::document::value GetStatusDoc(std::string hostname);
-  int CrateStart(std::string options="");
-
+  int DeviceArm(int run, std::string options="");
+  int DeviceStart();
+  int DeviceStop();
 
 private:
 

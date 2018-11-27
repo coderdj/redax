@@ -2,18 +2,12 @@
 
 V2718::V2718(MongoLog *log){
   
+  fBoardHandle=fLink=fCrate=-1; 
   b_startwithsin = false;
   b_mveto_on = false;
   b_nveto_on = false;
   b_led_on = false;
   i_pulser_Hz = 0;
-  bStarted = false;
-
-  fBaseAddress = 0;
-  fLink=1;
-  fCrate = fBoardHandle = -1;
-  fLog = log;
-
 }
 
 
@@ -21,23 +15,26 @@ V2718::~V2718(){
 };
 
 
+int V2718::CrateInit(int led_trig, int m_veto, int n_veto, int pulser_freq, int s_in, int link, int crate){
+        
+	fCrate = crate;
+        fLink = link;  	
 
-int V2718::CrateInit(int led_trig, int m_veto, int n_veto, int pulser_freq, int s_in){
-       
-	  b_startwithsin = false;
-          b_mveto_on = false;
-          b_nveto_on = false;
-          b_led_on = false;
-          i_pulser_Hz = 0;
-          bStarted = false;
+	// Initialising the V2718 module via the specified optical link
+        int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
+	    if(a != cvSuccess){
+                 std::cout<<"Failed to init V2718" <<std::endl;
+                 fBoardHandle = -1;
+            return -1;
+          }
 
-	std::cout << "Getting crate values" << std::endl;
-   
+	// Checking the values that were passed from the options file and 
+	// setting the V2718 options accordingly
 	    if(n_veto == 1){
                b_nveto_on = true;
             }
             if(m_veto == 1){
-                b_mveto_on = true;
+               b_mveto_on = true;
             } 
             if(s_in == 1){
                 b_startwithsin = true;
@@ -49,9 +46,9 @@ int V2718::CrateInit(int led_trig, int m_veto, int n_veto, int pulser_freq, int 
                 b_led_on = true;
             }
             else{
-               	  std::stringstream error;
-                  error<< "Could not get crate values";
-		  fLog->Entry(error.str(), MongoLog::Error);
+              std::stringstream error;
+              error<< "Could't get all V2718 values";
+	      fLog->Entry(error.str(), MongoLog::Error);
             }
      return 0;
 }
@@ -59,6 +56,7 @@ int V2718::CrateInit(int led_trig, int m_veto, int n_veto, int pulser_freq, int 
 
 int V2718::SendStartSignal(){
   // This is just a straight copy from XENON1T KODIAQ
+  // Starting specific output lines
   // Line 0 : S-IN. 
   CAENVME_SetOutputConf(fCrate, cvOutput0, cvDirect, 
 			cvActiveHigh, cvManualSW);
@@ -71,29 +69,30 @@ int V2718::SendStartSignal(){
   // Line 3 : LED Pulser
   CAENVME_SetOutputConf(fCrate, cvOutput3, cvDirect, 
 			cvActiveHigh, cvMiscSignals);
+  // Line 4 : NV S-IN Logic   
+  CAENVME_SetOutputConf(fCrate, cvOutput4, cvDirect,
+                        cvActiveHigh, cvMiscSignals); // soonTM
 
 
   // Set the output register
   unsigned int data = 0x0;
+  if(b_nveto_on)            //n_veto soonTM
+    data+=cvOut4Bit;       
   if(b_led_on)
-    data+=cvOut2Bit;          // Output line 2 signal level
-  if(b_mveto_on)            
-    data+=cvOut1Bit;          // Output line 1 signal level
-  //if(b_nveto_on)
-  //  data+=cvOut4Bit;          // Output line 4 signal level
+    data+=cvOut2Bit;
+  if(b_mveto_on)
+    data+=cvOut1Bit;
   if(b_startwithsin)
-    data+=cvOut0Bit;          // Output line 0 signal level 
-
+    data+=cvOut0Bit;
 
    // This is the S-IN
   if(CAENVME_SetOutputRegister(fCrate,data)!=0){
 	          std::stringstream error;
-                  error<< "Could't set output register. Crate Controller not found";
+                  error<< "Couldn't set output register. Crate Controller not found";
                   fLog->Entry(error.str(), MongoLog::Error);
   return -1;
   }
-  
-  bStarted=true;  
+ 
   //Configure the LED pulser
   if(i_pulser_Hz > 0){
     // We allow a range from 1Hz to 1MHz, but this is not continuous!
@@ -129,31 +128,24 @@ int V2718::SendStartSignal(){
          error<< "Given an invalid LED frequency!";
          fLog->Entry(error.str(), MongoLog::Error);
       }
-   // m_koLog->Message("Writing period with: "+koHelper::IntToString(period)+
-  //		     " and width with " +koHelper::IntToString(width));
-    // Send data to the board
+    // Set pulser    
     int ret = CAENVME_SetPulserConf(fCrate, cvPulserB, period, width, tu, 0,
-			  cvManualSW, cvManualSW);
-    if(ret!=cvSuccess ){
-	    std::cout << "we have a problem !" << std::endl;    
+	 		  cvManualSW, cvManualSW);
+    CAENVME_StartPulser(fCrate,cvPulserB); 
+    if(ret!=cvSuccess){
+	    std::cout << " Could not initialise pulser!" << std::endl;    
     }
-
-    CAENVME_StartPulser(fCrate,cvPulserB);    
   }
   return 0;
 }
 
 
-int V2718::SendStopSignal()
-{
-  bStarted = false;
+int V2718::SendStopSignal(){
+
   // Stop the pulser if it's running
   CAENVME_StopPulser(fCrate, cvPulserB);
   usleep(1000);
-  //u_int16_t data = 0x7C8;
-  //u_int16_t data = 0x7FF;
-  //cout<<"Writing cvOutRegClear with: "<<data<<endl;
-
+ 
   // Line 0 : S-IN.
   CAENVME_SetOutputConf(fCrate, cvOutput0, cvDirect, cvActiveHigh, cvManualSW);
   // Line 1 : MV S-IN Logic 
@@ -162,35 +154,17 @@ int V2718::SendStopSignal()
   CAENVME_SetOutputConf(fCrate, cvOutput2, cvDirect, cvActiveHigh, cvManualSW);
   // Line 3 : LED Pulser
   CAENVME_SetOutputConf(fCrate, cvOutput3, cvDirect, cvActiveHigh, cvMiscSignals);
-
-  // Set the output register                                                                                                                       
-  unsigned int data = 0x0;
+  // Line 4 : NV S-IN Logic
+  CAENVME_SetOutputConf(fCrate, cvOutput4, cvDirect, cvActiveHigh, cvManualSW);
   
-  CAENVME_SetOutputRegister(fCrate,data);
 
+  // Set the output register 
+  unsigned int data = 0x0; 
+  CAENVME_SetOutputRegister(fCrate,data);
+  if(CAENVME_End(fCrate)!= cvSuccess){
+     std::cout << "Failed to end crate" << std::endl;  
+  }
+   fBoardHandle=fLink=fCrate=-1; 
   return 0;   
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

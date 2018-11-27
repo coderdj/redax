@@ -16,7 +16,7 @@ except:
     hostname = os.uname()[1]
     print("No hostname provided so assuming it's running locally at %s"%hostname)
 
-hostname = ['fdaq00_0', 'fdaq00_1']
+hostname = ['fdaq00_controller_0', 'fdaq00_controller_1']
 
 try:
     run_num = int(sys.argv[4])
@@ -24,15 +24,22 @@ except:
     run_num = 1
     print("Didn't provide a run number so trying 1")
 
+try:
+    runmode = sys.argv[3]
+except:
+    runmode = 'test'
+    print("Didn't provide a run mode so trying 'test'")
+
+
 
 doc = {}
 if command == 'start':
-    
+
     doc = {
-        "detector" : "TPC",
+        "detector": "TPC",
         "command": "start",
         "run": run_num,
-        "mode": "test",
+        "mode": runmode,
         "host": hostname,
         "user": os.getlogin()        
     }
@@ -40,22 +47,21 @@ if command == 'start':
 elif command == 'stop':
 
     doc = {
+        "detector": "TPC",
         "command": "stop",
+        "run": run_num,
+        "mode": runmode,
         "host": hostname,
         "user": os.getlogin()
     }
 
 elif command == 'arm':
 
-    try:
-        runmode = sys.argv[3]
-    except:
-        runmode = 'test'
-        print("Didn't provide a run mode so trying 'test'")
-
     doc = {
+        "detector": "TPC",
         "mode": runmode,
         "command": "arm",
+        "run": run_num,
         "host": hostname,
         "user": os.getlogin()
     }
