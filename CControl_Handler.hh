@@ -3,6 +3,8 @@
 
 #include "Options.hh"
 #include "MongoLog.hh"
+#include "V2718.hh"
+#include <thread>
 
 class V2718;
 class V1495;
@@ -15,24 +17,26 @@ struct modules{
   DDC10 *ddc10 = NULL;
 };
 
+
 class CControl_Handler{
-  /*
-    Does all the DAQ-wide run start stuff. DDC-10, V1495, and V2718
-  */
   
 public:
-  CControl_Handler();
+  CControl_Handler(MongoLog *log);
   ~CControl_Handler();
 
   void ProcessCommand(std::string command, std::string detector,
 		      int run, std::string options="");
 
   bsoncxx::document::value GetStatusDoc(std::string hostname);
+  int DeviceArm(int run, std::string options="");
+  int DeviceStart();
+  int DeviceStop();
 
 private:
 
-  std::map<int, modules> fActiveRuns;
-
+  std::map<int, modules> fActiveRuns;  
+  Options *fOptions;
+  MongoLog *fLog;
 };
 
 #endif

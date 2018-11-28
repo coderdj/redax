@@ -21,6 +21,7 @@ struct BoardType{
   int crate;
   int board;
   std::string type;
+  std::string device;
   unsigned int vme_address;
 };
 
@@ -28,7 +29,19 @@ struct RegisterType{
   int board;
   std::string reg;
   std::string val;
+
 };
+
+struct CrateOptions{
+  int pulser_freq;
+  int n_veto;
+  int m_veto;
+  int led_trig;
+  int s_in;
+  int on;
+};
+
+
 
 class Options{
 
@@ -46,6 +59,8 @@ public:
 
   std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
   std::vector<RegisterType> GetRegisters(int board=-1);
+  std::vector<CrateOptions> GetCrateOpt(std::string device="");
+
 
   std::string ExportToString();
   int Override(bsoncxx::document::view override_opts);

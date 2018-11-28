@@ -128,7 +128,7 @@ int Options::GetInt(std::string path, int default_value){
   }
   catch (const std::exception &e){
     //LOG
-    std::cout<<e.what()<<std::endl;
+    std::cout<<"Exception: "<< e.what()<<std::endl;
     return default_value;    
   }
   return -1;  
@@ -140,7 +140,7 @@ std::string Options::GetString(std::string path, std::string default_value){
   }
   catch (const std::exception &e){
     //LOG
-    std::cout<<e.what()<<std::endl;
+    std::cout<< "Exception: "<< e.what()<<std::endl;
     return default_value;
   }  
   return "";
@@ -189,3 +189,19 @@ std::vector<RegisterType> Options::GetRegisters(int board){
   return ret;
   
 }
+
+
+std::vector<CrateOptions> Options::GetCrateOpt(std::string device){
+   std::vector<CrateOptions> ret;
+      bsoncxx::array::view subarray = bson_options["V2718"].get_array().value;
+         for(bsoncxx::array::element ele : subarray){
+	      CrateOptions ct;
+	      ct.s_in = ele["s_in"].get_int32().value;
+	      ct.pulser_freq = ele["pulser_freq"].get_int32().value;
+	      ct.m_veto = ele["m_veto"].get_int32().value;
+	      ct.n_veto = ele["n_veto"].get_int32().value;
+	      ct.led_trig = ele["led_trig"].get_int32().value;
+	      ret.push_back(ct);
+          }
+    return ret;	 
+}	
