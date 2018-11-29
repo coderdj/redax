@@ -210,13 +210,13 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
   // some data. try/catch cause CAENVMElib fails poorly (segfault) sometimes
   // in case the hardware has an issue.
   int write_success = 0;
-  try{    
+  try{
+    write_success += WriteRegister(0xEF24, 0x1);       // Global reset
+    write_success += WriteRegister(0xEF1C, 0x1);       // BERR 
     write_success += WriteRegister(0x8000, 0x10);      // Channel configuration
     write_success += WriteRegister(0x8080, 0x800000);  // DPP
     write_success += WriteRegister(0x8100, 0x0);       // Acq. control
     write_success += WriteRegister(0x810C, 0x80000000);// Trigger source
-    write_success += WriteRegister(0xEF24, 0x1);       // Global reset
-    write_success += WriteRegister(0xEF1C, 0x1);       // BERR
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
     write_success += WriteRegister(0x8034, 0x0);       // Delay to zero
     write_success += WriteRegister(0x8038, 0x0);       // Pre trig to zero
@@ -268,6 +268,10 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
 	return -2;
       }
 
+      // Software clear buffer memory
+      WriteRegister(0xEF28, 0x1);       // Global reset                                   
+
+      
       // Trigger the board with software trigger      
       WriteRegister(0x8100,0x4);//x24   // Acq control reg
       WriteRegister(0x8108,0x1);    // Software trig reg
@@ -290,6 +294,12 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
 	  if(!((cmask>>channel)&1)){
 	    // wtf?
 	    std::cout<<"Got wrong channel in baselines."<<std::endl;
+	    std::cout<<hex<<cmask<<std::endl;
+	    std::cout<<channel<<std::endl;
+	    std::cout<<buff[idx]<<std::endl;
+	    std::cout<<buff[idx+1]<<std::endl;
+	    std::cout<<buff[idx+2]<<std::endl;
+	    std::cout<<buff[idx+3]<<std::endl<<dec;
 	    break;
 	  }
 

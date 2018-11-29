@@ -64,13 +64,14 @@ class DBInterface():
         if doc is None:
             return [], None
         cc = None
-        if 'crate_controller' in doc.keys():
-            cc = mode['crate_controller']
+        hostlist = []
+        for b in doc['boards']:
+            if b['type'] == 'V1724' and b['host'] not in hostlist:
+                hostlist.append(b['host'])
+            elif b['type'] == 'V2718':
+                cc = b['host']
 
-        #print("MODE")
-        #print(mode)
-        #print([a['host'] for a in doc['boards']])
-        return [a['host'] for a in doc['boards']], cc
+        return hostlist, cc
 
     def LoadDispatcherStatus(self):
         ret = {}

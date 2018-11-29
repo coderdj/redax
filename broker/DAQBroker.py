@@ -1,6 +1,7 @@
 import time
 import datetime
 import os
+import copy
 
 class DAQBroker():
     def __init__(self, DBInt):
@@ -301,7 +302,9 @@ class DAQBroker():
                     "detector": det,
                     "createdAt": datetime.datetime.utcnow()  
                 })
-
+                
+            time.sleep(1)
+            
             # Send stop command
             pending_commands.append({
                 "user": doc['user'],
@@ -309,7 +312,7 @@ class DAQBroker():
                 "command": "stop",
                 "detector": det,
                 "createdAt": datetime.datetime.utcnow()  
-            })                                                                                                                                                                                    
+            })
             
             if 'number' in self.dets[det] and self.dets[det]['number'] is not None:
                 self.db.UpdateEndTime(self.dets[det]['number'])
@@ -318,10 +321,13 @@ class DAQBroker():
         elif command == 'arm':
             # Assign a temporary run number. Will become official if this works
             self.dets[det]['number'] = self.db.GetNextRunNumber()
+            hlist = copy.deepcopy(self.dets[det]['hosts'])
+            if 'crate_controller' in self.dets[det] and self.dets[det]['crate_controller'] != None:
+                hlist.append(self.dets[det]['crate_controller'])
             pc = {
                 'user': doc['user'],
                 'detector': det,
-                'host': self.dets[det]['hosts'],
+                'host': hlist,
                 'mode': doc['mode'],
                 'command': 'arm',
                 'number': self.dets[det]['number'],
@@ -348,12 +354,16 @@ class DAQBroker():
             # clear armed_at
             self.dets[det]['armed_at'] = None
 
+            # Add crate controller if there
+            hlist = copy.deepcopy(self.dets[det]['hosts'])
+            if 'crate_controller' in self.dets[det] and self.dets[det]['crate_controller'] != None:
+                hlist.append(self.dets[det]['crate_controller'])
+
             # send it
             pending_commands.append({
                 'user': doc['user'],
                 'command': 'start',
-                'host': self.dets[det]['hosts'],
-                'crate_controller': self.dets[det]['crate_controller'],
+                'host': hlist,
                 'mode': doc['mode'],
                 'number': self.dets[det]['number'],
                 "detector": det,

@@ -117,7 +117,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
   std::cout<<"Setting register off"<<std::endl;
   for( auto const& link : fDigitizers ) {
     for(auto digi : link.second){
-      digi->WriteRegister(0x8100, 0x0);
+      digi->WriteRegister(0x8100, 0x5);
     }
   }
   fStatus = 2;
