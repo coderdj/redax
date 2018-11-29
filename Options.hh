@@ -34,11 +34,10 @@ struct RegisterType{
 
 struct CrateOptions{
   int pulser_freq;
-  int n_veto;
-  int m_veto;
-  int led_trig;
+  int neutron_veto;
+  int muon_veto;
+  int led_trigger;
   int s_in;
-  int on;
 };
 
 
@@ -59,7 +58,7 @@ public:
 
   std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
   std::vector<RegisterType> GetRegisters(int board=-1);
-  std::vector<CrateOptions> GetCrateOpt(std::string device="");
+  int GetCrateOpt(CrateOptions &ret, std::string device="");
 
 
   std::string ExportToString();

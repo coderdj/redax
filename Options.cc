@@ -83,7 +83,7 @@ int Options::Override(bsoncxx::document::view override_opts){
   using bsoncxx::builder::stream::document;
   using bsoncxx::builder::stream::finalize;    
 
-  auto doc = document{};
+  // auto doc = document{};
   bsoncxx::document::value *new_value = new bsoncxx::document::value
     ( document{}<<bsoncxx::builder::concatenate_doc{bson_options}<<
       // "override_doc" << bsoncxx::builder::stream::open_document<<
@@ -191,17 +191,17 @@ std::vector<RegisterType> Options::GetRegisters(int board){
 }
 
 
-std::vector<CrateOptions> Options::GetCrateOpt(std::string device){
-   std::vector<CrateOptions> ret;
-      bsoncxx::array::view subarray = bson_options["V2718"].get_array().value;
-         for(bsoncxx::array::element ele : subarray){
-	      CrateOptions ct;
-	      ct.s_in = ele["s_in"].get_int32().value;
-	      ct.pulser_freq = ele["pulser_freq"].get_int32().value;
-	      ct.m_veto = ele["m_veto"].get_int32().value;
-	      ct.n_veto = ele["n_veto"].get_int32().value;
-	      ct.led_trig = ele["led_trig"].get_int32().value;
-	      ret.push_back(ct);
-          }
-    return ret;	 
+int Options::GetCrateOpt(CrateOptions &ret, std::string device){
+  // I think we can just hack the above getters to allow dot notation
+  // for a more robust solution to access subdocuments
+  try{
+    ret.s_in = bson_options["V2718"]["s_in"].get_int32().value;
+    ret.pulser_freq = bson_options["V2718"]["pulser_freq"].get_int32().value;
+    ret.muon_veto = bson_options["V2718"]["muon_veto"].get_int32().value;
+    ret.neutron_veto = bson_options["V2718"]["neutron_veto"].get_int32().value;
+    ret.led_trigger = bson_options["V2718"]["led_trigger"].get_int32().value;
+  }catch(std::exception E){
+    return -1;
+  }
+  return 0;
 }	

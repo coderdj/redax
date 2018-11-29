@@ -6,22 +6,13 @@
 #include "V2718.hh"
 #include <thread>
 
-class V2718;
 class V1495;
 class DDC10;
-
-struct modules{
-  int number;
-  V2718 *v2718 = NULL;
-  V1495 *v1495 = NULL;
-  DDC10 *ddc10 = NULL;
-};
-
 
 class CControl_Handler{
   
 public:
-  CControl_Handler(MongoLog *log);
+  CControl_Handler(MongoLog *log, std::string procname);
   ~CControl_Handler();
 
   void ProcessCommand(std::string command, std::string detector,
@@ -34,7 +25,11 @@ public:
 
 private:
 
-  std::map<int, modules> fActiveRuns;  
+  V2718 *fV2718;
+  V1495 *fV1495;
+  DDC10 *fDDC10;
+  
+  std::string fProcname;
   Options *fOptions;
   MongoLog *fLog;
 };

@@ -39,7 +39,7 @@ int main(int argc, char** argv){
   }
 
   // Holds session data
-  CControl_Handler *fHandler = new CControl_Handler(logger);  
+  CControl_Handler *fHandler = new CControl_Handler(logger, hostname);  
 
   while(1){
     // Get documents with either "Arm", "Start" or "Stop" commands
