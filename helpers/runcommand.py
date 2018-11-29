@@ -4,7 +4,9 @@ from pymongo import MongoClient
 
 command = sys.argv[1]
 
-client = MongoClient("mongodb://reader:%s@127.0.0.1:27017/dax"%os.environ["MONGO_PASSWORD"])
+#client = MongoClient("mongodb://reader:%s@127.0.0.1:27017/dax"%os.environ["MONGO_PASSWORD"])
+client = MongoClient("mongodb://dax:%s@ds129770.mlab.com:29770/dax"%os.environ["MONGO_PASSWORD"])
+
 db = client['dax']
 collection = db['control']
 
@@ -14,13 +16,30 @@ except:
     hostname = os.uname()[1]
     print("No hostname provided so assuming it's running locally at %s"%hostname)
 
-hostname = ['fdaq00_0', 'fdaq00_1']
+hostname = ['fdaq00_controller_0', 'fdaq00_controller_1']
+
+try:
+    run_num = int(sys.argv[4])
+except:
+    run_num = 1
+    print("Didn't provide a run number so trying 1")
+
+try:
+    runmode = sys.argv[3]
+except:
+    runmode = 'test'
+    print("Didn't provide a run mode so trying 'test'")
+
+
 
 doc = {}
 if command == 'start':
-    
+
     doc = {
+        "detector": "TPC",
         "command": "start",
+        "run": run_num,
+        "mode": runmode,
         "host": hostname,
         "user": os.getlogin()        
     }
@@ -28,28 +47,27 @@ if command == 'start':
 elif command == 'stop':
 
     doc = {
+        "detector": "TPC",
         "command": "stop",
+        "run": run_num,
+        "mode": runmode,
         "host": hostname,
         "user": os.getlogin()
     }
 
 elif command == 'arm':
 
-    try:
-        runmode = sys.argv[3]
-    except:
-        runmode = 'test'
-        print("Didn't provide a run mode so trying 'test'")
-
     doc = {
+        "detector": "TPC",
         "mode": runmode,
         "command": "arm",
+        "run": run_num,
         "host": hostname,
         "user": os.getlogin()
     }
                    
 else:
-    print("Usage: python runcommand.py {start/stop/arm} {host} {runmode}")
+    print("Usage: python runcommand.py {start/stop/arm} {host} {runmode} {run}")
     exit(0)
 
 try:
