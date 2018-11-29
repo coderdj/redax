@@ -7,10 +7,10 @@ CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
   fOptions = NULL;
   fLog = log;
   fProcname = procname;
-
+  fCurrentRun = -1;
   fV2718 = NULL;
   fV1495 = NULL;
-  fDDC19 = NULL;
+  fDDC10 = NULL;
 }
 
 CControl_Handler::~CControl_Handler(){
@@ -19,45 +19,37 @@ CControl_Handler::~CControl_Handler(){
       delete fOptions;
 }
 
-void CControl_Handler::ProcessCommand(std::string command, std::string detector,
-				      int run, std::string options){
-  std::cout<<"Found commmand "<<command<<" for detector "<<detector<<" and run "<<
-    run<<" with mode: "<<options<<std::endl;
-  if(command == "start")
-    std::cout<<"I would send a start signal now"<<std::endl;
-  else if(command == "stop")
-    std::cout<<"I would send a stop signal now"<<std::endl;
-  else if(command == "arm")
-    std::cout<<"I would arm the DAQ now"<<std::endl;
-
-  return;
-}
-
 // Initialising various devices namely; V2718 crate controller, V1495, DDC10...
-int CControl_Handler::DeviceArm(std::string opts){
+int CControl_Handler::DeviceArm(int run, std::string opts, std::vector<std::string>include_json,
+				std::string override){
 
   // Just in case clear out any remaining objects from previous runs
   DeviceStop();
 
+  fCurrentRun = run;
+  
   // This will throw if, for example, you can't reach the opts DB or if you
   // can't find an options doc with the name you're trying to invoke
   try{
-    fOptions = new Options(opts);
+    fOptions = new Options(opts, include_json);
+    if(override!=""){
+    fOptions->Override(bsoncxx::from_json(override).view());
+  }
     
-  }catch(std::exception e){
-    fLog->Entry("Exception when loading options: "+e.what(), MongoLog::Error);
+  }catch(std::exception E){
+    fLog->Entry("Exception when loading options: " + std::string(E.what()), MongoLog::Error);
     return -1;
   }
 
   // Pull options for modules
   CrateOptions copts;
-  if(fOptions->GetCrateOpt("V2718", copts) != 0){
+  if(fOptions->GetCrateOpt(copts, "V2718") != 0){
     fLog->Entry("Failed to pull crate options from file. Required fields: s_in, pulser_freq, muon_veto, neutron_veto, led_trigger", MongoLog::Error);
     return -1;
   }
   
   // Getting the link and crate for V2718
-  std::vector<BoardType> bv = fOptions->GetBoards("V2718", fProcName);
+  std::vector<BoardType> bv = fOptions->GetBoards("V2718", fProcname);
   if(bv.size() != 1){
     fLog->Entry("Require one V2718 to be defined or we can't start the run", MongoLog::Error);
     return -1;
@@ -66,7 +58,7 @@ int CControl_Handler::DeviceArm(std::string opts){
     
   fV2718 = new V2718(fLog);
   
-  if (fV2718->CrateInit(copt, cc_def.link, cc_def.crate)!=0){
+  if (fV2718->CrateInit(copts, cc_def.link, cc_def.crate)!=0){
     fLog->Entry("Failed to initialize V2718 crate controller", MongoLog::Error);
     return -1;
   }
@@ -96,6 +88,7 @@ int CControl_Handler::DeviceStop(){
     fV2718 = NULL;
   }
 
+  /*
   if(fV1495 != NULL){
     delete fV1495;
     fV1495 = NULL;
@@ -104,6 +97,7 @@ int CControl_Handler::DeviceStop(){
     delete fDDC10;
     fDDC10 = NULL;
   }
+  */
   if(fOptions != NULL){
     delete fOptions;
     fOptions = NULL;
@@ -122,7 +116,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
 
   if(fV2718 != NULL){
     in_array << bsoncxx::builder::stream::open_document
-      // << "run_number" << fCurrentRun
+	     << "run_number" << fCurrentRun
 	     << "s_in" << fV2718->GetCrateOptions().s_in
 	     << "neutron_veto" << fV2718->GetCrateOptions().neutron_veto
 	     << "muon_veto" << fV2718->GetCrateOptions().muon_veto

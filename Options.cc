@@ -200,7 +200,8 @@ int Options::GetCrateOpt(CrateOptions &ret, std::string device){
     ret.muon_veto = bson_options["V2718"]["muon_veto"].get_int32().value;
     ret.neutron_veto = bson_options["V2718"]["neutron_veto"].get_int32().value;
     ret.led_trigger = bson_options["V2718"]["led_trigger"].get_int32().value;
-  }catch(std::exception E){
+  }catch(std::exception &E){
+    std::cout<<"Exception getting ccontroller opts: "<<std::endl<<E.what()<<std::endl;
     return -1;
   }
   return 0;

@@ -5,7 +5,6 @@ V2718::V2718(MongoLog *log){
   fBoardHandle=fLink=fCrate=-1; 
   fCopts.s_in = fCopts.neutron_veto = fCopts.muon_veto = -1;
   fCopts.led_trigger = fCopts.pulser_freq = -1;
-  bStarted = false;
 }
 
 
@@ -21,7 +20,7 @@ int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
   // Initialising the V2718 module via the specified optical link
   int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
   if(a != cvSuccess){
-    fLog->Entry("Failed to init V2718 with CAEN error: " + str(a), MongoLog::Error);
+    fLog->Entry("Failed to init V2718 with CAEN error: " + std::to_string(a), MongoLog::Error);
     return -1;
   }   
   return 0;
@@ -67,7 +66,7 @@ int V2718::SendStartSignal(){
   }
  
   //Configure the LED pulser
-  if(fOpts.pulser_freq > 0){
+  if(fCopts.pulser_freq > 0){
     // We allow a range from 1Hz to 1MHz, but this is not continuous!
     // If the number falls between two possible ranges it will be rounded to 
     // the maximum value of the lower one
@@ -75,26 +74,26 @@ int V2718::SendStartSignal(){
     u_int32_t width = 0x1;
     u_int32_t period = 0x0; 
       
-     if(fOpts.pulser_freq < 10){
-	if(i_pulser_Hz > 5)
+     if(fCopts.pulser_freq < 10){
+	if(fCopts.pulser_freq > 5)
 	   period = 0xFF;
 	else
-	   period = (u_int32_t)((1000/104) / fOpts.pulser_freq);
+	   period = (u_int32_t)((1000/104) / fCopts.pulser_freq);
       }
-     else if(fOpts.pulser_freq < 2450){
+     else if(fCopts.pulser_freq < 2450){
 	tu = cvUnit410us;
-	if(fOpts.pulser_freq > 1219)
+	if(fCopts.pulser_freq > 1219)
 	   period = 0xFF;
 	else
-	   period = (u_int32_t)((1000000/410) / fOpts.pulser_freq);
+	   period = (u_int32_t)((1000000/410) / fCopts.pulser_freq);
       }
-      else if(fOpts.pulser_freq < 312500){
+      else if(fCopts.pulser_freq < 312500){
 	tu = cvUnit1600ns;
-	period = (u_int32_t)((1000000/1.6) / fOpts.pulser_freq);
+	period = (u_int32_t)((1000000/1.6) / fCopts.pulser_freq);
       }
-      else if(fOpts.pulser_freq < 20000000){
+      else if(fCopts.pulser_freq < 20000000){
 	tu = cvUnit25ns;
-        period = (u_int32_t)((1E9/25) / fOpts.pulser_freq);
+        period = (u_int32_t)((1E9/25) / fCopts.pulser_freq);
       }
       else{
          std::stringstream error;

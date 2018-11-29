@@ -15,11 +15,9 @@ public:
   CControl_Handler(MongoLog *log, std::string procname);
   ~CControl_Handler();
 
-  void ProcessCommand(std::string command, std::string detector,
-		      int run, std::string options="");
-
   bsoncxx::document::value GetStatusDoc(std::string hostname);
-  int DeviceArm(int run, std::string options="");
+  int DeviceArm(int run, std::string options, std::vector<std::string>include_json,
+		std::string override="");
   int DeviceStart();
   int DeviceStop();
 
@@ -28,7 +26,8 @@ private:
   V2718 *fV2718;
   V1495 *fV1495;
   DDC10 *fDDC10;
-  
+
+  int fCurrentRun;
   std::string fProcname;
   Options *fOptions;
   MongoLog *fLog;
