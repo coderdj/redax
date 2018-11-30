@@ -21,6 +21,13 @@ static unsigned int StringToHex(std::string str){
     return ss >> std::hex >> result ? result : 0;
 };
 
+  const static int Idle    = 0;
+  const static int Arming  = 1;
+  const static int Armed   = 2;
+  const static int Running = 3;
+  const static int Error   = 4;
+  const static int Unknown = 5;
+  
 private:
 
 };

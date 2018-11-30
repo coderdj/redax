@@ -11,7 +11,7 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fLog=log;
   fHelper = new DAXHelpers();
   fOptions = NULL;
-  fStatus = 0;
+  fStatus = DAXHelpers::Idle;
   fReadLoop = false;
   fNProcessingThreads=8;
   fBufferLength = 0;
@@ -56,7 +56,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
   std::cout<<"Initializing digitizers"<<std::endl;
   
   // Initialize digitizers
-  fStatus = 1;
+  fStatus = DAXHelpers::Arming;
   for(auto d : fOptions->GetBoards("V1724", fHostname)){
     std::cout<<"New digitizer "<<d.board<<std::endl;
     V1724 *digi = new V1724(fLog);
@@ -74,7 +74,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
       std::stringstream err;
       err<<"Failed to initialize digitizer "<<d.board;
       fLog->Entry(err.str(), MongoLog::Warning);
-      fStatus = 0;
+      fStatus = DAXHelpers::Idle;
       return -1;
     }
   }
@@ -105,7 +105,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
       
       if(success!=0){
 	//LOG
-	fStatus = 0;
+	fStatus = DAXHelpers::Idle;
       fLog->Entry("Failed to write registers.", MongoLog::Warning);
       return -1;
       }
@@ -120,7 +120,7 @@ int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys
       digi->WriteRegister(0x8100, 0x5);
     }
   }
-  fStatus = 2;
+  fStatus = DAXHelpers::Armed;
 
   std::cout<<"Printing to string"<<std::endl;
   std::cout<<fOptions->ExportToString()<<std::endl;
@@ -144,7 +144,7 @@ void DAQController::Start(){
       }
     }
   }
-  fStatus = 3;
+  fStatus = DAXHelpers::Running;
   return;
 }
 
@@ -159,7 +159,7 @@ void DAQController::Stop(){
   fLog->Entry("Stopped digitizers", MongoLog::Debug);
 
   fReadLoop = false; // at some point.
-  fStatus = 0;
+  fStatus = DAXHelpers::Idle;
   return;
 }
 void DAQController::End(){
@@ -174,7 +174,7 @@ void DAQController::End(){
     }
   } 
   fDigitizers.clear();
-  fStatus = 0;
+  fStatus = DAXHelpers::Idle;
 
   if(fRawDataBuffer != NULL){
     std::stringstream warn_entry;
@@ -319,7 +319,7 @@ bool DAQController::CheckErrors(){
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
     if(fProcessingThreads[i].inserter->CheckError()){
       fLog->Entry("Error found in processing thread.", MongoLog::Error);
-      fStatus=4;
+      fStatus=DAXHelpers::Error;
       return true;
     }
   }
