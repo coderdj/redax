@@ -26,6 +26,7 @@ private:
   V1495 *fV1495;
   DDC10 *fDDC10;
 
+  int fStatus;
   int fCurrentRun;
   std::string fProcname;
   Options *fOptions;

@@ -124,7 +124,6 @@ int main(int argc, char** argv){
  
     // Report back on what we are doing
     status.insert_one(fHandler->GetStatusDoc(hostname));
-   // Heartbeat and status info to monitor DB
    usleep(1000000);
   }
   return 0;

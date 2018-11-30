@@ -63,7 +63,7 @@ public:
   std::vector<RegisterType> GetRegisters(int board=-1);
   int GetCrateOpt(CrateOptions &ret, std::string device="");
 
-  int GetChannel(int bid, int cid){ return cid;};
+  int GetChannel(int bid, int cid);
   
 private:
   std::string defaultPath = "defaults/daxOptions.json";

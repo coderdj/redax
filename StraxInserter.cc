@@ -164,6 +164,11 @@ int StraxInserter::ParseDocuments(
 
 	  // Cast everything to char so we can put it in our buffer.
 	  u_int16_t cl = u_int16_t(fOptions->GetChannel(dp.bid, channel));
+
+	  // Failing to discern which channel we're getting data from seems serious enough to throw
+	  if(cl==-1)
+	    throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
+
 	  char *channelLoc = reinterpret_cast<char*> (&cl);
 	  fragment.append(channelLoc, 2);
 

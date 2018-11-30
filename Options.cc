@@ -193,3 +193,13 @@ int Options::GetCrateOpt(CrateOptions &ret, std::string device){
   }
   return 0;
 }	
+
+int Options::GetChannel(int bid, int cid){
+  std::string boardstring = std::to_string(bid);
+  try{
+    return bson_options["channels"][cid].get_int32().value;
+  }
+  catch(std::exception& e){
+    return -1;
+  }
+}

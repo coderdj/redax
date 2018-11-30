@@ -11,6 +11,7 @@ CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
   fV2718 = NULL;
   fV1495 = NULL;
   fDDC10 = NULL;
+  fStatus = DAXHelpers::Idle;
 }
 
 CControl_Handler::~CControl_Handler(){
@@ -20,6 +21,8 @@ CControl_Handler::~CControl_Handler(){
 // Initialising various devices namely; V2718 crate controller, V1495, DDC10...
 int CControl_Handler::DeviceArm(int run, Options *opts){
 
+  fStatus = DAXHelpers::Arming;
+  
   // Just in case clear out any remaining objects from previous runs
   DeviceStop();
 
@@ -30,6 +33,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   CrateOptions copts;
   if(fOptions->GetCrateOpt(copts, "V2718") != 0){
     fLog->Entry("Failed to pull crate options from file. Required fields: s_in, pulser_freq, muon_veto, neutron_veto, led_trigger", MongoLog::Error);
+    fStatus = DAXHelpers::Idle;
     return -1;
   }
   
@@ -37,6 +41,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   std::vector<BoardType> bv = fOptions->GetBoards("V2718", fProcname);
   if(bv.size() != 1){
     fLog->Entry("Require one V2718 to be defined or we can't start the run", MongoLog::Error);
+    fStatus = DAXHelpers::Idle;
     return -1;
   }
   BoardType cc_def = bv[0];
@@ -45,19 +50,22 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   
   if (fV2718->CrateInit(copts, cc_def.link, cc_def.crate)!=0){
     fLog->Entry("Failed to initialize V2718 crate controller", MongoLog::Error);
+    fStatus = DAXHelpers::Idle;
     return -1;
   }
-
+  fStatus = DAXHelpers::Armed;
   return 0;
 }
 	   
 // Send the start signal from crate controller
 int CControl_Handler::DeviceStart(){      
-  if(fV2718 == NULL || fV2718->SendStartSignal()!=0){   
-    fLog->Entry("V2718 either undefined or failed to start", MongoLog::Error);
+  if(fV2718 == NULL && fV2718->SendStartSignal()!=0){   
+    fLog->Entry("V2718 either failed to start", MongoLog::Error);
+    fStatus = DAXHelpers::Error;
     return -1;
   }
-  std::cout << "V2718 Started" << std::endl; 
+  std::cout << "V2718 Started" << std::endl;
+  fStatus = DAXHelpers::Running;
   return 0;
 }
 
@@ -83,7 +91,7 @@ int CControl_Handler::DeviceStop(){
     fDDC10 = NULL;
   }
   */
-
+  fStatus = DAXHelpers::Idle;
   return 0;
 }
 
@@ -93,13 +101,13 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
  
   // Updating the status doc
   bsoncxx::builder::stream::document builder{};
-  builder << "host" << hostname << "type" << "ccontrol";
+  builder << "host" << hostname << "type" << "ccontrol" << "status" << fStatus;
   auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
 
   if(fV2718 != NULL){
     in_array << bsoncxx::builder::stream::open_document
 	     << "run_number" << fCurrentRun
-             << "type" << "V2718"      
+             << "type" << "V2718"
 	     << "s_in" << fV2718->GetCrateOptions().s_in
 	     << "neutron_veto" << fV2718->GetCrateOptions().neutron_veto
 	     << "muon_veto" << fV2718->GetCrateOptions().muon_veto
