@@ -19,7 +19,7 @@ int main(int argc, char** argv){
   mongocxx::database db = client["dax"];
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
-  mongocxx::collection col_options = db["options"];
+  mongocxx::collection options_collection = db["options"];
 
   // Build a unique name for this process
   // we trust that the user has given {ID} uniquely
@@ -38,6 +38,9 @@ int main(int argc, char** argv){
     exit(-1);
   }
 
+  // Options
+  Options *options = NULL;
+  
   // Holds session data
   CControl_Handler *fHandler = new CControl_Handler(logger, hostname);  
 
@@ -83,19 +86,7 @@ int main(int argc, char** argv){
        catch(const std::exception E){
 	 logger->Entry("ccontrol: Received an arm document with no run mode",MongoLog::Warning);
        }
-                  
-       // Now get the options in the same way as for initialising the digitisers, etc.. 
-       bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
-       try{
-	 std::string option_name = doc["mode"].get_utf8().value.to_string();
-	 trydoc = col_options.find_one(bsoncxx::builder::stream::document{}<<
-				       "name" << option_name.c_str() <<
-				       bsoncxx::builder::stream::finalize);
-       }
-       catch(const std::exception E){
-	 logger->Entry("ccontrol: Received an improper options doc", MongoLog::Warning);
-       }
-            
+                                     
        // Get an override doc from the 'options_override' field if it exists
        std::string override_json = "";
        try{
@@ -105,35 +96,17 @@ int main(int argc, char** argv){
        catch(const std::exception E){
 	 logger->Entry("No override options provided", MongoLog::Debug);
        }	  
-       
-       // Get all the subdocs in options
-       if(trydoc){
-	 std::vector<std::string> include_json;
-	 try{ 
-             bsoncxx::array::view include_array = (*trydoc).view()["includes"].get_array().value;
-	     for(bsoncxx::array::element ele : include_array){
-               auto sd = col_options.find_one(bsoncxx::builder::stream::document{}<<
-					      "name" << ele.get_utf8().value.to_string() <<
-					      bsoncxx::builder::stream::finalize);
-	       if(sd)
-		 include_json.push_back(bsoncxx::to_json(*sd));
-	       else
-		 logger->Entry("ccontrol: Possible improper run config.", MongoLog::Warning);
-	     }
-	 }
-	 catch(const std::exception E){ 
-	   logger->Entry("Could not get all the subdocs in options doc", MongoLog::Debug);
-	 }
+              
+       //Here are our options
+       if(options != NULL)
+	 delete options;
+       options = new Options(logger, mode, options_collection, override_json);
+	 
+       // Initialise the V2178, V1495 and DDC10...etc.      
+       if(fHandler->DeviceArm(run, options) != 0){
+	 logger->Entry("Failed to initialize devices", MongoLog::Error);
+       }
 
-	 //Here are our options
-	 std::string options = bsoncxx::to_json(*trydoc);
-	 
-	 // Initialise the V2178, V1495 and DDC10...etc.      
-	 if(fHandler->DeviceArm(run,options, include_json, override_json) != 0){
-	   logger->Entry("Failed to initialize devices", MongoLog::Error);
-	 }
-	 
-       } // end if "trydoc"
      } // end if "arm" command
      
 

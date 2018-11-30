@@ -15,6 +15,7 @@
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
 #include "DAXHelpers.hh"
+#include "MongoLog.hh"
 
 struct BoardType{
   int link;
@@ -45,12 +46,14 @@ struct CrateOptions{
 class Options{
 
 public:
-  Options();
-  Options(std::string opts, std::vector<std::string>include_opts={});
+  Options(MongoLog *log, std::string name, mongocxx::collection opts_collection,
+	  std::string override_opts);
   ~Options();
 
-  int LoadFile(std::string path);
-  int Load(std::string opts, std::vector<std::string>include_opts={});
+  int Load(std::string name, mongocxx::collection opts_collection,
+	   std::string override_opts);
+  int Override(bsoncxx::document::view override_opts);
+  std::string ExportToString();
   
   int GetInt(std::string key, int default_value=-1);
   long int GetLongInt(std::string key, long int default_value=-1);
@@ -60,10 +63,6 @@ public:
   std::vector<RegisterType> GetRegisters(int board=-1);
   int GetCrateOpt(CrateOptions &ret, std::string device="");
 
-
-  std::string ExportToString();
-  int Override(bsoncxx::document::view override_opts);
-
   int GetChannel(int bid, int cid){ return cid;};
   
 private:
@@ -71,6 +70,7 @@ private:
   DAXHelpers *fHelper;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
+  MongoLog *fLog;
 };
 
 #endif

@@ -46,6 +46,9 @@ int main(int argc, char** argv){
     std::cout<<"Exiting"<<std::endl;
     exit(-1);
   }
+
+  //Options
+  Options *fOptions = NULL;
   
   // The DAQController object is responsible for passing commands to the
   // boards and tracking the status
@@ -145,32 +148,14 @@ int main(int argc, char** argv){
 	controller->End();
       }
       else if(command == "arm"){
+
 	// Can only arm if we're in the idle, arming, or armed state
 	if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
 	  
 	  // Clear up any previously failed things
 	  if(controller->status() != 0)
 	    controller->End();
-	  
-	  // Try to pull options from database and store in an 'optional' object
-	  bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
-	  try{
-	    string option_name = (doc)["mode"].get_utf8().value.to_string();
-	    logger->Entry("Loading options " + option_name, MongoLog::Debug);
-	    trydoc = options_collection.find_one(bsoncxx::builder::stream::document{}<<
-						 "name" << option_name.c_str() <<
-						 bsoncxx::builder::stream::finalize);	    
-	    
-	    logger->Entry("Received arm command from user "+
-			  (doc)["user"].get_utf8().value.to_string() +
-			  " for mode " + option_name, MongoLog::Message);
-	  }
-	  catch(const std::exception &e){
-	    logger->Entry("Want to arm boards but no valid mode provided", MongoLog::Warning);
-	  }
 
-
-	  
 	  // Get an override doc from the 'options_override' field if it exists
 	  std::string override_json = "";
 	  try{
@@ -180,66 +165,45 @@ int main(int argc, char** argv){
 	  catch(const std::exception &e){
 	    logger->Entry("No override options provided, continue without.", MongoLog::Debug);
 	  }
-	  
-	  std::cout<<"Overrode JSON"<<std::endl;
-	  
+	 
 	  bool initialized = false;
-	  if(trydoc){
 
-	    // Pull all sub-docs
-	    std::vector<std::string> include_json;
-	    try{ 
-              bsoncxx::array::view include_array = (*trydoc).view()["includes"].get_array().value;
-	      for(bsoncxx::array::element ele : include_array){
-		auto sd = options_collection.find_one(bsoncxx::builder::stream::document{}<<
-						      "name" << ele.get_utf8().value.to_string() <<
-						      bsoncxx::builder::stream::finalize);
-		if(sd)
-		  include_json.push_back(bsoncxx::to_json(*sd));
-		else
-		  logger->Entry("Possible improper run config. Options include documents faulty",
-				MongoLog::Warning);
-		  		
-	      }
+	  // Mongocxx types confusing so passing json strings around
+	  if(fOptions != NULL)
+	    delete fOptions;
+	  fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
+				 options_collection, override_json);
+	  std::vector<int> links;
+	  if(controller->InitializeElectronics(fOptions, links) != 0){
+	    logger->Entry("Failed to initialize electronics", MongoLog::Error);
+	    controller->End();
+	  }
+	  else{
+	    initialized = true;
+	    logger->Entry("Initialized electronics", MongoLog::Debug);
+	  }
+	  
+	  if(readoutThreads.size()!=0){
+	    logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
+	  }
+	  else if(!initialized){
+	    cout<<"Skipping readout configuration since init failed"<<std::endl;
+	  }
+	  else{
+	    for(unsigned int i=0; i<links.size(); i++){
+	      std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
+	      std:: thread *readoutThread = new std::thread
+		(
+		 DAQController::ReadThreadWrapper,
+		 (static_cast<void*>(controller)), links[i]
+		 );
+	      readoutThreads.push_back(readoutThread);
 	    }
-	    catch(...){};
-
-	    // Mongocxx types confusing so passing json strings around
-	    std::string options = bsoncxx::to_json(*trydoc);
-	    std::vector<int> links;
-	    std::cout<<"About to initialize electronics"<<std::endl;
-	    if(controller->InitializeElectronics(options, links, include_json, override_json) != 0){
-	      logger->Entry("Failed to initialize electronics", MongoLog::Error);
-	      controller->End();
-	    }
-	    else{
-	      initialized = true;
-	      logger->Entry("Initialized electronics", MongoLog::Debug);
-	    }
-	    
-	    if(readoutThreads.size()!=0){
-	      logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
-	    }
-	    else if(!initialized){
-	      cout<<"Skipping readout configuration since init failed"<<std::endl;
-	    }
-	    else{
-	      for(unsigned int i=0; i<links.size(); i++){
-		std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
-		std:: thread *readoutThread = new std::thread
-		  (
-		   DAQController::ReadThreadWrapper,
-		   (static_cast<void*>(controller)), links[i]
-		   );
-		readoutThreads.push_back(readoutThread);
-	      }
-	    }
-	  }	  
-	}
+	  }
+	}	  	
 	else
 	  logger->Entry("Cannot arm DAQ while not 'Idle'", MongoLog::Warning);
-      }
-
+      }      
     }
     // Insert some information on this readout node back to the monitor DB
     controller->CheckErrors();

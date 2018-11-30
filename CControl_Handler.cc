@@ -15,31 +15,16 @@ CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
 
 CControl_Handler::~CControl_Handler(){
   DeviceStop();
-  if(fOptions != NULL)
-      delete fOptions;
 }
 
 // Initialising various devices namely; V2718 crate controller, V1495, DDC10...
-int CControl_Handler::DeviceArm(int run, std::string opts, std::vector<std::string>include_json,
-				std::string override){
+int CControl_Handler::DeviceArm(int run, Options *opts){
 
   // Just in case clear out any remaining objects from previous runs
   DeviceStop();
 
-  fCurrentRun = run;
-  
-  // This will throw if, for example, you can't reach the opts DB or if you
-  // can't find an options doc with the name you're trying to invoke
-  try{
-    fOptions = new Options(opts, include_json);
-    if(override!=""){
-    fOptions->Override(bsoncxx::from_json(override).view());
-  }
-    
-  }catch(std::exception E){
-    fLog->Entry("Exception when loading options: " + std::string(E.what()), MongoLog::Error);
-    return -1;
-  }
+  fCurrentRun = run;  
+  fOptions = opts;
 
   // Pull options for modules
   CrateOptions copts;
@@ -98,10 +83,7 @@ int CControl_Handler::DeviceStop(){
     fDDC10 = NULL;
   }
   */
-  if(fOptions != NULL){
-    delete fOptions;
-    fOptions = NULL;
-  }
+
   return 0;
 }
 

@@ -23,8 +23,6 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
 
 DAQController::~DAQController(){
   delete fHelper;
-  if(fOptions != NULL)
-    delete fOptions;
   if(fProcessingThreads.size()!=0)
     CloseProcessingThreads();
   delete fStraxHandler;
@@ -41,18 +39,9 @@ std::string DAQController::run_mode(){
   }
 }
 
-int DAQController::InitializeElectronics(std::string opts, std::vector<int>&keys,
-					 std::vector<std::string>include_json,
-					 std::string override){
+int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys){
 
-  // Load options including override if any
-  if(fOptions != NULL)
-    delete fOptions;
-  fOptions = new Options(opts, include_json);
-  if(override!=""){
-    fOptions->Override(bsoncxx::from_json(override).view());
-  }
-
+  fOptions = options;
   std::cout<<"Initializing digitizers"<<std::endl;
   
   // Initialize digitizers

@@ -1,21 +1,23 @@
 #!/bin/bash
 
 # SCREEN_NAMES are the names of detached screens
-SCREEN_NAMES=("reader0" "reader1" "sysmon" "broker" "api")
+SCREEN_NAMES=("reader0" "reader1" "sysmon" "broker" "api" "ccontrol")
 
 # DIRS are the running directories of your processes
 DIRS=("/home/coderre/ldaq"
       "/home/coderre/ldaq"
       "/home/coderre/ldaq/monitor"
       "/home/coderre/ldaq/broker"
-      "/home/coderre/api")
+      "/home/coderre/api"
+      "/home/coderre/ldaq")
 
 # EXEC is the line to execute
 EXEC=("gdb -ex run --args ./main 0 mongodb://dax:${DAX_PASSWORD}@ds263172.mlab.com:63172/dax"
       "gdb -ex run --args ./main 1 mongodb://dax:${DAX_PASSWORD}@ds263172.mlab.com:63172/dax"
       "python monitor.py"
       "python broker.py --num=0 --config=options.ini"
-      "python run.py")
+      "python run.py"
+      "gdb -ex run --args ./ccontrol 0 mongodb://dax:${DAX_PASSWORD}@ds263172.mlab.com:63172/dax")
 
 if [[ ${#SCREEN_NAMES[@]} != ${#DIRS[@]} || ${#DIRS[@]} != ${#EXEC[@]} ]]
 then

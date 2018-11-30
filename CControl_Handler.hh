@@ -16,8 +16,7 @@ public:
   ~CControl_Handler();
 
   bsoncxx::document::value GetStatusDoc(std::string hostname);
-  int DeviceArm(int run, std::string options, std::vector<std::string>include_json,
-		std::string override="");
+  int DeviceArm(int run, Options *opts);
   int DeviceStart();
   int DeviceStop();
 

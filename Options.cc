@@ -1,15 +1,10 @@
 #include "Options.hh"
 
-Options::Options(){
-  //if(LoadFile(defaultPath)!=0)
-  //throw std::runtime_error("Can't initialize options class");
-  fHelper = new DAXHelpers();
+Options::Options(MongoLog *log, std::string options_name, mongocxx::collection opts_collection,
+		 std::string override_opts){
   bson_value = NULL;
-}
-
-Options::Options(std::string opts, std::vector<std::string>include_opts){
-  if(Load(opts, include_opts)!=0)
-    throw std::runtime_error("Can't initialize options class");  
+  if(Load(options_name, opts_collection, override_opts)!=0)
+    throw std::runtime_error("Can't initialize options class");
   fHelper = new DAXHelpers();
 }
 
@@ -19,59 +14,51 @@ Options::~Options(){
     delete bson_value;
 }
 
-int Options::LoadFile(std::string path){
-  /*
-    Load a file and put the options into the internal bson 
-    holder
-  */
-  
-  try{
-    std::ifstream t(path.c_str());
-    std::string str((std::istreambuf_iterator<char>(t)),
-		    std::istreambuf_iterator<char>());
-    Load(str);
-  }
-  catch (const std::exception &e){
-    std::cout<<e.what()<<std::endl;
-    return -1;
-  }
-  return 0;  
-}
-
 std::string Options::ExportToString(){
-  // This might be silly
   std::string ret = bsoncxx::to_json(bson_options);
   return ret;
 }
 
-int Options::Load(std::string opts, std::vector<std::string>include_opts){
-  try{
-    // This needs to be a pointer. Needs to stay in scope for as long as you might
-    // want to see the view.
-    bson_value = new bsoncxx::document::value(bsoncxx::from_json(opts).view());
-    bson_options = bson_value->view();
-  }
-  catch (const bsoncxx::v_noabi::exception &e){
-    std::cout<<"Failed to load file or parse JSON. Check that your JSON is valid."<<std::endl;
-    std::cout<<e.what()<<std::endl;
+int Options::Load(std::string name, mongocxx::collection opts_collection,
+		  std::string override_opts){
+  // Try to pull doc from DB
+  bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
+  trydoc = opts_collection.find_one(bsoncxx::builder::stream::document{}<<
+				    "name" << name.c_str() << bsoncxx::builder::stream::finalize);
+  if(!trydoc){
+    fLog->Entry("Failed to find your options file in DB", MongoLog::Warning);
     return -1;
   }
-  catch(const std::exception &e){
-    std::cout<<e.what()<<std::endl;
+  if(bson_value != NULL)
+    delete bson_value;
+  bson_value = new bsoncxx::document::value((*trydoc).view());
+  bson_options = bson_value->view();
+  
+  // Pull all subdocuments
+  int success = 0;
+  try{
+    bsoncxx::array::view include_array = (*trydoc).view()["includes"].get_array().value;
+    for(bsoncxx::array::element ele : include_array){
+      auto sd = opts_collection.find_one(bsoncxx::builder::stream::document{} <<
+					 "name" << ele.get_utf8().value.to_string() <<
+					 bsoncxx::builder::stream::finalize);
+      if(sd) success += Override(*sd); // include_json.push_back(bsoncxx::to_json(*sd));
+      else fLog->Entry("Possible improper run config. Check your options includes",
+		       MongoLog::Warning);
+    }
+  }catch(...){}; // will catch if there are no includes, for example
+
+  if(override_opts != "")
+    success += Override(bsoncxx::from_json(override_opts));
+  
+  if(success!=0){
+    fLog->Entry("Failed to override options doc with includes and overrides.", MongoLog::Warning);
+    return -1;
   }
 
-  // In case there are extra opts just override
-  int success = 0;
-  for(unsigned int x=0; x<include_opts.size(); x++){
-    success += Override(bsoncxx::from_json(include_opts[x]).view());
-  }
-  if(success!=0){
-    std::cout<<"Failed to override options doc with include"<<std::endl;
-    //  fLog->Entry("Failed to override options doc with includes", MongoLog::Warning);
-  }
-  
-  return success;
+  return 0;
 }
+
 
 int Options::Override(bsoncxx::document::view override_opts){
 
