@@ -16,7 +16,8 @@ int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
         
   fCrate = crate;
   fLink = link;  	
-
+  fCopts = c_opts;
+  
   // Initialising the V2718 module via the specified optical link
   int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
   if(a != cvSuccess){

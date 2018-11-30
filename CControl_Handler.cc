@@ -99,6 +99,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
   if(fV2718 != NULL){
     in_array << bsoncxx::builder::stream::open_document
 	     << "run_number" << fCurrentRun
+             << "type" << "V2718"      
 	     << "s_in" << fV2718->GetCrateOptions().s_in
 	     << "neutron_veto" << fV2718->GetCrateOptions().neutron_veto
 	     << "muon_veto" << fV2718->GetCrateOptions().muon_veto
