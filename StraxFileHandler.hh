@@ -36,6 +36,8 @@ private:
   std::map<std::string, std::mutex>fFileMutexes;
   std::map<std::string, std::ofstream>fFileHandles;
   u_int32_t fChunkCloseDelay, fChunkNameLength;
+
+  std::mutex fCleanUpMutex;
 };
 
 #endif

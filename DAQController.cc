@@ -13,7 +13,7 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fOptions = NULL;
   fStatus = DAXHelpers::Idle;
   fReadLoop = false;
-  fNProcessingThreads=8;
+  fNProcessingThreads=16;
   fBufferLength = 0;
   fRawDataBuffer = NULL;
   fDatasize=0.;

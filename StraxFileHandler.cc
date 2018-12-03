@@ -116,12 +116,14 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
 
   // Love the auto pointer but since we want to manipulate the
   // map within the loop easier to do it this way
+  if(!fCleanUpMutex.try_lock())
+    return;
   std::map<std::string, std::mutex>::iterator mutex_itr;
 
   //for (auto &mutex_itr : fFileMutexes){
   for(mutex_itr=fFileMutexes.begin();
       mutex_itr!=fFileMutexes.end(); ++mutex_itr){
-
+    
     // Get the ID of this one
     std::string idnr = mutex_itr->first.substr(0, fChunkNameLength);
     u_int32_t idnrint = (u_int32_t)(std::stoi(idnr));
@@ -177,20 +179,16 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
       // std::experimental::filesystem::remove(GetDirectoryPath(mutex_itr->first, true));
 
       // Don't remove this mutex in this case, destroy the entries
-
-      // BAD WORKAROUND. This is a mess because you can't remove and rebalance this map
-      // while other threads are inserting into said map and looking up elements. So...
-      // I guess we just don't erase these entries. Result? You can never get a lock on the
-      // mutex (so effective skip it) and your handles pile up (but short runs anyway)
-      //fFileHandles.erase(mutex_itr->first);
-      //mutex_itr = fFileMutexes.erase(mutex_itr);
-
+      fFileHandles.erase(mutex_itr->first);
+      mutex_itr = fFileMutexes.erase(mutex_itr);
+      
+      
       if(fFileMutexes.size()>0)
 	continue;
       else
 	break;
     }
-
+    fCleanUpMutex.unlock();
   }
 
   // If we call this with 'force_all' it means we're ending the run
