@@ -24,6 +24,7 @@ int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
     fLog->Entry("Failed to init V2718 with CAEN error: " + std::to_string(a), MongoLog::Error);
     return -1;
   }   
+  SendStopSignal();
   return 0;
 }
 

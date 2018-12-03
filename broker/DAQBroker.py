@@ -21,6 +21,7 @@ class DAQBroker():
         for doc in desired_state:
 
             det = doc['detector']
+            self._update_status(HostStatus)
             #print(doc)
             # Case 1: doc is not active, detector not here, ignore
             if doc['active'] == 'false' and det not in self.dets.keys():
