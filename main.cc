@@ -41,7 +41,7 @@ int main(int argc, char** argv){
   
   // Logging
   MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(suri, "dax", "log", hostname, true);
+  int ret = logger->Initialize(suri, "xenonnt", "log", hostname, true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
     exit(-1);

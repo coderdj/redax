@@ -5,11 +5,11 @@ import datetime
 class DBInterface():
     def __init__(self, config, hostname):
         self.dax_db = MongoClient(
-            config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])['dax']
+            config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])['xenonnt']
         self.log_db = MongoClient(
-            config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])['log']
+            config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])['xenonnt']
         self.runs_db = MongoClient(
-            config['DEFAULT']['RunsDatabaseURI']%os.environ['MONGO_PASSWORD'])['run']
+            config['DEFAULT']['RunsDatabaseURI']%os.environ['MONGO_PASSWORD'])['xenonnt']
         self.STATUSES = ["Idle", "Arming", "Armed", "Running", "Error", "Timeout", "Unknown"]
         self.collections = {
             "incoming": self.dax_db["detector_control"],
