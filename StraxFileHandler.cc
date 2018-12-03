@@ -175,9 +175,15 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
 
       
       // std::experimental::filesystem::remove(GetDirectoryPath(mutex_itr->first, true));
+
       // Don't remove this mutex in this case, destroy the entries
-      fFileHandles.erase(mutex_itr->first);
-      mutex_itr = fFileMutexes.erase(mutex_itr);
+
+      // BAD WORKAROUND. This is a mess because you can't remove and rebalance this map
+      // while other threads are inserting into said map and looking up elements. So...
+      // I guess we just don't erase these entries. Result? You can never get a lock on the
+      // mutex (so effective skip it) and your handles pile up (but short runs anyway)
+      //fFileHandles.erase(mutex_itr->first);
+      //mutex_itr = fFileMutexes.erase(mutex_itr);
 
       if(fFileMutexes.size()>0)
 	continue;
