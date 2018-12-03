@@ -388,12 +388,13 @@ int V1724::LoadDAC(vector<u_int32_t>dac_values){
       u_int32_t data = 0x4;
       // DAC ready register
       data = ReadRegister((0x1088)+(0x100*x));
-      if(data == 0xffffffff ){
+      //if(data == 0xffffffff ){
 	//usleep(1000);
 	//counter++;
-	counter=101;
-	break;
-      }
+      //std::cout<<"Epic fail in DAC reading"<<std::endl;
+      //counter=101;
+      //break;
+      //}
       if(data&0x4){
 	usleep(1000);
 	counter++;
