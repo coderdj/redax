@@ -43,7 +43,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
   // time you see something under 5
   
   // First, is this number greater than the previous?
-  if(timestamp > last_time){
+  if(timestamp >= last_time){
 
     // Case 1. This is over 15s but seen_under_5 is true. Give 1 back
     if(timestamp >= 15e8 && seen_under_5)
