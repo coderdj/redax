@@ -114,8 +114,6 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
   // them. The only real way we know if a file is finished is if
   // it is at least 'n' id's back from the current file
 
-  // Love the auto pointer but since we want to manipulate the
-  // map within the loop easier to do it this way
   if(!fCleanUpMutex.try_lock())
     return;
   std::map<std::string, std::mutex>::iterator mutex_itr;
@@ -188,7 +186,7 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
       else
 	break;
     }
-    fCleanUpMutex.unlock();
+
   }
 
   // If we call this with 'force_all' it means we're ending the run
@@ -219,5 +217,5 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
       }
     }
   } // end force_all
-  
+  fCleanUpMutex.unlock();
 }
