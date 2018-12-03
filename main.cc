@@ -34,7 +34,7 @@ int main(int argc, char** argv){
   string suri = argv[2];  
   mongocxx::uri uri(suri.c_str());
   mongocxx::client client(uri);
-  mongocxx::database db = client["dax"];
+  mongocxx::database db = client["xenonnt"];
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
