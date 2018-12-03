@@ -41,6 +41,8 @@ std::string DAQController::run_mode(){
 
 int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys){
 
+  End();
+  
   fOptions = options;
   std::cout<<"Initializing digitizers"<<std::endl;
   
