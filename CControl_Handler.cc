@@ -58,8 +58,12 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 }
 	   
 // Send the start signal from crate controller
-int CControl_Handler::DeviceStart(){      
-  if(fV2718 == NULL && fV2718->SendStartSignal()!=0){   
+int CControl_Handler::DeviceStart(){
+  if(fStatus != DAXHelpers::Armed){
+    fLog->Entry("V2718 attempt to start without arming. Maybe unclean shutdown", MongoLog::Warning);
+    return 0;
+  }
+  if(fV2718 == NULL || fV2718->SendStartSignal()!=0){   
     fLog->Entry("V2718 either failed to start", MongoLog::Error);
     fStatus = DAXHelpers::Error;
     return -1;

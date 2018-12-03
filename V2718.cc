@@ -24,7 +24,7 @@ int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
     fLog->Entry("Failed to init V2718 with CAEN error: " + std::to_string(a), MongoLog::Error);
     return -1;
   }   
-  SendStopSignal();
+  SendStopSignal(false);
   return 0;
 }
 
@@ -114,8 +114,11 @@ int V2718::SendStartSignal(){
 }
 
 
-int V2718::SendStopSignal(){
+int V2718::SendStopSignal(bool end){
 
+  if(fCrate == -1)
+    return 0;
+  
   // Stop the pulser if it's running
   CAENVME_StopPulser(fCrate, cvPulserB);
   usleep(1000);
@@ -135,10 +138,13 @@ int V2718::SendStopSignal(){
   // Set the output register 
   unsigned int data = 0x0; 
   CAENVME_SetOutputRegister(fCrate,data);
-  if(CAENVME_End(fCrate)!= cvSuccess){
-     std::cout << "Failed to end crate" << std::endl;  
+
+  if(end){
+    if(CAENVME_End(fCrate)!= cvSuccess){
+      std::cout << "Failed to end crate" << std::endl;  
+    }
+    fBoardHandle=fLink=fCrate=-1;
   }
-   fBoardHandle=fLink=fCrate=-1; 
   return 0;   
 }
 

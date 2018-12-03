@@ -24,7 +24,7 @@ public:
   
   int CrateInit(CrateOptions c_opts, int link, int crate);
   int SendStartSignal();
-  int SendStopSignal(); 
+  int SendStopSignal(bool end=true); 
   
   CrateOptions GetCrateOptions(){ return fCopts;};
   
