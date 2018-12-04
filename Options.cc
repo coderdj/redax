@@ -200,6 +200,7 @@ int Options::GetChannel(int bid, int cid){
     return bson_options["channels"][boardstring][cid].get_int32().value;
   }
   catch(std::exception& e){
+    std::cout<<"Failed to look up "<<bid<<" "<<cid<<std::endl;
     return -1;
   }
 }
