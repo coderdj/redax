@@ -146,7 +146,14 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
       pbuf->pubseekpos (0,ifs.in);
 
       // allocate memory to contain file data
-      char* buffer=new char[size];
+      char *buffer = NULL;
+      try{
+	buffer=new char[size];
+      }catch(const std::exception &e){
+	std::cout<<"Can't make buffer of size "<<size<<std::endl;
+	std::cout<<e.what();
+	throw e;
+      }
 
       // get file data
       pbuf->sgetn (buffer,size);
