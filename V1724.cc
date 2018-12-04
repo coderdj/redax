@@ -197,7 +197,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
   // suited to your acquisition (positive, negative, bipolar logic)
 
   u_int32_t target_value = nominal_value;
-  int adjustment_threshold = 10;
+  int adjustment_threshold = 2;
 
   // We can adjust a DAC offset register, which is 0xffff in range, is inversely
   // proportional to the baseline position, and has ~5% overshoot on either end.
@@ -221,7 +221,8 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
     write_success += WriteRegister(0x8034, 0x0);       // Delay to zero
     write_success += WriteRegister(0x8038, 0x0);       // Pre trig to zero
-    write_success += WriteRegister(0x8120, 0xFF);      // Channel mask       
+    write_success += WriteRegister(0x8120, 0xFF);      // Channel mask
+    write_success += WriteRegister(0x8020, 0x3E8);
   }
   catch(const std::exception &e){
     std::stringstream error;
