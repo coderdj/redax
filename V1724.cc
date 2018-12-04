@@ -113,10 +113,13 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
 
 unsigned int V1724::ReadRegister(unsigned int reg){
   unsigned int temp;
-  if(CAENVME_ReadCycle(fBoardHandle, fBaseAddress+reg, &temp,
-		       cvA32_U_DATA, cvD32) != cvSuccess){
+  int ret = -100;
+  if((ret = CAENVME_ReadCycle(fBoardHandle, fBaseAddress+reg, &temp,
+			      cvA32_U_DATA, cvD32)) < cvSuccess){ //!= cvSuccess){
     std::stringstream err;
-    err<<"Failed to read register 0x"<<hex<<reg<<dec<<" on board "<<fBID<<endl;
+    std::cout<<"Read returned: "<<ret<<" "<<hex<<temp<<std::endl;
+    err<<"Failed to read register 0x"<<hex<<reg<<dec<<" on board "<<fBID<<
+      ": "<<ret<<endl;
     fLog->Entry(err.str(), MongoLog::Warning);
     return 0xFFFFFFFF;
   }
