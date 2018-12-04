@@ -322,7 +322,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
 	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
 	      maxval=(buff[idx+i]>>16)&0xFFFF;	  
 	  }
-	  if(abs(maxval-minval>1000)){
+	  if(abs(maxval-minval>50)){
 	    std::cout<<"Signal in baseline, channel "<<channel
 		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
 	  }
