@@ -110,7 +110,7 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
     fLog->Entry(err.str(), MongoLog::Warning);
     return -1;
   }
-  //std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;
+  std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;
   usleep(100); // don't ask
   return 0;
 }
@@ -420,7 +420,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   }
 
   
-  LoadDAC(dac_values);
+  // LoadDAC(dac_values);
   end_values = dac_values;
   return 0;
 }
@@ -436,15 +436,7 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values){
     int counter = 0; 
     while(counter < 100){
       u_int32_t data = 0x4;
-      // DAC ready register
-      data = ReadRegister((0x1088)+(0x100*x));
-      //if(data == 0xffffffff ){
-	//usleep(1000);
-	//counter++;
-      //std::cout<<"Epic fail in DAC reading"<<std::endl;
-      //counter=101;
-      //break;
-      //}
+      data = ReadRegister((0x1088)+(0x100*x)); // DAC ready register
       if(data&0x4){
 	usleep(1000);
 	counter++;
