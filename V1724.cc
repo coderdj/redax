@@ -289,7 +289,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       WriteRegister(0x8100,0x4);//x24?   // Acq control reg
       WriteRegister(0x8108,0x1);    // Software trig reg      
       usleep(50);
-      WriteRegister(0x8100, 0x0);
       
       int readcount = 0;
       while(size == 0 && readcount < 1000){	
@@ -305,9 +304,11 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       }
       if(readcount >= 1000){
 	//std::cout<<"Failed at reading out buffer"<<std::endl;
+	WriteRegister(0x8100, 0x0);
 	continue;
       }
 
+      WriteRegister(0x8100, 0x0);
       int baseline = -1;
       
       // Parse it up. Remember we masked every channel except the one
