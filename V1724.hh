@@ -23,7 +23,7 @@ class V1724{
   int WriteRegister(unsigned int reg, unsigned int value);
   unsigned int ReadRegister(unsigned int reg);
   u_int32_t ReadMBLT(u_int32_t *&buffer);
-  int ConfigureBaselines(vector <unsigned int> &end_values,
+  int ConfigureBaselines(vector <u_int16_t> &end_values,
 			 int nominal_value=16000,
 			 int ntries=100);
   int GetClockCounter(u_int32_t timestamp);
@@ -33,7 +33,7 @@ class V1724{
     return fBID;
   };
 
-  int LoadDAC(vector<u_int32_t>dac_values);
+  int LoadDAC(vector<u_int16_t>dac_values);
   
  private:
   int fBoardHandle;

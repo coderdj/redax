@@ -100,8 +100,10 @@ int V1724::GetClockCounter(u_int32_t timestamp){
 
 int V1724::WriteRegister(unsigned int reg, unsigned int value){
   //std::cout<<"Writing reg:val: "<<hex<<reg<<":"<<value<<dec<<std::endl;
+  u_int32_t write=0;
+  write+=value;
   if(CAENVME_WriteCycle(fBoardHandle,fBaseAddress+reg,
-			&value,cvA32_U_DATA,cvD32) != cvSuccess){
+			&write,cvA32_U_DATA,cvD32) != cvSuccess){
     std::stringstream err;
     err<<"Failed to write register 0x"<<hex<<reg<<dec<<" to board "<<fBID<<
       " with value "<<hex<<value<<dec<<" board handle "<<fBoardHandle<<endl;
@@ -189,7 +191,7 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   
 }
 
-int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
+int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 			      int nominal_value, int ntries){
 
   // Baseline configuration routine. The V1724 has a DAC offset setting that
@@ -200,14 +202,14 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
   // suited to your acquisition (positive, negative, bipolar logic)
 
   u_int32_t target_value = nominal_value;
-  int adjustment_threshold = 2;
-
+  int adjustment_threshold = 5;
+  
   // We can adjust a DAC offset register, which is 0xffff in range, is inversely
   // proportional to the baseline position, and has ~5% overshoot on either end.
   // So we use this information to get starting values:
-  u_int32_t starting_value = u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
+  u_int32_t starting_value = 0x8000; //u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
   int nChannels = 8;
-  vector<u_int32_t> dac_values(nChannels, starting_value);
+  vector<u_int16_t> dac_values(nChannels, starting_value);
   vector<bool> channel_finished(nChannels, false);
   
   // Now we need to load a simple configuration to the board in order to read
@@ -217,15 +219,17 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
   try{
     write_success += WriteRegister(0xEF24, 0x1);       // Global reset
     write_success += WriteRegister(0xEF1C, 0x1);       // BERR 
-    write_success += WriteRegister(0x8000, 0x10);      // Channel configuration
-    write_success += WriteRegister(0x8080, 0x800000);  // DPP
-    write_success += WriteRegister(0x8100, 0x0);       // Acq. control
-    write_success += WriteRegister(0x810C, 0x80000000);// Trigger source
+    //write_success += WriteRegister(0x8000, 0x310);      // Channel configuration
+    //write_success += WriteRegister(0x8080, 0x1310000);//0x800000);  // DPP
+    //write_success += WriteRegister(0x8100, 0x0);       // Acq. control
+    //    write_success += WriteRegister(0x810C, 0x80000000);// Trigger source
+    //write_success += WriteRegister(0x800C, 0xA);
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
-    write_success += WriteRegister(0x8034, 0x0);       // Delay to zero
-    write_success += WriteRegister(0x8038, 0x0);       // Pre trig to zero
+    //write_success += WriteRegister(0x8034, 0x0);       // Delay to zero
+    //write_success += WriteRegister(0x8038, 0x0);       // Pre trig to zero
     write_success += WriteRegister(0x8120, 0xFF);      // Channel mask
-    write_success += WriteRegister(0x8020, 0x3E8);
+    //write_success += WriteRegister(0x811C, 0x840);
+    write_success += WriteRegister(0x8020, 0x1F4);
   }
   catch(const std::exception &e){
     std::stringstream error;
@@ -265,7 +269,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
       breakout = false;    
 
       // Tell board to read out this channel only
-      unsigned short channel_mask = 0x80000000+(1 << channel);
+      unsigned short channel_mask = 0x0+(1 << channel);
       if(WriteRegister(0x8120, channel_mask)!=0){
 	stringstream error;
 	error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to set channel mask in baseline.";
@@ -274,18 +278,28 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
       }
 
       // Software clear buffer memory
-      WriteRegister(0xEF28, 0x1);       // Global reset                                   
+      //WriteRegister(0xEF28, 0x1);       // Global reset                                   
 
       
       // Trigger the board with software trigger      
-      WriteRegister(0x8100,0x4);//x24   // Acq control reg
+      WriteRegister(0x8100,0x4);//x24?   // Acq control reg
       WriteRegister(0x8108,0x1);    // Software trig reg
-      usleep(1000); // paranoia. Like, you need some time to acquire right?
-      WriteRegister(0x8100,0x0); // Acq off
+      usleep(50);
+      WriteRegister(0x8100, 0x0);
+      u_int32_t *buff = NULL;
+      u_int32_t size = 0;
+      int readcount = 0;
+      while(size == 0 && readcount < 1000){
+	size = ReadMBLT(buff);
+	usleep(10);
+	readcount++;
+      }
+      if(!(readcount<1000)){
+	std::cout<<"Timeout in baselines"<<std::endl;
+	continue;
+	//return -1;
+      }
 
-      // Now read the data. Don't forget to delete buff later.
-      u_int32_t *buff=NULL;
-      u_int32_t size = ReadMBLT(buff);
       int baseline = -1;
       
       // Parse it up. Remember we masked every channel except the one
@@ -312,11 +326,15 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
 	  u_int32_t csize = buff[idx];
 	  idx+=2;
 	  int tbase = 0;
+	  int bcount= 0;
 	  u_int32_t minval=0x3fff, maxval=0;
 	  
 	  for(unsigned int i=0; i<csize-2; i++){
+	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
+	      continue;
 	    tbase += buff[idx+i]&0xFFFF;
 	    tbase += (buff[idx+i]>>16)&0xFFFF;
+	    bcount+=2;
 	    if((buff[idx+i]&0xFFFF)<minval)
 	      minval = buff[idx+i]&0xFFFF;
 	    if((buff[idx+i]&0xFFFF)>maxval)
@@ -331,28 +349,35 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
 		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
 	  }
 	  else
-	    baseline = int(tbase / ((csize-2)*2));
+	    baseline = int(float(tbase) / ((float(bcount)-2)));
 	  break;
 	}
 	idx++;
       }
-
       if(baseline>=0){
 	// Time for the **magic**. We want to see how far we are off from nominal and
 	// adjust up and down accordingly. We will always adjust just a tiny bit
 	// less than we think we need to to avoid getting into some overshoot
 	// see-saw type loop where we never hit the target.
 	float absolute_unit = float(0xffff)/float(0x3fff);
-	int adjustment = int(0.5*absolute_unit*((int(baseline)-int(target_value)))); 
-	if(abs(adjustment) < adjustment_threshold)
+	int adjustment = int(0.5*absolute_unit*((int(baseline)-int(target_value))));
+	//int adjustment = int(baseline)-int(target_value);
+	//std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
+	//std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
+	if(abs(adjustment) < adjustment_threshold){
 	  channel_finished[channel]=true;
+	  std::cout<<"Channel "<<channel<<" finished"<<std::endl;
+	}
 	else{
 	  if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel])
-	    dac_values[channel]=0;
+	    dac_values[channel]=0x0;
 	  else if(adjustment>0 &&dac_values[channel]+adjustment>0xffff)
 	    dac_values[channel]=0xffff;
-	  else
-	    dac_values[channel]+=adjustment;	  
+	  else {
+	    std::cout<<"Had channel "<<channel<<" at "<<dac_values[channel];
+	    dac_values[channel]+=(adjustment);
+	    std::cout<<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<baseline<<std::endl;
+	  }
 	}
 	//std::cout<<"Channel "<<channel<<": baseline "<<baseline<<" and value "<<hex<<dac_values[channel]<<dec<<std::endl;
       }
@@ -380,7 +405,7 @@ int V1724::ConfigureBaselines(vector <unsigned int> &end_values,
   return 0;
 }
 
-int V1724::LoadDAC(vector<u_int32_t>dac_values){
+int V1724::LoadDAC(vector<u_int16_t>dac_values){
   // Loads DAC values into registers
   
   for(unsigned int x=0; x<dac_values.size(); x++){
@@ -420,7 +445,26 @@ int V1724::LoadDAC(vector<u_int32_t>dac_values){
       errorstr<<"Failed writing DAC "<<hex<<dac_values[x]<<dec<<" in channel "<<x;
       fLog->Entry(errorstr.str(), MongoLog::Error);
       return -1;
-    }    
+    }
+
+    // Wait for it to kick in
+    counter = 0;
+    while(counter < 100){
+      u_int32_t data = 0x4;
+      data = ReadRegister((0x1088)+(0x100*x));
+      if(data&0x4){
+	usleep(1000);
+	counter++;
+	continue;
+      }
+      break;
+    }
+    if(counter >= 100){
+      stringstream errorstr;
+      errorstr<<"Timed out waiting for channel "<<x<<" after DAC setting";
+      fLog->Entry(errorstr.str(), MongoLog::Error);
+      return -1;
+    }
   }
   return 0;
   

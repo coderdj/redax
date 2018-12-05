@@ -77,9 +77,9 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 
       // Load DAC. n.b.: if you set the DAC value in your ini file you'll overwrite
       // the fancy stuff done here!
-      vector<u_int32_t>dac_values(8, 0x1000);
+      vector<u_int16_t>dac_values(8, 0x1000);
       int nominal_dac = fOptions->GetInt("baseline_value", 16000);
-      int success = digi->ConfigureBaselines(dac_values, nominal_dac, 100);
+      int success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
       if(success == -2){
 	fLog->Entry("Baselines failed with digi error", MongoLog::Warning);
 	return -1;
@@ -97,7 +97,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       if(success!=0){
 	//LOG
 	fStatus = DAXHelpers::Idle;
-      fLog->Entry("Failed to write registers.", MongoLog::Warning);
+	fLog->Entry("Failed to write registers.", MongoLog::Warning);
       return -1;
       }
     }
