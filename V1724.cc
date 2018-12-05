@@ -110,6 +110,8 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
     fLog->Entry(err.str(), MongoLog::Warning);
     return -1;
   }
+  //std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;
+  usleep(100); // don't ask
   return 0;
 }
 
@@ -221,9 +223,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     write_success += WriteRegister(0xEF1C, 0x1);       // BERR 
     //write_success += WriteRegister(0x8000, 0x310);      // Channel configuration
     //write_success += WriteRegister(0x8080, 0x1310000);//0x800000);  // DPP
-    write_success += WriteRegister(0x8080, 0x1010000);
+    //    write_success += WriteRegister(0x8080, 0x1010000);
     //write_success += WriteRegister(0x8100, 0x0);       // Acq. control
-     write_success += WriteRegister(0x810C, 0xC0000000);// Trigger source
+    //     write_success += WriteRegister(0x810C, 0xC0000000);// Trigger source
     //write_success += WriteRegister(0x800C, 0xA);
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
     //write_success += WriteRegister(0x8034, 0x0);       // Delay to zero
@@ -270,35 +272,40 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       breakout = false;    
 
       // Tell board to read out this channel only
-      unsigned int channel_mask = 0x0+(1 << channel);
-      if(WriteRegister(0x8120, channel_mask)!=0){
-	stringstream error;
-	error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to set channel mask in baseline.";
-	fLog->Entry(error.str(), MongoLog::Error);
-	return -2;
-      }
-      std::cout<<"Wrote channel mask "<<hex<<channel_mask<<dec<<std::endl;
-      // Software clear buffer memory
-      //WriteRegister(0xEF28, 0x1);       // Global reset                                   
+      //      unsigned int channel_mask = 0x0+(1 << channel);
+      //if(WriteRegister(0x8120, channel_mask)!=0){
+      //stringstream error;
+      //error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to set channel mask in baseline.";
+      //fLog->Entry(error.str(), MongoLog::Error);
+      //return -2;
+      //}
+      //std::cout<<"Wrote channel mask "<<hex<<channel_mask<<dec<<std::endl;
 
-      
-      // Trigger the board with software trigger      
-      WriteRegister(0x8100,0x4);//x24?   // Acq control reg
-      WriteRegister(0x8108,0x1);    // Software trig reg
-      usleep(50);
-      WriteRegister(0x8100, 0x0);
       u_int32_t *buff = NULL;
       u_int32_t size = 0;
+
+      WriteRegister(0xEF28, 0x1);       // Software clear any old data
+      usleep(50);      
+      WriteRegister(0x8100,0x4);//x24?   // Acq control reg
+      WriteRegister(0x8108,0x1);    // Software trig reg      
+      usleep(50);
+      WriteRegister(0x8100, 0x0);
+      
       int readcount = 0;
-      while(size == 0 && readcount < 1000){
+      while(size == 0 && readcount < 1000){	
 	size = ReadMBLT(buff);
 	usleep(10);
 	readcount++;
+	if(size>0 && size<=16){
+	  std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
+	  size = 0;
+	  delete[] buff;
+	  buff = NULL;
+	}	
       }
-      if(!(readcount<1000)){
-	std::cout<<"Timeout in baselines"<<std::endl;
+      if(readcount >= 1000){
+	//std::cout<<"Failed at reading out buffer"<<std::endl;
 	continue;
-	//return -1;
       }
 
       int baseline = -1;
@@ -314,6 +321,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  if(!((cmask>>channel)&1)){
 	    // wtf?
 	    std::cout<<"Got wrong channel in baselines."<<std::endl;
+	    std::cout<<"Transfer size was supposedly "<<dec<<size<<std::endl;
 	    std::cout<<hex<<cmask<<std::endl;
 	    std::cout<<channel<<std::endl;
 	    std::cout<<buff[idx]<<std::endl;
@@ -326,35 +334,43 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  }
 
 	  idx += 4;
-	  u_int32_t csize = buff[idx];
-	  idx+=2;
 	  int tbase = 0;
 	  int bcount= 0;
 	  u_int32_t minval=0x3fff, maxval=0;
-	  
-	  for(unsigned int i=0; i<csize-2; i++){
-	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
+	  for(unsigned int c=0; c<8; c++){
+	    if(!((cmask>>c)&1))
 	      continue;
-	    tbase += buff[idx+i]&0xFFFF;
-	    tbase += (buff[idx+i]>>16)&0xFFFF;
-	    bcount+=2;
-	    if((buff[idx+i]&0xFFFF)<minval)
-	      minval = buff[idx+i]&0xFFFF;
-	    if((buff[idx+i]&0xFFFF)>maxval)
-	      maxval = buff[idx+i]&0xFFFF;
-	    if(((buff[idx+i]>>16)&0xFFFF)<minval)
-	      minval=(buff[idx+i]>>16)&0xFFFF;
-	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
-	      maxval=(buff[idx+i]>>16)&0xFFFF;	  
-	  }
-	  if(abs(maxval-minval>50)){
-	    std::cout<<"Signal in baseline, channel "<<channel
-		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
-	  }
-	  else
-	    baseline = int(float(tbase) / ((float(bcount)-2)));
-	  break;
-	}
+	    u_int32_t csize = buff[idx];
+	    if(c!=channel){
+	      idx+=csize;
+	      continue;
+	    }
+	    idx+=2;
+	    
+	    for(unsigned int i=0; i<csize-2; i++){
+	      if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
+		continue;
+	      tbase += buff[idx+i]&0xFFFF;
+	      tbase += (buff[idx+i]>>16)&0xFFFF;
+	      bcount+=2;
+	      if((buff[idx+i]&0xFFFF)<minval)
+		minval = buff[idx+i]&0xFFFF;
+	      if((buff[idx+i]&0xFFFF)>maxval)
+		maxval = buff[idx+i]&0xFFFF;
+	      if(((buff[idx+i]>>16)&0xFFFF)<minval)
+		minval=(buff[idx+i]>>16)&0xFFFF;
+	      if(((buff[idx+i]>>16)&0xFFFF)>maxval)
+		maxval=(buff[idx+i]>>16)&0xFFFF;	  
+	    }
+	    if(abs(maxval-minval>50)){
+	      std::cout<<"Signal in baseline, channel "<<channel
+		       <<" min: "<<minval<<" max: "<<maxval<<std::endl;
+	    }
+	    else
+	      baseline = int(float(tbase) / ((float(bcount)-2)));
+	    break;
+	  }// end for through channels
+	}// end if found header
 	idx++;
       }
       if(baseline>=0){
@@ -383,6 +399,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  }
 	}
 	//std::cout<<"Channel "<<channel<<": baseline "<<baseline<<" and value "<<hex<<dac_values[channel]<<dec<<std::endl;
+	delete[] buff;
       }
 
     } // end channel loop
