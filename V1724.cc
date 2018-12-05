@@ -102,7 +102,7 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
   //std::cout<<"Writing reg:val: "<<hex<<reg<<":"<<value<<dec<<std::endl;
   u_int32_t write=0;
   write+=value;
-  if(CAENVME_WriteCycle(fBoardHandle,fBaseAddress+reg,
+  if(CAENVME_WriteCycle(fBoardHandle, reg,
 			&write,cvA32_U_DATA,cvD32) != cvSuccess){
     std::stringstream err;
     err<<"Failed to write register 0x"<<hex<<reg<<dec<<" to board "<<fBID<<
@@ -118,8 +118,8 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
 unsigned int V1724::ReadRegister(unsigned int reg){
   unsigned int temp;
   int ret = -100;
-  if((ret = CAENVME_ReadCycle(fBoardHandle, fBaseAddress+reg, &temp,
-			      cvA32_U_DATA, cvD32)) < cvSuccess){ //!= cvSuccess){
+  if((ret = CAENVME_ReadCycle(fBoardHandle, reg, &temp,
+			      cvA32_U_DATA, cvD32)) != cvSuccess){
     std::stringstream err;
     std::cout<<"Read returned: "<<ret<<" "<<hex<<temp<<std::endl;
     err<<"Failed to read register 0x"<<hex<<reg<<dec<<" on board "<<fBID<<
@@ -284,7 +284,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       u_int32_t *buff = NULL;
       u_int32_t size = 0;
 
-      WriteRegister(0xEF28, 0x1);       // Software clear any old data
+      //      WriteRegister(0xEF28, 0x1);       // Software clear any old data
       usleep(50);      
       WriteRegister(0x8100,0x4);//x24?   // Acq control reg
       WriteRegister(0x8108,0x1);    // Software trig reg      
@@ -340,7 +340,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  for(unsigned int c=0; c<8; c++){
 	    if(!((cmask>>c)&1))
 	      continue;
-	    u_int32_t csize = buff[idx];
+	    u_int32_t csize = buff[idx]&0x7FFFFF;
 	    if(c!=channel){
 	      idx+=csize;
 	      continue;
@@ -399,9 +399,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  }
 	}
 	//std::cout<<"Channel "<<channel<<": baseline "<<baseline<<" and value "<<hex<<dac_values[channel]<<dec<<std::endl;
-	delete[] buff;
       }
 
+      delete [] buff;
     } // end channel loop
 
     // If all channels finished we can break out
