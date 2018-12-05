@@ -154,7 +154,7 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
     };
     if( (ret != cvSuccess) && (ret != cvBusError) ){
       stringstream err;
-      err<<"Read error in board "<<fBID<<" after "<<count<<" reads.";
+      err<<"Read error in board "<<fBID<<" after "<<count<<" reads: "<<dec<<ret;
       fLog->Entry(err.str(), MongoLog::Error);
       delete[] tempBuffer;
       return 0;

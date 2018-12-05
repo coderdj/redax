@@ -79,20 +79,25 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       // the fancy stuff done here!
       vector<u_int16_t>dac_values(8, 0x1000);
       int nominal_dac = fOptions->GetInt("baseline_value", 16000);
+      std::cout<<"Setting baselines for digi "<<digi->bid()<<std::endl;
       int success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
+      std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
       if(success == -2){
 	fLog->Entry("Baselines failed with digi error", MongoLog::Warning);
 	return -1;
       }
-      
+
+      std::cout<<"Writing user registers for digi "<<digi->bid()<<std::endl;
       for(auto regi : fOptions->GetRegisters(digi->bid())){
 	unsigned int reg = fHelper->StringToHex(regi.reg);
 	unsigned int val = fHelper->StringToHex(regi.val);
 	success+=digi->WriteRegister(reg, val);
       }
+      std::cout<<"User registers finished for digi "<<digi->bid()<<", loading DAC"<<std::endl;
 
       // Load the baselines you just configured
       success += digi->LoadDAC(dac_values);
+      std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;
       
       if(success!=0){
 	//LOG
