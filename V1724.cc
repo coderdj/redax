@@ -221,8 +221,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     write_success += WriteRegister(0xEF1C, 0x1);       // BERR 
     //write_success += WriteRegister(0x8000, 0x310);      // Channel configuration
     //write_success += WriteRegister(0x8080, 0x1310000);//0x800000);  // DPP
+    write_success += WriteRegister(0x8080, 0x1010000);
     //write_success += WriteRegister(0x8100, 0x0);       // Acq. control
-    //    write_success += WriteRegister(0x810C, 0x80000000);// Trigger source
+     write_success += WriteRegister(0x810C, 0xC0000000);// Trigger source
     //write_success += WriteRegister(0x800C, 0xA);
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
     //write_success += WriteRegister(0x8034, 0x0);       // Delay to zero
@@ -269,14 +270,14 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       breakout = false;    
 
       // Tell board to read out this channel only
-      unsigned short channel_mask = 0x0+(1 << channel);
+      unsigned int channel_mask = 0x0+(1 << channel);
       if(WriteRegister(0x8120, channel_mask)!=0){
 	stringstream error;
 	error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to set channel mask in baseline.";
 	fLog->Entry(error.str(), MongoLog::Error);
 	return -2;
       }
-
+      std::cout<<"Wrote channel mask "<<hex<<channel_mask<<dec<<std::endl;
       // Software clear buffer memory
       //WriteRegister(0xEF28, 0x1);       // Global reset                                   
 
@@ -319,7 +320,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    std::cout<<buff[idx+1]<<std::endl;
 	    std::cout<<buff[idx+2]<<std::endl;
 	    std::cout<<buff[idx+3]<<std::endl<<dec;
-	    break;
+	    idx++;
+	    continue;
+	    //break;
 	  }
 
 	  idx += 4;
