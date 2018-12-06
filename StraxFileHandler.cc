@@ -124,13 +124,13 @@ void StraxFileHandler::CreateMissing(u_int32_t back_from_id){
     }
     if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, true))){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
-	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
+	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_pre, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index_pre, true));
       o.close();
     }
     if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_post, true))){
-      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
+      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_post, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index, true));
