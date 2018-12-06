@@ -115,21 +115,21 @@ void StraxFileHandler::CreateMissing(u_int32_t back_from_id){
       chunk_index.insert(0, "0");
     std::string chunk_index_pre = chunk_index+"_pre";
     std::string chunk_index_post = chunk_index+"_post";
-    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index, true))){
+    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index, false))){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index, true));
       o.close();
     }
-    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, true))){
+    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, false))){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_pre, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index_pre, true));
       o.close();
     }
-    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_post, true))){
+    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_post, false))){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_post, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
       std::ofstream o;
