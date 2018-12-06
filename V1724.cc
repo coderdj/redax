@@ -370,6 +370,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  }
 	} // End for loop through channels
 	delete[] buff;
+	break; // Need to break cause we just deleted buff
       } // End if found header
       else
 	idx++;	
