@@ -83,7 +83,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       int success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
       //int success = 0;
       std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
-      if(success == -2){
+      if(success!=0){
 	fLog->Entry("Baselines failed with digi error", MongoLog::Warning);
 	return -1;
       }

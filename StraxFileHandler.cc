@@ -47,7 +47,7 @@ void StraxFileHandler::End(bool silent){
   // Loop through mutexes, lock them, and close each associated file
   std::cout<<"Closing open files"<<std::endl;
   //while(fFileMutexes.size()>0)
-  if(!silent)
+  if(!silent && (fFileHandles.size()>0 || fFileMutexes.size()>0))
     CleanUp(0, true);
   std::cout<<"Done closing open files."<<std::endl;
   fFileHandles.clear();
