@@ -296,8 +296,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     //      WriteRegister(0xEF28, 0x1);       // Software clear any old data
     usleep(50);      
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
+    usleep(1000);
     WriteRegister(0x8108,0x1);    // Software trig reg      
-    usleep(50);
+    usleep(1000);
     
     int readcount = 0;
     while(size == 0 && readcount < 1000){	
