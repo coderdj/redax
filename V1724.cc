@@ -363,7 +363,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
 	  }
 	  else
-	    baseline = int(float(tbase) / ((float(bcount)-2)));
+	    baseline = int(float(tbase) / ((float(bcount))));
 	  
 	  if(baseline>=0){
 	    // Time for the **magic**. We want to see how far we are off from nominal and
@@ -371,7 +371,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    // less than we think we need to to avoid getting into some overshoot
 	    // see-saw type loop where we never hit the target.
 	    float absolute_unit = float(0xffff)/float(0x3fff);
-	    int adjustment = int(absolute_unit*((int(baseline)-int(target_value))));
+	    int adjustment = int(absolute_unit*((float(baseline)-float(target_value))));
 	    //int adjustment = int(baseline)-int(target_value);
 	    //std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
 	    //std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
