@@ -6,6 +6,7 @@ StraxFileHandler::StraxFileHandler(MongoLog *log){
   fChunkNameLength = 6;
   fChunkCloseDelay = 10;
   fHostname = "reader";
+  fCleanToId = 0;
 }
 
 StraxFileHandler::~StraxFileHandler(){
@@ -14,6 +15,8 @@ StraxFileHandler::~StraxFileHandler(){
 
 int StraxFileHandler::Initialize(std::string output_path, std::string run_name,
 				 u_int32_t full_fragment_size, std::string hostname){
+
+  fCleanToId = 0;
   
   // Clear any previous initialization
   End();
@@ -43,12 +46,19 @@ void StraxFileHandler::End(){
 
   // Loop through mutexes, lock them, and close each associated file
   std::cout<<"Closing open files"<<std::endl;
-  while(fFileMutexes.size()>0)    
-    CleanUp(0, true);
+  //while(fFileMutexes.size()>0)    
+  CleanUp(0, true);
   std::cout<<"Done closing open files."<<std::endl;
   fFileHandles.clear();
   fFileMutexes.clear();
   
+}
+
+std::string StraxFileHandler::GetStringFormat(int id){
+  std::string chunk_index = std::to_string(id);
+  while(chunk_index.size() < fChunkNameLength)
+    chunk_index.insert(0, "0");
+  return chunk_index;
 }
 
 int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> &parsed_fragments){
@@ -109,31 +119,31 @@ std::experimental::filesystem::path StraxFileHandler::GetFilePath(std::string id
 }
 
 void StraxFileHandler::CreateMissing(u_int32_t back_from_id){
+  if(back_from_id < fChunkCloseDelay)
+    return;
   for(unsigned int x=0; x<back_from_id-fChunkCloseDelay; x++){
-    std::string chunk_index = std::to_string(x);
-    while(chunk_index.size() < fChunkNameLength)
-      chunk_index.insert(0, "0");
+    std::string chunk_index = GetStringFormat(x);
     std::string chunk_index_pre = chunk_index+"_pre";
     std::string chunk_index_post = chunk_index+"_post";
     if(!std::experimental::filesystem::exists(GetFilePath(chunk_index, false))){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
       std::ofstream o;
-      o.open(GetFilePath(chunk_index, true));
+      o.open(GetFilePath(chunk_index, false));
       o.close();
     }
     if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, false))){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_pre, false));
       std::ofstream o;
-      o.open(GetFilePath(chunk_index_pre, true));
+      o.open(GetFilePath(chunk_index_pre, false));
       o.close();
     }
     if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_post, false))){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_post, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
       std::ofstream o;
-      o.open(GetFilePath(chunk_index, true));
+      o.open(GetFilePath(chunk_index, false));
       o.close();
     }
   }
@@ -145,98 +155,55 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
   // them. The only real way we know if a file is finished is if
   // it is at least 'n' id's back from the current file
 
-  if(!fCleanUpMutex.try_lock())
-    return;
-  std::map<std::string, std::mutex>::iterator mutex_itr;
-
-  //for (auto &mutex_itr : fFileMutexes){
-  for(mutex_itr=fFileMutexes.begin();
-      mutex_itr!=fFileMutexes.end(); ++mutex_itr){
+  unsigned int largest_closed = 0;
+  if(force_all)
+    back_from_id = 1000000;
+  
+  // The variable fCleanToId holds the index to which we're sure we've written everything
+  for(unsigned int index = fCleanToId; index < back_from_id - fChunkCloseDelay; index++){
     
-    // Get the ID of this one
-    std::string idnr = mutex_itr->first.substr(0, fChunkNameLength);
-    u_int32_t idnrint = (u_int32_t)(std::stoi(idnr));
-    if(force_all || (back_from_id > idnrint &&
-		     back_from_id - idnrint > fChunkCloseDelay)){
+    std::string chunk_index = GetStringFormat(index);
+    std::string chunk_index_pre = chunk_index + "_pre";
+    std::string chunk_index_post = chunk_index + "_post";
 
-      // try_lock cause if it is being used we can skip
-      if(!mutex_itr->second.try_lock()){
-	std::cout<<"Skipping file "<<mutex_itr->first<<" since in use."<<std::endl;
-	continue;
+    if(fFileMutexes.find(chunk_index) != fFileMutexes.end()){
+      if(fFileHandles[chunk_index].is_open()){
+	if(index > largest_closed) largest_closed = index;
+	fFileMutexes[chunk_index].lock();
+	FinishFile(chunk_index);
+	fFileMutexes[chunk_index].unlock();
       }
-      std::cout<<"Closing file "<<mutex_itr->first<<std::endl;
-      std::cout<<fFileMutexes.size()<<" files remain"<<std::endl;
-      
-      // Close this chunk!
-      fFileHandles[mutex_itr->first].close();
-
-      // ZIP it up!
-      std::ifstream ifs(GetFilePath(mutex_itr->first, true), std::ios::binary);
-      std::filebuf* pbuf = ifs.rdbuf();
-      std::size_t size = pbuf->pubseekoff (0,ifs.end,ifs.in);
-      pbuf->pubseekpos (0,ifs.in);
-
-      // allocate memory to contain file data
-      char *buffer = NULL;
-      try{
-	buffer=new char[size];
-      }catch(const std::exception &e){
-	std::cout<<"Can't make buffer of size "<<size<<std::endl;
-	std::cout<<e.what();
-	throw e;
+    }
+    if(fFileMutexes.find(chunk_index_pre) != fFileMutexes.end()){
+      if(fFileHandles[chunk_index_pre].is_open()){
+	if(index > largest_closed) largest_closed = index;
+	fFileMutexes[chunk_index_pre].lock();
+	FinishFile(chunk_index_pre);
+	fFileMutexes[chunk_index_pre].unlock();
       }
-
-      // get file data
-      pbuf->sgetn (buffer,size);
-
-      // blosc it
-      char *out_buffer = new char[size+BLOSC_MAX_OVERHEAD];
-      int wsize = blosc_compress(5, 1, sizeof(float), size, buffer,
-				 out_buffer, size+BLOSC_MAX_OVERHEAD);
-
-      delete[] buffer;
-      ifs.close();
-
-      // I am afraid to stream to the 'finished' version so gonna remove the temp file,
-      // then stream compressed data to it, then rename
-      std::experimental::filesystem::remove(GetFilePath(mutex_itr->first, true));
-      std::ofstream outfile(GetFilePath(mutex_itr->first, true), std::ios::binary);
-      outfile.write(out_buffer, wsize);
-      delete[] out_buffer;
-      outfile.close();
-      
-      // Move this chunk from *_TEMP to the same path without TEMP
-      if(!std::experimental::filesystem::exists(GetDirectoryPath(mutex_itr->first, false)))
-	std::experimental::filesystem::create_directory(GetDirectoryPath(mutex_itr->first, false));
-      std::experimental::filesystem::rename(GetFilePath(mutex_itr->first, true),
-					    GetFilePath(mutex_itr->first, false));
-
-      
-      // std::experimental::filesystem::remove(GetDirectoryPath(mutex_itr->first, true));
-
-      // Don't remove this mutex in this case, destroy the entries
-      fFileHandles.erase(mutex_itr->first);
-      mutex_itr->second.unlock(); // docs warn undefined behavior if mutex destroyed while locked
-      mutex_itr = fFileMutexes.erase(mutex_itr);
-      
-      
-      if(fFileMutexes.size()>0)
-	continue;
-      else
-	break;
+    }
+    if(fFileMutexes.find(chunk_index_post) != fFileMutexes.end()){
+      if(fFileHandles[chunk_index_post].is_open()){
+	if(index > largest_closed) largest_closed = index;
+	fFileMutexes[chunk_index_post].lock();
+	FinishFile(chunk_index_post);
+	fFileMutexes[chunk_index_post].unlock();
+      }
     }
 
   }
 
-  // If we call this with 'force_all' it means we're ending the run
-  // so we need to put in the THE_END marker
-  if(force_all){    
+  if(largest_closed != 0)
+    CreateMissing(largest_closed);
+
+  // At the end of the run we need to write "THE_END"
+  if(force_all){
     std::experimental::filesystem::path write_path(fOutputPath);
     write_path /= "THE_END";
     if(!std::experimental::filesystem::exists(write_path)){
       std::cout<<"Creating END directory at "<<write_path<<std::endl;
       try{
-	std::experimental::filesystem::create_directory(write_path);
+        std::experimental::filesystem::create_directory(write_path);
       }
       catch(...){};
     }
@@ -245,19 +212,64 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
     outfile.open(write_path, std::ios::out);
     outfile<<"...my only friend";
     outfile.close();
-
-    // Prune _TEMP directories
-    for(auto& p: std::experimental::filesystem::directory_iterator(fOutputPath)){
-      std::string fss = p.path().string();
-      if(fss.substr( fss.length() - 5 ) == "_TEMP"){
-	try{
-	  std::experimental::filesystem::remove(fss);
-	}catch(...){};
-      }
-    }
-  } // end force_all
-
-  fCleanUpMutex.unlock();
   
-  CreateMissing(back_from_id);
+    // Prune _TEMP directories                                                                                                                                                                                     
+    //for(auto& p: std::experimental::filesystem::directory_iterator(fOutputPath)){
+    //std::string fss = p.path().string();
+    //if(fss.substr( fss.length() - 5 ) == "_TEMP"){
+    //try{
+    //std::experimental::filesystem::remove(fss);
+    //}catch(...){};
+    //}
+    //}
+
+  }
+}
+
+void StraxFileHandler::FinishFile(std::string chunk_index){
+  
+  // Close this chunk!
+  fFileHandles[chunk_index].close();
+
+  // ZIP it up!
+  std::ifstream ifs(GetFilePath(chunk_index, true), std::ios::binary);
+  std::filebuf* pbuf = ifs.rdbuf();
+  std::size_t size = pbuf->pubseekoff (0,ifs.end,ifs.in);
+  pbuf->pubseekpos (0,ifs.in);
+
+  // allocate memory to contain file data
+  char *buffer = NULL;
+  try{
+    buffer=new char[size];
+  }catch(const std::exception &e){
+    std::cout<<"Can't make buffer of size "<<size<<std::endl;
+    std::cout<<e.what();
+    throw e;
+  }
+
+  // get file data
+  pbuf->sgetn (buffer,size);
+
+  // blosc it
+  char *out_buffer = new char[size+BLOSC_MAX_OVERHEAD];
+  int wsize = blosc_compress(5, 1, sizeof(float), size, buffer,
+			     out_buffer, size+BLOSC_MAX_OVERHEAD);
+  
+  delete[] buffer;
+  ifs.close();
+
+  // I am afraid to stream to the 'finished' version so gonna remove the temp file,
+  // then stream compressed data to it, then rename
+  std::experimental::filesystem::remove(GetFilePath(chunk_index, true));
+  std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
+  writefile.write(out_buffer, wsize);
+  delete[] out_buffer;
+  writefile.close();
+  
+  // Move this chunk from *_TEMP to the same path without TEMP
+  if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
+    std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
+  std::experimental::filesystem::rename(GetFilePath(chunk_index, true),
+					GetFilePath(chunk_index, false));
+       
 }
