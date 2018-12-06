@@ -213,6 +213,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   int nChannels = 8;
   vector<u_int16_t> dac_values(nChannels, starting_value);
   vector<bool> channel_finished(nChannels, false);
+  vector<bool> update_dac(nChannels, true);
   
   // Now we need to load a simple configuration to the board in order to read
   // some data. try/catch cause CAENVMElib fails poorly (segfault) sometimes
@@ -221,17 +222,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   try{
     write_success += WriteRegister(0xEF24, 0x1);       // Global reset
     write_success += WriteRegister(0xEF1C, 0x1);       // BERR 
-    //write_success += WriteRegister(0x8000, 0x310);      // Channel configuration
-    //write_success += WriteRegister(0x8080, 0x1310000);//0x800000);  // DPP
-    //    write_success += WriteRegister(0x8080, 0x1010000);
-    //write_success += WriteRegister(0x8100, 0x0);       // Acq. control
-    //     write_success += WriteRegister(0x810C, 0xC0000000);// Trigger source
-    //write_success += WriteRegister(0x800C, 0xA);
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
-    //write_success += WriteRegister(0x8034, 0x0);       // Delay to zero
-    //write_success += WriteRegister(0x8038, 0x0);       // Pre trig to zero
     write_success += WriteRegister(0x8120, 0xFF);      // Channel mask
-    //write_success += WriteRegister(0x811C, 0x840);
     write_success += WriteRegister(0x8020, 0x1F4);
   }
   catch(const std::exception &e){
@@ -256,161 +248,133 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   int maxIterations = ntries;
   while(currentIteration < maxIterations){
     currentIteration++;
+
+    // First check if we're finished and if so get out
     bool breakout = true;
+    for(int channel=0; channel<nChannels; channel++){
+      if(channel_finished[channel])
+        continue;
+      breakout = false;
+    }
+    if(breakout)
+      break;
 
     // Load DAC for this channel
-    if(LoadDAC(dac_values)!=0){
+    if(LoadDAC(dac_values, update_dac)!=0){
       std::stringstream error;
       error<<"Digitizer "<<fBID<<" failed to load DAC in baseline routine.";
       fLog->Entry(error.str(), MongoLog::Error);
       return -2;
     }
     
-    for(int channel=0; channel<nChannels; channel++){
-      if(channel_finished[channel])
-	continue;
-      breakout = false;    
-
-      // Tell board to read out this channel only
-      //      unsigned int channel_mask = 0x0+(1 << channel);
-      //if(WriteRegister(0x8120, channel_mask)!=0){
-      //stringstream error;
-      //error<<"Digitizer "<<fBID<<" channel "<<channel<<" failed to set channel mask in baseline.";
-      //fLog->Entry(error.str(), MongoLog::Error);
-      //return -2;
-      //}
-      //std::cout<<"Wrote channel mask "<<hex<<channel_mask<<dec<<std::endl;
-
-      u_int32_t *buff = NULL;
-      u_int32_t size = 0;
-
-      //      WriteRegister(0xEF28, 0x1);       // Software clear any old data
-      usleep(50);      
-      WriteRegister(0x8100,0x4);//x24?   // Acq control reg
-      WriteRegister(0x8108,0x1);    // Software trig reg      
-      usleep(50);
-      
-      int readcount = 0;
-      while(size == 0 && readcount < 1000){	
-	size = ReadMBLT(buff);
-	usleep(10);
-	readcount++;
-	if(size>0 && size<=16){
-	  std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
-	  size = 0;
-	  delete[] buff;
-	  buff = NULL;
-	}	
-      }
-      if(readcount >= 1000){
-	//std::cout<<"Failed at reading out buffer"<<std::endl;
-	WriteRegister(0x8100, 0x0);
-	continue;
-      }
-
+    u_int32_t *buff = NULL;
+    u_int32_t size = 0;
+    
+    //      WriteRegister(0xEF28, 0x1);       // Software clear any old data
+    usleep(50);      
+    WriteRegister(0x8100,0x4);//x24?   // Acq control reg
+    WriteRegister(0x8108,0x1);    // Software trig reg      
+    usleep(50);
+    
+    int readcount = 0;
+    while(size == 0 && readcount < 1000){	
+      size = ReadMBLT(buff);
+      usleep(10);
+      readcount++;
+      if(size>0 && size<=16){
+	std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
+	size = 0;
+	delete[] buff;
+	buff = NULL;
+      }	
+    }
+    if(readcount >= 1000){
       WriteRegister(0x8100, 0x0);
-      int baseline = -1;
-      
-      // Parse it up. Remember we masked every channel except the one
-      // we want so should be just that one in the data.
-      unsigned int idx = 0;
-      while(idx < size/sizeof(u_int32_t)){
-	if(buff[idx]>>20==0xA00){ // header
+      continue;
+    }
+    WriteRegister(0x8100, 0x0);
+    int baseline = -1;
+    
+    // Parse
+    unsigned int idx = 0;
+    while(idx < size/sizeof(u_int32_t)){
+      if(buff[idx]>>20==0xA00){ // header	  
+	u_int32_t cmask = buff[idx+1]&0xFF;	  
+	idx += 4;
+	int tbase = 0;
+	int bcount= 0;
+	u_int32_t minval=0x3fff, maxval=0;
 
-	  // Sanity check. Is this your channel?
-	  u_int32_t cmask = buff[idx+1]&0xFF;
-	  if(!((cmask>>channel)&1)){
-	    // wtf?
-	    std::cout<<"Got wrong channel in baselines."<<std::endl;
-	    std::cout<<"Transfer size was supposedly "<<dec<<size<<std::endl;
-	    std::cout<<hex<<cmask<<std::endl;
-	    std::cout<<channel<<std::endl;
-	    std::cout<<buff[idx]<<std::endl;
-	    std::cout<<buff[idx+1]<<std::endl;
-	    std::cout<<buff[idx+2]<<std::endl;
-	    std::cout<<buff[idx+3]<<std::endl<<dec;
-	    idx++;
+	// Loop through channels
+	for(unsigned int channel=0; channel<8; channel++){
+	  if(!((cmask>>channel)&1))
 	    continue;
-	    //break;
+	  u_int32_t csize = buff[idx]&0x7FFFFF;
+	  if(channel_finished[channel]){
+	    idx+=csize;
+	    continue;
 	  }
-
-	  idx += 4;
-	  int tbase = 0;
-	  int bcount= 0;
-	  u_int32_t minval=0x3fff, maxval=0;
-	  for(unsigned int c=0; c<8; c++){
-	    if(!((cmask>>c)&1))
+	  idx+=2;
+	  
+	  for(unsigned int i=0; i<csize-2; i++){
+	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
 	      continue;
-	    u_int32_t csize = buff[idx]&0x7FFFFF;
-	    if(c!=channel){
-	      idx+=csize;
-	      continue;
-	    }
-	    idx+=2;
-	    
-	    for(unsigned int i=0; i<csize-2; i++){
-	      if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
-		continue;
-	      tbase += buff[idx+i]&0xFFFF;
-	      tbase += (buff[idx+i]>>16)&0xFFFF;
-	      bcount+=2;
-	      if((buff[idx+i]&0xFFFF)<minval)
-		minval = buff[idx+i]&0xFFFF;
-	      if((buff[idx+i]&0xFFFF)>maxval)
-		maxval = buff[idx+i]&0xFFFF;
-	      if(((buff[idx+i]>>16)&0xFFFF)<minval)
-		minval=(buff[idx+i]>>16)&0xFFFF;
-	      if(((buff[idx+i]>>16)&0xFFFF)>maxval)
-		maxval=(buff[idx+i]>>16)&0xFFFF;	  
-	    }
-	    if(abs(maxval-minval>50)){
-	      std::cout<<"Signal in baseline, channel "<<channel
-		       <<" min: "<<minval<<" max: "<<maxval<<std::endl;
-	    }
-	    else
-	      baseline = int(float(tbase) / ((float(bcount)-2)));
-	    break;
-	  }// end for through channels
-	}// end if found header
-	idx++;
-      }
-      if(baseline>=0){
-	// Time for the **magic**. We want to see how far we are off from nominal and
-	// adjust up and down accordingly. We will always adjust just a tiny bit
-	// less than we think we need to to avoid getting into some overshoot
-	// see-saw type loop where we never hit the target.
-	float absolute_unit = float(0xffff)/float(0x3fff);
-	int adjustment = int(0.5*absolute_unit*((int(baseline)-int(target_value))));
-	//int adjustment = int(baseline)-int(target_value);
-	//std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
-	//std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
-	if(abs(adjustment) < adjustment_threshold){
-	  channel_finished[channel]=true;
-	  std::cout<<"Channel "<<channel<<" finished"<<std::endl;
-	}
-	else{
-	  if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel])
-	    dac_values[channel]=0x0;
-	  else if(adjustment>0 &&dac_values[channel]+adjustment>0xffff)
-	    dac_values[channel]=0xffff;
-	  else {
-	    std::cout<<"Had channel "<<channel<<" at "<<dac_values[channel];
-	    dac_values[channel]+=(adjustment);
-	    std::cout<<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<baseline<<std::endl;
+	    tbase += buff[idx+i]&0xFFFF;
+	    tbase += (buff[idx+i]>>16)&0xFFFF;
+	    bcount+=2;
+	    if((buff[idx+i]&0xFFFF)<minval)
+	      minval = buff[idx+i]&0xFFFF;
+	    if((buff[idx+i]&0xFFFF)>maxval)
+	      maxval = buff[idx+i]&0xFFFF;
+	    if(((buff[idx+i]>>16)&0xFFFF)<minval)
+	      minval=(buff[idx+i]>>16)&0xFFFF;
+	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
+	      maxval=(buff[idx+i]>>16)&0xFFFF;	  
 	  }
-	}
-	//std::cout<<"Channel "<<channel<<": baseline "<<baseline<<" and value "<<hex<<dac_values[channel]<<dec<<std::endl;
-      }
-
-      delete [] buff;
-    } // end channel loop
-
-    // If all channels finished we can break out
-    if(breakout)
-      break;   
+	  idx += csize-2;
+	  if(abs(maxval-minval>50)){
+	    std::cout<<"Signal in baseline, channel "<<channel
+		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
+	  }
+	  else
+	    baseline = int(float(tbase) / ((float(bcount)-2)));
+	  
+	  if(baseline>=0){
+	    // Time for the **magic**. We want to see how far we are off from nominal and
+	    // adjust up and down accordingly. We will always adjust just a tiny bit
+	    // less than we think we need to to avoid getting into some overshoot
+	    // see-saw type loop where we never hit the target.
+	    float absolute_unit = float(0xffff)/float(0x3fff);
+	    int adjustment = int(0.5*absolute_unit*((int(baseline)-int(target_value))));
+	    //int adjustment = int(baseline)-int(target_value);
+	    //std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
+	    //std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
+	    if(abs(adjustment) < adjustment_threshold){
+	      channel_finished[channel]=true;
+	      std::cout<<"Channel "<<channel<<" finished"<<std::endl;
+	    }
+	    else{
+	      update_dac[channel] = true;
+	      if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel])
+		dac_values[channel]=0x0;
+	      else if(adjustment>0 &&dac_values[channel]+adjustment>0xffff)
+		dac_values[channel]=0xffff;
+	      else {
+		std::cout<<"Had channel "<<channel<<" at "<<dac_values[channel];
+		dac_values[channel]+=(adjustment);
+		std::cout<<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<baseline<<std::endl;
+	      }
+	    }
+	  }
+	} // End for loop through channels
+	delete[] buff;
+      } // End if found header
+      else
+	idx++;	
+    } // End while through buff
     
   }// end iteration loop
-
+  
   for(unsigned int x=0; x<channel_finished.size(); x++){
     if(channel_finished[x]!=true){
       std::stringstream error;
@@ -421,18 +385,20 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   }
 
   
-  // LoadDAC(dac_values);
   end_values = dac_values;
   return 0;
 }
 
-int V1724::LoadDAC(vector<u_int16_t>dac_values){
+int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
   // Loads DAC values into registers
   
   for(unsigned int x=0; x<dac_values.size(); x++){
-    if(x>7) // oops
+    if(x>7 || update_dac[x]==false) // oops
       continue;
 
+    // We updated, or at least tried to update
+    update_dac[x]=true;
+    
     // Define a counter to give the DAC time to be set if needed
     int counter = 0; 
     while(counter < 100){

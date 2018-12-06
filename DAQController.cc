@@ -96,7 +96,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       std::cout<<"User registers finished for digi "<<digi->bid()<<", loading DAC"<<std::endl;
 
       // Load the baselines you just configured
-      success += digi->LoadDAC(dac_values);
+      vector<bool> update_dac(8, true);
+      success += digi->LoadDAC(dac_values, update_dac);
       std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;
       
       if(success!=0){

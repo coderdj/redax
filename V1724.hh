@@ -33,7 +33,7 @@ class V1724{
     return fBID;
   };
 
-  int LoadDAC(vector<u_int16_t>dac_values);
+  int LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac);
   
  private:
   int fBoardHandle;
