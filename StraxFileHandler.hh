@@ -25,8 +25,9 @@ private:
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
   std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
-
+  
   void CleanUp(u_int32_t back_from_id, bool force_all=false);
+  void CreateMissing(u_int32_t back_from_id);
   
   MongoLog *fLog;
   std::experimental::filesystem::path fOutputPath;

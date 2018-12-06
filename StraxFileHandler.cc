@@ -4,7 +4,7 @@ StraxFileHandler::StraxFileHandler(MongoLog *log){
   fLog = log;
   fFullFragmentSize=0;
   fChunkNameLength = 6;
-  fChunkCloseDelay = 5;
+  fChunkCloseDelay = 10;
   fHostname = "reader";
 }
 
@@ -85,7 +85,7 @@ int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> &parse
     fFileMutexes[id].unlock();    
   }
 
-  if(lowest_id > 0)
+  if(lowest_id > int(fChunkCloseDelay))
     CleanUp((u_int32_t)(lowest_id));
 
   return 0;
@@ -106,6 +106,37 @@ std::experimental::filesystem::path StraxFileHandler::GetFilePath(std::string id
   std::string filename = fHostname;  
   write_path /= filename;
   return write_path;
+}
+
+void StraxFileHandler::CreateMissing(u_int32_t back_from_id){
+  for(unsigned int x=0; x<back_from_id-fChunkCloseDelay; x++){
+    std::string chunk_index = std::to_string(x);
+    while(chunk_index.size() < fChunkNameLength)
+      chunk_index.insert(0, "0");
+    std::string chunk_index_pre = chunk_index+"_pre";
+    std::string chunk_index_post = chunk_index+"_post";
+    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index, true))){
+      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
+	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
+      std::ofstream o;
+      o.open(GetFilePath(chunk_index, true));
+      o.close();
+    }
+    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, true))){
+      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
+	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
+      std::ofstream o;
+      o.open(GetFilePath(chunk_index_pre, true));
+      o.close();
+    }
+    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_post, true))){
+      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
+	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
+      std::ofstream o;
+      o.open(GetFilePath(chunk_index, true));
+      o.close();
+    }
+  }
 }
 
 void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
@@ -185,6 +216,7 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
 
       // Don't remove this mutex in this case, destroy the entries
       fFileHandles.erase(mutex_itr->first);
+      mutex_itr->second.unlock(); // docs warn undefined behavior if mutex destroyed while locked
       mutex_itr = fFileMutexes.erase(mutex_itr);
       
       
@@ -226,4 +258,6 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
   } // end force_all
 
   fCleanUpMutex.unlock();
+  
+  CreateMissing(back_from_id);
 }
