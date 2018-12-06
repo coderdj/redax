@@ -138,7 +138,11 @@ class DAQBroker():
                                                     
                 # If ARMING, check if timed out
                 elif self.dets[det]['status'] == self.status_codes["ARMING"]:
-                    t = (datetime.datetime.utcnow() - self.dets[det]['armed_at']).total_seconds()
+                    try:
+                        t = (datetime.datetime.utcnow() - self.dets[det]['armed_at']).total_seconds()
+                    except: # In case broker restarts during arm
+                        self.dets[det]['armed_at'] = datetime.datetime.utcnow()
+                        t=0
                     self.dets[det]['diagnosis'] = 'processing'
                     if t > self.arm_timeout:
                         self.dets[det]['diagnosis'] = 'error'

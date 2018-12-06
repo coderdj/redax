@@ -294,11 +294,11 @@ int StraxInserter::ReadAndInsertData(){
       delete readVector;
       readVector=NULL;
     }
-    if(buffered_fragments>1000){
-      fStraxHandler->InsertFragments(fragments);
-      fragments.clear();
-      buffered_fragments=0;
-    }
+    //if(buffered_fragments>1000){
+    fStraxHandler->InsertFragments(fragments);
+    fragments.clear();
+    buffered_fragments=0;
+    //}
 
     usleep(10); // 10ms sleep
     read_length = fDataSource->GetData(readVector);

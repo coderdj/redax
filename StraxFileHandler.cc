@@ -224,5 +224,6 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
       }
     }
   } // end force_all
+
   fCleanUpMutex.unlock();
 }
