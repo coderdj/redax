@@ -74,7 +74,6 @@ private:
   u_int64_t fDatasize;
   string fHostname;
   
-  StraxFileHandler *fStraxHandler;  
   
 };
 

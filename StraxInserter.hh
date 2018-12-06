@@ -6,16 +6,17 @@
 #include <cstring>
 #include <assert.h>
 #include <blosc.h>
-
+#include <thread>
 //#include "MongoInserter.hh"
 
 //for debugging
-#include <sys/types.h>
-#include <unistd.h>
-#include <sys/syscall.h>
-#define gettid() syscall(SYS_gettid)
-
-#include "StraxFileHandler.hh"
+//#include <sys/types.h>
+#include <map>
+#include <mutex>
+#include <blosc.h>
+#include <experimental/filesystem>
+#include "Options.hh"
+#include "MongoLog.hh"
 
 class DAQController;
 
@@ -37,23 +38,31 @@ public:
   StraxInserter();
   ~StraxInserter();
   
-  int  Initialize(Options *options, MongoLog *log, StraxFileHandler *handler,
-		  DAQController *dataSource);
+  int  Initialize(Options *options, MongoLog *log, 
+		  DAQController *dataSource, std::string hostname);
   void Close();
   
   int ReadAndInsertData();
   bool CheckError(){ return fErrorBit; };
+  
 private:
-  int ParseDocuments(std::map<std::string, std::string*> &strax_docs,
-		      data_packet dp);
+  void ParseDocuments(data_packet dp);
+  void WriteOutFiles(int smallest_index_seen, bool end=false);
   void DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
 			   u_int16_t channels_in_event);
+  
+  std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
+  std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
+  std::string GetStringFormat(int id);
+  void CreateMissing(u_int32_t back_from_id);
+  int fMissingVerified;
   
   u_int64_t fChunkLength; // ns
   u_int32_t fChunkOverlap; // ns
   u_int16_t fFragmentLength; // This is in BYTES
   u_int16_t fStraxHeaderSize; // in BYTES too
   u_int32_t fChunkNameLength;
+  std::string fOutputPath, fHostname;
   int fFirmwareVersion;
   Options *fOptions;
   MongoLog *fLog;
@@ -61,7 +70,8 @@ private:
   bool fActive;
   bool fErrorBit;
 
-  StraxFileHandler *fStraxHandler;
+  std::map<std::string, std::string*> fFragments;
+  
 };
 
 #endif
