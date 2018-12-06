@@ -80,8 +80,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       vector<u_int16_t>dac_values(8, 0x1000);
       int nominal_dac = fOptions->GetInt("baseline_value", 16000);
       std::cout<<"Setting baselines for digi "<<digi->bid()<<std::endl;
-      int success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
-      //int success = 0;
+      ///int success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
+      int success = 0;
       std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
       if(success!=0){
 	fLog->Entry("Baselines failed with digi error", MongoLog::Warning);

@@ -4,7 +4,7 @@ StraxFileHandler::StraxFileHandler(MongoLog *log){
   fLog = log;
   fFullFragmentSize=0;
   fChunkNameLength = 6;
-  fChunkCloseDelay = 10;
+  fChunkCloseDelay = 5;
   fHostname = "reader";
   fCleanToId = 0;
 }
