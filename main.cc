@@ -147,7 +147,7 @@ int main(int argc, char** argv){
 	}
 	controller->End();
       }
-      else if(command == "arm"){
+      else if(command == "arm"){	
 
 	// Can only arm if we're in the idle, arming, or armed state
 	if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
@@ -155,7 +155,7 @@ int main(int argc, char** argv){
 	  // Clear up any previously failed things
 	  if(controller->status() != 0)
 	    controller->End();
-
+	  
 	  // Get an override doc from the 'options_override' field if it exists
 	  std::string override_json = "";
 	  try{
