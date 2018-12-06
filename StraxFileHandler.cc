@@ -4,7 +4,7 @@ StraxFileHandler::StraxFileHandler(MongoLog *log){
   fLog = log;
   fFullFragmentSize=0;
   fChunkNameLength = 6;
-  fChunkCloseDelay = 5;
+  fChunkCloseDelay = 10;
   fHostname = "reader";
   fCleanToId = 0;
 }
@@ -79,13 +79,18 @@ int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> &parse
     
     // Create outfile and mutex pair in case they don't exist
     if( fFileMutexes.find(id) == fFileMutexes.end()){
-      fFileMutexes[id].lock();
-      std::experimental::filesystem::path write_path = GetDirectoryPath(id, true);//(fOutputPath);
-      //write_path /= id;
-      std::experimental::filesystem::create_directory(write_path);
-      write_path = GetFilePath(id, true);
-      fFileHandles[id].open(write_path, std::ios::out | std::ios::binary);
-      fFileMutexes[id].unlock();
+      fNewElementMutex.lock();
+      if( fFileMutexes.find(id) != fFileMutexes.end()){
+	fFileMutexes[id].lock();
+	std::experimental::filesystem::path write_path = GetDirectoryPath(id, true);//(fOutputPath);
+	//write_path /= id;
+	std::experimental::filesystem::create_directory(write_path);
+	write_path = GetFilePath(id, true);
+	fFileHandles[id].open(write_path, std::ios::out | std::ios::binary);
+	fFileMutexes[id].unlock();
+	}
+      fNewElementMutex.unlock();
+      }
     }
     
     std::streamsize write_size = (std::streamsize)(idit.second->size());
