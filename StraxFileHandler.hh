@@ -19,7 +19,7 @@ public:
   int Initialize(std::string output_path, std::string run_name, u_int32_t full_fragment_size,
 		 std::string hostname);
   int InsertFragments(std::map<std::string, std::string*> &parsed_fragments);
-  void End();
+  void End(bool silent=false);
   
 private:
 

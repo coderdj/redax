@@ -19,7 +19,7 @@ int StraxFileHandler::Initialize(std::string output_path, std::string run_name,
   fCleanToId = 0;
   
   // Clear any previous initialization
-  End();
+  End(true);
 
   fFullFragmentSize = full_fragment_size;
   std::cout<<"Defining full strax fragment size as "<<fFullFragmentSize<<std::endl;
@@ -42,12 +42,13 @@ int StraxFileHandler::Initialize(std::string output_path, std::string run_name,
   return -1;
 }
 
-void StraxFileHandler::End(){
+void StraxFileHandler::End(bool silent){
 
   // Loop through mutexes, lock them, and close each associated file
   std::cout<<"Closing open files"<<std::endl;
-  //while(fFileMutexes.size()>0)    
-  CleanUp(0, true);
+  //while(fFileMutexes.size()>0)
+  if(!silent)
+    CleanUp(0, true);
   std::cout<<"Done closing open files."<<std::endl;
   fFileHandles.clear();
   fFileMutexes.clear();
