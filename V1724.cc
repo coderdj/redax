@@ -293,7 +293,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       continue;
     }
     WriteRegister(0x8100, 0x0);
-    int baseline = -1;
     
     // Parse
     unsigned int idx = 0;
@@ -301,12 +300,15 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       if(buff[idx]>>20==0xA00){ // header	  
 	u_int32_t cmask = buff[idx+1]&0xFF;	  
 	idx += 4;
-	int tbase = 0;
-	int bcount= 0;
-	u_int32_t minval=0x3fff, maxval=0;
 
 	// Loop through channels
 	for(unsigned int channel=0; channel<8; channel++){
+
+	  int baseline = -1;
+	  int tbase = 0;
+	  int bcount = 0;
+	  unsigned int minval = 0x3fff, maxval=0;
+	  
 	  if(!((cmask>>channel)&1))
 	    continue;
 	  u_int32_t csize = buff[idx]&0x7FFFFF;
