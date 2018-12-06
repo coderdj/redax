@@ -358,12 +358,13 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 
   std::map<std::string, std::string*>::iterator iter;
   for(iter=fFragments.begin();
-      iter!=fFragments.end(); ++iter){
+      iter!=fFragments.end(); iter++){
     std::string chunk_index = iter->first;
     std::string idnr = chunk_index.substr(0, fChunkNameLength);
     int idnrint = std::stoi(idnr);
-    if(!(idnrint < smallest_index_seen || end))
+    if(!(idnrint < smallest_index_seen || end))    
       continue;
+    
     if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, true)))
       std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, true));
 
@@ -388,6 +389,8 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     iter = fFragments.erase(iter);
     
     CreateMissing(idnrint);
+    if(iter==fFragments.end())
+      break;
   } // End for through fragments
   
 
