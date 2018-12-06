@@ -114,7 +114,7 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
   //std::cout<<"Writing reg:val: "<<hex<<reg<<":"<<value<<dec<<std::endl;
   u_int32_t write=0;
   write+=value;
-  if(CAENVME_WriteCycle(fBoardHandle, reg,
+  if(CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg,
 			&write,cvA32_U_DATA,cvD32) != cvSuccess){
     std::stringstream err;
     err<<"Failed to write register 0x"<<hex<<reg<<dec<<" to board "<<fBID<<
@@ -130,7 +130,7 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
 unsigned int V1724::ReadRegister(unsigned int reg){
   unsigned int temp;
   int ret = -100;
-  if((ret = CAENVME_ReadCycle(fBoardHandle, reg, &temp,
+  if((ret = CAENVME_ReadCycle(fBoardHandle, fBaseAddress+reg, &temp,
 			      cvA32_U_DATA, cvD32)) != cvSuccess){
     std::stringstream err;
     std::cout<<"Read returned: "<<ret<<" "<<hex<<temp<<std::endl;
