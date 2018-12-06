@@ -80,7 +80,7 @@ int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> &parse
     // Create outfile and mutex pair in case they don't exist
     if( fFileMutexes.find(id) == fFileMutexes.end()){
       fNewElementMutex.lock();
-      if( fFileMutexes.find(id) != fFileMutexes.end()){
+      if( fFileMutexes.find(id) == fFileMutexes.end()){
 	fFileMutexes[id].lock();
 	std::experimental::filesystem::path write_path = GetDirectoryPath(id, true);//(fOutputPath);
 	//write_path /= id;
@@ -88,10 +88,10 @@ int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> &parse
 	write_path = GetFilePath(id, true);
 	fFileHandles[id].open(write_path, std::ios::out | std::ios::binary);
 	fFileMutexes[id].unlock();
-	}
-      fNewElementMutex.unlock();
       }
+      fNewElementMutex.unlock();
     }
+    
     
     std::streamsize write_size = (std::streamsize)(idit.second->size());
     fFileMutexes[id].lock();    
