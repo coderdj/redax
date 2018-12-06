@@ -95,8 +95,10 @@ int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> &parse
     fFileMutexes[id].unlock();    
   }
 
-  if(lowest_id > int(fChunkCloseDelay))
+  if(lowest_id > int(fChunkCloseDelay) && fChunkCloseMutex.try_lock()){
     CleanUp((u_int32_t)(lowest_id));
+    fChunkCloseMutex.unlock();
+  }
 
   return 0;
 }
