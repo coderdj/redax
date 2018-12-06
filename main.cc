@@ -149,6 +149,18 @@ int main(int argc, char** argv){
       }
       else if(command == "arm"){	
 
+	// Join readout threads if they still are out there
+	controller->Stop();
+	if(readoutThreads.size() !=0){
+	  for(auto t : readoutThreads){
+	    std::cout<<"Joining orphaned readout thread"<<std::endl;
+	    t->join();
+	    delete t;
+	  }
+	  readoutThreads.clear();
+	}
+
+	
 	// Can only arm if we're in the idle, arming, or armed state
 	if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
 	  
