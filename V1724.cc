@@ -412,7 +412,7 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
       continue;
 
     // We updated, or at least tried to update
-    update_dac[x]=true;
+    update_dac[x]=false;
     
     // Define a counter to give the DAC time to be set if needed
     int counter = 0; 
