@@ -224,8 +224,8 @@ void DAQController::ReadData(int link){
     vector<data_packet> local_buffer;
     for(unsigned int x=0; x<fDigitizers[link].size(); x++){
 
-      // Every million reads check board status
-      if(readcycler%1000000==0){
+      // Every 1k reads check board status
+      if(readcycler%1000==0){
 	readcycler=0;
 	u_int32_t data = fDigitizers[link][x]->ReadRegister(0x8104);
 	std::cout<<"Board "<<fDigitizers[link][x]->bid()<<" has status "<<hex<<data<<dec<<std::endl;
