@@ -383,7 +383,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     //std::cout<<"Attempted write path: "<<GetFilePath(chunk_index, true)<<std::endl;
     char *out_buffer = new char[uncompressed_size+BLOSC_MAX_OVERHEAD];
     int wsize = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size,  &((*iter->second)[0]),
-				   out_buffer, uncompressed_size+BLOSC_MAX_OVERHEAD, "BLOSC_SNAPPY", 0, 2);
+				   out_buffer, uncompressed_size+BLOSC_MAX_OVERHEAD, "lz4", 0, 2);
     // was using BLOSCLZ but it complained
     delete iter->second;
     
