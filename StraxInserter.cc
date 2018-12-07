@@ -282,7 +282,8 @@ void StraxInserter::ParseDocuments(data_packet dp){
     else
       idx++;
   }
-  WriteOutFiles(smallest_latest_index_seen);
+  if(smallest_latest_index_seen != -1)
+    WriteOutFiles(smallest_latest_index_seen);
   //blosc_destroy();
 }
 
