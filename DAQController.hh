@@ -24,7 +24,8 @@ public:
   DAQController(MongoLog *log=NULL, std::string hostname="DEFAULT");
   ~DAQController();
 
-  int InitializeElectronics(Options *options, std::vector<int> &keys);
+  int InitializeElectronics(Options *options, std::vector<int> &keys,
+			    std::map<int, std::vector<u_int16_t>>&written_dacs);
 
   // Get data (return new buffer and size)
   double data_rate(){

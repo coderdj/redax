@@ -37,7 +37,8 @@ std::string DAQController::run_mode(){
   }
 }
 
-int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys){
+int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys,
+					 std::map<int, std::vector<u_int16_t>>&written_dacs){
 
   End();
   
@@ -98,6 +99,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       // Load the baselines you just configured
       vector<bool> update_dac(8, true);
       success += digi->LoadDAC(dac_values, update_dac);
+      written_dacs[digi->bid()] = dac_values;
       std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;
       
       if(success!=0){
