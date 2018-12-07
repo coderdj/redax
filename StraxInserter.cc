@@ -459,7 +459,7 @@ void StraxInserter::CreateMissing(u_int32_t back_from_id){
       o.open(GetFilePath(chunk_index, false));
       o.close();
     }
-    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, false))){
+    if(x!=0 && !std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, false))){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_pre, false));
       std::ofstream o;
