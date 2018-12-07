@@ -127,7 +127,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// First, on the first instance of a channel we gotta check if
 	// the channel clock rolled over BEFORE this clock and adjust the counter
 	if(channel_time > 15e8 && dp.header_time<5e8 &&
-	   last_times_seen[channel] == 0xFFFFFFFF){
+	   last_times_seen[channel] == 0xFFFFFFFF && clock_counters[channel]!=0){
 	  clock_counters[channel]--;
 	}
 	// Now check the opposite
