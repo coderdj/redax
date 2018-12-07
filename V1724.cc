@@ -168,6 +168,9 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
       stringstream err;
       err<<"Read error in board "<<fBID<<" after "<<count<<" reads: "<<dec<<ret;
       fLog->Entry(err.str(), MongoLog::Error);
+      u_int32_t data=0;
+      data = ReadRegister(0x8104);
+      std::cout<<"Board status: "<<hex<<data<<dec<<std::endl;
       delete[] tempBuffer;
       return 0;
     }
@@ -308,6 +311,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       fLog->Entry("Timed out waiting for board to be ready in baselines", MongoLog::Warning);
       return -1;
     }
+    std::cout<<hex<<"Read board status :"<<data<<" in baselines"<<dec<<std::endl;
     
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
     usleep(1000);
@@ -317,7 +321,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     int readcount = 0;
     while(size == 0 && readcount < 1000){	
       size = ReadMBLT(buff);
-      usleep(10);
+      usleep(1000);
       readcount++;
       if(size>0 && size<=16){
 	std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
