@@ -83,10 +83,17 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       ///int success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
       int success = 0;
       std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
-      if(success!=0){
+      if(success==-2){
 	fLog->Entry("Baselines failed with digi error", MongoLog::Warning);
-	return -1;
+	fStatus = DAXHelpers::Error;
+	return -1;	
       }
+      else if(success!=0){
+	fLog->Entry("Baselines failed with timeout", MongoLog::Warning);
+	fStatus	= DAXHelpers::Idle;
+        return -1;
+      }
+
 
       std::cout<<"Writing user registers for digi "<<digi->bid()<<std::endl;
       for(auto regi : fOptions->GetRegisters(digi->bid())){
@@ -106,7 +113,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	//LOG
 	fStatus = DAXHelpers::Idle;
 	fLog->Entry("Failed to write registers.", MongoLog::Warning);
-      return -1;
+	return -1;
       }
     }
   }

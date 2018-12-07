@@ -58,7 +58,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
   if(timestamp > last_time){
 
     // Case 1. This is over 15s but seen_under_5 is true. Give 1 back
-    if(timestamp >= 15e8 && seen_under_5)
+    if(timestamp >= 15e8 && seen_under_5 && clock_counter != 0)
       return clock_counter-1;
 
     // Case 2. This is over 5s and seen_under_5 is true.
@@ -100,11 +100,11 @@ int V1724::GetClockCounter(u_int32_t timestamp){
     }
   }
   else{
-    //std::stringstream err;
-    //err<<"Something odd in your clock counters. t_new: "<<timestamp<<
-    //" last time: "<<last_time<<" over 15: "<<seen_over_15<<
-    //" under 5: "<<seen_under_5;
-    //fLog->Entry(err.str(), MongoLog::Warning);
+    std::stringstream err;
+    err<<"Something odd in your clock counters. t_new: "<<timestamp<<
+    " last time: "<<last_time<<" over 15: "<<seen_over_15<<
+    " under 5: "<<seen_under_5;
+    fLog->Entry(err.str(), MongoLog::Warning);
     // Counter equal to last time, so we're happy and keep the same counter
     return clock_counter;
   }  
