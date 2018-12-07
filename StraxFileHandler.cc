@@ -97,7 +97,6 @@ int StraxFileHandler::InsertFragments(std::map<std::string, std::string*> &parse
     fFileMutexes[id].lock();    
     fFileHandles[id].write( &((*parsed_fragments[id])[0]), write_size);
     delete parsed_fragments[id];
-
     fFileMutexes[id].unlock();    
   }
 
@@ -140,7 +139,7 @@ void StraxFileHandler::CreateMissing(u_int32_t back_from_id){
       o.open(GetFilePath(chunk_index, false));
       o.close();
     }
-    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, false))){
+    if(x!=0 && !std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, false))){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_pre, false));
       std::ofstream o;
@@ -201,9 +200,11 @@ void StraxFileHandler::CleanUp(u_int32_t back_from_id, bool force_all){
 
   }
 
-  if(largest_closed != 0)
+  if(largest_closed != 0){
     CreateMissing(largest_closed);
-
+    fCleanToId = largest_closed;
+  }
+  
   // At the end of the run we need to write "THE_END"
   if(force_all){
     std::experimental::filesystem::path write_path(fOutputPath);
