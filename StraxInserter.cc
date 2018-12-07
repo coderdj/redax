@@ -99,6 +99,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
       // If we don't know which firmware we're using, check now
       if(fFirmwareVersion == -1){
 	DetermineDataFormat(&(buff[idx]), event_size, channels_in_event);
+	fFirmwareVersion = 0; //n.b. fix this after the test!
 	if(fFirmwareVersion == 0)
 	  std::cout<<"Detected XENON1T firmware"<<std::endl;
 	else
