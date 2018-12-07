@@ -10,7 +10,7 @@ void UpdateDACDatabase(std::string run_identifier,
   using namespace bsoncxx::builder::stream;
   auto search_doc = document{} << "run" <<  run_identifier << finalize;
   auto update_doc = document{};
-  update_doc<< "run" << run_identifier;
+  update_doc<< "$set" << open_document << "run" << run_identifier;
   for(auto iter : dac_values){
     update_doc << std::to_string(iter.first) << open_array <<
       [&](array_context<> arr){
@@ -18,6 +18,7 @@ void UpdateDACDatabase(std::string run_identifier,
             arr << iter.second[i];
     } << close_array;
   }
+  update_doc<<close_document;
   auto write_doc = update_doc<<finalize;
   mongocxx::options::update options;
   options.upsert(true);
