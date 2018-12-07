@@ -149,7 +149,12 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// Get the CHUNK and decide if this event also goes into a PRE/POST file
 	u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
 	u_int64_t chunk_id = u_int64_t(Time64/fFullChunkLength);
-
+	if(chunk_id > 10000){
+	  std::cout<<"Chunk ID: "<<chunk_id<<" from time: "<<Time64<<" and length: "<<
+	    fFullChunkLength<<" with channel time: "<<channel_time<<" and reset counter: "<<
+	    clock_counters[channel]<<std::endl;
+	  throw(std::runtime_error("Exception in clock times"));
+	}
 	// Check if this is the smallest_latest_index_seen
 	if(smallest_latest_index_seen == -1 || chunk_id < smallest_latest_index_seen)
 	  smallest_latest_index_seen = chunk_id;
