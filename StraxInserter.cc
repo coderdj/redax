@@ -373,7 +373,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, true)))
       std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, true));
 
-    long int uncompressed_size = iter->second->size();
+    size_t uncompressed_size = iter->second->size();
 
     // blosc it
     char *out_buffer = new char[uncompressed_size+BLOSC_MAX_OVERHEAD];
