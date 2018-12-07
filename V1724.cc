@@ -294,7 +294,21 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     u_int32_t size = 0;
     
     WriteRegister(0xEF28, 0x1);       // Software clear any old data
-    usleep(1000);      
+    usleep(1000);
+
+    // Make sure we're ready for acquisition
+    u_int32_t data = 0;
+    int readycount = 0;
+    while(!data&0x100 && readycount < 1000){
+      usleep(1000);
+      data = ReadRegister(0x8104);
+      readycount++;
+    }
+    if(readycount>=1000){
+      fLog->Entry("Timed out waiting for board to be ready in baselines", MongoLog::Warning);
+      return -1;
+    }
+    
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
     usleep(1000);
     WriteRegister(0x8108,0x1);    // Software trig reg      

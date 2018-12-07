@@ -215,6 +215,7 @@ void DAQController::ReadData(int link){
   }
   
   u_int32_t lastRead = 0; // bytes read in last cycle. make sure we clear digitizers at run stop
+  long int readcycler = 0;
   while(fReadLoop){// || lastRead > 0){
     //if(fReadLoop==false)
     //  std::cout<<lastRead<<std::endl;
@@ -222,6 +223,13 @@ void DAQController::ReadData(int link){
     
     vector<data_packet> local_buffer;
     for(unsigned int x=0; x<fDigitizers[link].size(); x++){
+
+      // Every million reads check board status
+      if(readcycler%1000000==0){
+	readcycler=0;
+	u_int32_t data = fDigitizers[link][x]->ReadRegister(0x8104);
+	std::cout<<"Board "<<fDigitizers[link][x]->bid()<<" has status "<<hex<<data<<dec<<std::endl;
+      }
       data_packet d;
       d.buff=NULL;
       d.size=0;
@@ -257,6 +265,7 @@ void DAQController::ReadData(int link){
     if(local_buffer.size()!=0)
       AppendData(local_buffer);
     local_buffer.clear();
+    readcycler++;
   }
 
 }
