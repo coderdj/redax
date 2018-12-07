@@ -299,7 +299,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     // Make sure we're ready for acquisition
     u_int32_t data = 0;
     int readycount = 0;
-    while(!data&0x100 && readycount < 1000){
+    while(!(data&0x100) && readycount < 1000){
       usleep(1000);
       data = ReadRegister(0x8104);
       readycount++;
