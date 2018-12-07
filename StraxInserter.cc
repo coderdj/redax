@@ -452,8 +452,8 @@ std::experimental::filesystem::path StraxInserter::GetFilePath(std::string id, b
 }
 
 void StraxInserter::CreateMissing(u_int32_t back_from_id){
-  // should be able to start at x=fMissingVerified but fails.
-  for(unsigned int x=0; x<back_from_id; x++){
+
+  for(unsigned int x=fMissingVerified; x<back_from_id; x++){
     std::string chunk_index = GetStringFormat(x);
     std::string chunk_index_pre = chunk_index+"_pre";
     std::string chunk_index_post = chunk_index+"_post";
@@ -475,7 +475,7 @@ void StraxInserter::CreateMissing(u_int32_t back_from_id){
       if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_post, false)))
 	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
       std::ofstream o;
-      o.open(GetFilePath(chunk_index, false));
+      o.open(GetFilePath(chunk_index_post, false));
       o.close();
     }
   }
