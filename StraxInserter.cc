@@ -367,7 +367,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     std::string chunk_index = iter->first;
     std::string idnr = chunk_index.substr(0, fChunkNameLength);
     int idnrint = std::stoi(idnr);
-    if(!(idnrint < smallest_index_seen || end))    
+    if(!(idnrint < smallest_index_seen-1 || end))    
       continue;
     
     if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, true)))
