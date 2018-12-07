@@ -13,7 +13,7 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fOptions = NULL;
   fStatus = DAXHelpers::Idle;
   fReadLoop = false;
-  fNProcessingThreads=16;
+  fNProcessingThreads=8;
   fBufferLength = 0;
   fRawDataBuffer = NULL;
   fDatasize=0.;
@@ -42,7 +42,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   End();
   
   fOptions = options;
-  std::cout<<"Initializing digitizers"<<std::endl;
+  fNProcessingThreads = fOptions->GetNestedInt("processing_threads."+fHostname, 8);  
+  std::cout<<"Initializing digitizers with "<<fNProcessingThreads<<" processing threads"<<std::endl;
   
   // Initialize digitizers
   fStatus = DAXHelpers::Arming;
