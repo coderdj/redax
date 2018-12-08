@@ -293,10 +293,11 @@ int StraxInserter::ReadAndInsertData(){
   std::vector <data_packet> *readVector=NULL;
   int read_length = fDataSource->GetData(readVector);  
   fActive = true;
-  
+  bool haddata=false;
   while(fActive || read_length>0){
     //std::cout<<"Factive: "<<fActive<<" read length: "<<read_length<<std::endl;
     if(readVector != NULL){
+      haddata=true;
       for(unsigned int i=0; i<readVector->size(); i++){
 	ParseDocuments((*readVector)[i]);
 	delete[] (*readVector)[i].buff;
@@ -309,7 +310,8 @@ int StraxInserter::ReadAndInsertData(){
     read_length = fDataSource->GetData(readVector);
   }
 
-  WriteOutFiles(1000000, true);
+  if(haddata)
+    WriteOutFiles(1000000, true);
   return 0;  
 }
 
