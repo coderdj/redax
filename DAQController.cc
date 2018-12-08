@@ -89,7 +89,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       }
       else if(BL_MODE == "cached"){
 	int rrun = fOptions->GetInt("baseline_reference_run", -1);
-	if(rrun == -1 || fLog->GetDACValues(digi->bid(), rrun, dac_values) != -1){
+	std::cout<<"Loading cached baselines for digi "<<digi->bid()<<std::endl;
+	if(rrun == -1 || fLog->GetDACValues(digi->bid(), rrun, dac_values) != 0){
 	  fLog->Entry("Asked for cached baselines but can't find baseline_reference_run. Fallback to fixed",
 		      MongoLog::Warning);
 	  BL_MODE = "fixed"; // fallback in case no run set
