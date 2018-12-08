@@ -77,7 +77,7 @@ void MongoLog::UpdateDACDatabase(std::string run_identifier,
 int MongoLog::GetDACValues(int bid, int reference_run,
 			   std::vector<u_int16_t> &dac_values){
   std::string runstring = std::to_string(reference_run);
-  whlie(runstring.size()<6)
+  while(runstring.size()<6)
     runstring.insert(0, "0");
   auto doc = fDAC_collection.find_one(bsoncxx::builder::stream::document{}<<
 				      "run" << runstring <<
