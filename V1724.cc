@@ -148,8 +148,9 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   int nb=0,ret=-5;
   // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
   // the other, V1724G, has 512 MS/channel = 1MB/channel
-  unsigned int BLT_SIZE=8*8388608; //8*8388608; // 8MB buffer size
-  u_int32_t *tempBuffer = new u_int32_t[BLT_SIZE*2];
+  unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
+  unsigned int BUFFER_SIZE = 16*BLT_SIZE; //absurdly large maybe
+  u_int32_t *tempBuffer = new u_int32_t[BUFFER_SIZE];
 
   int count = 0;
   do{
@@ -178,10 +179,10 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
     count++;
     blt_bytes+=nb;
 
-    if(blt_bytes>BLT_SIZE){
+    if(blt_bytes>BUFFER_SIZE){
       stringstream err;
       err<<"You managed to transfer more data than fits on board."<<
-	"Transferred: "<<blt_bytes<<" bytes, Buffer: "<<BLT_SIZE<<" bytes.";
+	"Transferred: "<<blt_bytes<<" bytes, Buffer: "<<BUFFER_SIZE<<" bytes.";
       fLog->Entry(err.str(), MongoLog::Error);
       
       delete[] tempBuffer;
