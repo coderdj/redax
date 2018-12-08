@@ -122,8 +122,8 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
     fLog->Entry(err.str(), MongoLog::Warning);
     return -1;
   }
-  std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;
-  usleep(100); // don't ask
+  std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;  
+  usleep(1000); // don't ask
   return 0;
 }
 
@@ -236,6 +236,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   int write_success = 0;
   try{
     write_success += WriteRegister(0xEF24, 0x1);       // Global reset
+    usleep(1000);
     write_success += WriteRegister(0xEF1C, 0x1);       // BERR 
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
     write_success += WriteRegister(0x8120, 0xFF);      // Channel mask
