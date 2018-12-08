@@ -292,6 +292,7 @@ int StraxInserter::ReadAndInsertData(){
   
   std::vector <data_packet> *readVector=NULL;
   int read_length = fDataSource->GetData(readVector);  
+  fActive = true;
   
   while(fActive || read_length>0){
     //std::cout<<"Factive: "<<fActive<<" read length: "<<read_length<<std::endl;
