@@ -224,7 +224,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // We can adjust a DAC offset register, which is 0xffff in range, is inversely
   // proportional to the baseline position, and has ~5% overshoot on either end.
   // So we use this information to get starting values:
-  u_int32_t starting_value = 0x1000; //u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
+  u_int32_t starting_value = u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
   int nChannels = 8;
   vector<u_int16_t> dac_values(nChannels, starting_value);
   vector<bool> channel_finished(nChannels, false);
