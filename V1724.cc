@@ -123,7 +123,7 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
     return -1;
   }
   std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;  
-  usleep(1000); // don't ask
+  usleep(5000); // don't ask
   return 0;
 }
 
@@ -139,6 +139,7 @@ unsigned int V1724::ReadRegister(unsigned int reg){
     fLog->Entry(err.str(), MongoLog::Warning);
     return 0xFFFFFFFF;
   }
+  usleep(5000);
   return temp;
 }
 
@@ -228,7 +229,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   u_int32_t starting_value = u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
   int nChannels = 8;
   vector<u_int16_t> dac_values(nChannels, starting_value);
-  vector<bool> channel_finished(nChannels, false);
+  vector<int> channel_finished(nChannels, 0);
   vector<bool> update_dac(nChannels, true);
   
   // Now we need to load a simple configuration to the board in order to read
@@ -280,7 +281,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     // First check if we're finished and if so get out
     bool breakout = true;
     for(int channel=0; channel<nChannels; channel++){
-      if(channel_finished[channel])
+      if(channel_finished[channel]>=5)
         continue;
       breakout = false;
     }
@@ -356,7 +357,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  if(!((cmask>>channel)&1))
 	    continue;
 	  u_int32_t csize = buff[idx]&0x7FFFFF;
-	  if(channel_finished[channel]){
+	  if(channel_finished[channel]>=5){
 	    idx+=csize;
 	    continue;
 	  }
@@ -396,10 +397,11 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    //std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
 	    //std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
 	    if(abs(adjustment) < adjustment_threshold){
-	      channel_finished[channel]=true;
-	      std::cout<<"Channel "<<channel<<" finished"<<std::endl;
+	      channel_finished[channel]++;
+	      std::cout<<"Channel "<<channel<<" converging at step "<<channel_finished[channel]<<"/5"<<std::endl;
 	    }
 	    else{
+	      channel_finished[channel]=0;
 	      update_dac[channel] = true;
 	      if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel])
 		dac_values[channel]=0x0;
@@ -423,7 +425,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   }// end iteration loop
   
   for(unsigned int x=0; x<channel_finished.size(); x++){
-    if(channel_finished[x]!=true){
+    if(channel_finished[x]<2){ // Be a little more lenient in case it's just starting to converge
       std::stringstream error;
       error<<"Baseline routine did not finish for channel "<<x<<" (and maybe others)."<<std::endl;
       fLog->Entry(error.str(), MongoLog::Error);

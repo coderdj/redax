@@ -157,7 +157,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  throw(std::runtime_error("Exception in clock times"));
 	}
 	// Check if this is the smallest_latest_index_seen
-	if(smallest_latest_index_seen == -1 || chunk_id < smallest_latest_index_seen)
+	if(smallest_latest_index_seen == -1 || int(chunk_id) < smallest_latest_index_seen)
 	  smallest_latest_index_seen = chunk_id;
 	
 	bool nextpre=false;//, prevpost=false;
