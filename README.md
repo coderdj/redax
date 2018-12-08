@@ -1,5 +1,5 @@
 # REDAX
-D. Coderre, 2018. See license in LICENSE file.
+D. Coderre, 2018. Please see license in LICENSE file.
 
 ## Prerequisites
 
