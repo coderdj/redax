@@ -408,7 +408,10 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   if(end){
     fFragments.clear();
     std::experimental::filesystem::path write_path(fOutputPath);
-    write_path /= "THE_END";
+    std::string filename = fHostname;
+    std::stringstream ss;
+    ss<<std::this_thread::get_id();
+    write_path /= "THE_END_"+fHostname+"_"+ss.str();
     if(!std::experimental::filesystem::exists(write_path)){
       std::cout<<"Creating END directory at "<<write_path<<std::endl;
       try{
