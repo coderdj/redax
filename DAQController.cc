@@ -78,9 +78,33 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       // Load DAC. n.b.: if you set the DAC value in your ini file you'll overwrite
       // the fancy stuff done here!
       vector<u_int16_t>dac_values(8, 0x1000);
-      int nominal_dac = fOptions->GetInt("baseline_value", 16000);
-      std::cout<<"Setting baselines for digi "<<digi->bid()<<std::endl;
-      int success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
+
+      // Multiple options here
+      std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
+      int success = 0;
+      if(BL_MODE == "fit"){      
+	int nominal_dac = fOptions->GetInt("baseline_value", 16000);
+	std::cout<<"Setting baselines for digi "<<digi->bid()<<std::endl;
+	success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
+      }
+      else if(BL_MODE == "cached"){
+	int rrun = fOptions->GetInt("baseline_reference_run", -1);
+	if(rrun == -1 || fBaselineHelper.GetDACValues(digi->bid(), rrun, dac_values) != -1){
+	  fLog->Entry("Asked for cached baselines but can't find baseline_reference_run. Fallback to fixed",
+		      MongoLog::Warning);
+	  BL_MODE = "fixed"; // fallback in case no run set
+	}
+      }
+      else if(BL_MODE != "fixed"){
+	fLog->Entry("Received unknown baseline mode. Fallback to fixed", MongoLog::Warning);
+	BL_MODE = "fixed";
+      }
+      if(BL_MODE == "fixed"){
+	int BLVal = fOptions->GetInt("baseline_fixed_value", 4000);
+	for(unsigned int x=0;x<dac_values.size();x++)
+	  dac_values[x] = BLVal;
+      }
+	
       //int success = 0;
       std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
       if(success==-2){
