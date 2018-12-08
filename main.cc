@@ -60,12 +60,12 @@ int main(int argc, char** argv){
   mongocxx::database db = client["xenonnt"];
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
-  mongocxx::collection dac_collection = db["dac_values"];
   mongocxx::collection options_collection = db["options"];
   
   // Logging
   MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(suri, "xenonnt", "log", hostname, true);
+  int ret = logger->Initialize(suri, "xenonnt", "log", hostname,
+			       "dac_values", true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
     exit(-1);
@@ -216,8 +216,8 @@ int main(int argc, char** argv){
 	    controller->End();
 	  }
 	  else{
-	    UpdateDACDatabase(fOptions->GetString("run_identifier", "default"),
-			      written_dacs, dac_collection);
+	    logger->UpdateDACDatabase(fOptions->GetString("run_identifier", "default"),
+			      written_dacs);
 	    initialized = true;
 	    logger->Entry("Initialized electronics", MongoLog::Debug);
 	  }

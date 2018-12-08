@@ -24,7 +24,8 @@ public:
   
   int  Initialize(std::string connection_string,
 		  std::string db, std::string collection,
-		  std::string host, bool debug=false);
+		  std::string host, std::string dac_collection="",
+		  bool debug=false);
 
   const static int Debug   = 0;  // Verbose output
   const static int Message = 1;  // Normal output
@@ -33,10 +34,15 @@ public:
   const static int Fatal   = 4;  // Program gonna die
 
   int Entry(std::string message, int priority=Message);
-  
+
+  int GetDACValues(int bid, int reference_run,
+		   std::vector<u_int16_t>&dac_values);
+  void UpdateDACDatabase(std::string run_identifier,
+			 std::map<int, std::vector<u_int16_t>>dac_values);
+
 private:  
   mongocxx::client fMongoClient;
-  mongocxx::collection fMongoCollection;
+  mongocxx::collection fMongoCollection, fDAC_collection;
   std::string fHostname;
   int fLogLevel;
 };
