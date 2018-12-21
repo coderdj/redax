@@ -13,19 +13,17 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fOptions = NULL;
   fStatus = DAXHelpers::Idle;
   fReadLoop = false;
-  fNProcessingThreads=16;
+  fNProcessingThreads=8;
   fBufferLength = 0;
   fRawDataBuffer = NULL;
   fDatasize=0.;
   fHostname = hostname;
-  fStraxHandler = new StraxFileHandler(log);
 }
 
 DAQController::~DAQController(){
   delete fHelper;
   if(fProcessingThreads.size()!=0)
     CloseProcessingThreads();
-  delete fStraxHandler;
 }
 
 std::string DAQController::run_mode(){
@@ -39,12 +37,14 @@ std::string DAQController::run_mode(){
   }
 }
 
-int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys){
+int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys,
+					 std::map<int, std::vector<u_int16_t>>&written_dacs){
 
   End();
   
   fOptions = options;
-  std::cout<<"Initializing digitizers"<<std::endl;
+  fNProcessingThreads = fOptions->GetNestedInt("processing_threads."+fHostname, 8);  
+  std::cout<<"Initializing digitizers with "<<fNProcessingThreads<<" processing threads"<<std::endl;
   
   // Initialize digitizers
   fStatus = DAXHelpers::Arming;
@@ -78,15 +78,47 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       // Load DAC. n.b.: if you set the DAC value in your ini file you'll overwrite
       // the fancy stuff done here!
       vector<u_int16_t>dac_values(8, 0x1000);
-      int nominal_dac = fOptions->GetInt("baseline_value", 16000);
-      std::cout<<"Setting baselines for digi "<<digi->bid()<<std::endl;
-      ///int success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
+
+      // Multiple options here
+      std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
       int success = 0;
-      std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
-      if(success!=0){
-	fLog->Entry("Baselines failed with digi error", MongoLog::Warning);
-	return -1;
+      if(BL_MODE == "fit"){      
+	int nominal_dac = fOptions->GetInt("baseline_value", 16000);
+	std::cout<<"Setting baselines for digi "<<digi->bid()<<std::endl;
+	success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
       }
+      else if(BL_MODE == "cached"){
+	int rrun = fOptions->GetInt("baseline_reference_run", -1);
+	std::cout<<"Loading cached baselines for digi "<<digi->bid()<<std::endl;
+	if(rrun == -1 || fLog->GetDACValues(digi->bid(), rrun, dac_values) != 0){
+	  fLog->Entry("Asked for cached baselines but can't find baseline_reference_run. Fallback to fixed",
+		      MongoLog::Warning);
+	  BL_MODE = "fixed"; // fallback in case no run set
+	}
+      }
+      else if(BL_MODE != "fixed"){
+	fLog->Entry("Received unknown baseline mode. Fallback to fixed", MongoLog::Warning);
+	BL_MODE = "fixed";
+      }
+      if(BL_MODE == "fixed"){
+	int BLVal = fOptions->GetInt("baseline_fixed_value", 4000);
+	for(unsigned int x=0;x<dac_values.size();x++)
+	  dac_values[x] = BLVal;
+      }
+	
+      //int success = 0;
+      std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
+      if(success==-2){
+	fLog->Entry("Baselines failed with digi error", MongoLog::Warning);
+	fStatus = DAXHelpers::Error;
+	return -1;	
+      }
+      else if(success!=0){
+	fLog->Entry("Baselines failed with timeout", MongoLog::Warning);
+	fStatus	= DAXHelpers::Idle;
+        return -1;
+      }
+
 
       std::cout<<"Writing user registers for digi "<<digi->bid()<<std::endl;
       for(auto regi : fOptions->GetRegisters(digi->bid())){
@@ -99,13 +131,14 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       // Load the baselines you just configured
       vector<bool> update_dac(8, true);
       success += digi->LoadDAC(dac_values, update_dac);
+      written_dacs[digi->bid()] = dac_values;
       std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;
       
       if(success!=0){
 	//LOG
 	fStatus = DAXHelpers::Idle;
 	fLog->Entry("Failed to write registers.", MongoLog::Warning);
-      return -1;
+	return -1;
       }
     }
   }
@@ -120,16 +153,9 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   }
   fStatus = DAXHelpers::Armed;
 
-  std::cout<<"Printing to string"<<std::endl;
-  std::cout<<fOptions->ExportToString()<<std::endl;
+  //std::cout<<"Printing to string"<<std::endl;
+  //std::cout<<fOptions->ExportToString()<<std::endl;
 
-  // Last thing we need to do is get our strax writer ready.
-  std::string strax_output_path = fOptions->GetString("strax_output_path", "./out");
-  std::string run_name = fOptions->GetString("run_identifier", "run");
-  u_int32_t full_fragment_size = (fOptions->GetInt("strax_header_size", 31) +
-				  fOptions->GetInt("strax_fragment_length", 220));
-  std::cout<<"Initializing strax with "<<full_fragment_size<<" fragment size"<<std::endl;
-  fStraxHandler->Initialize(strax_output_path, run_name, full_fragment_size, fHostname);
 
   return 0;
 }
@@ -186,9 +212,7 @@ void DAQController::End(){
     delete fRawDataBuffer;
     fRawDataBuffer = NULL;
   }
-  std::cout<<"Closing strax output"<<std::endl;
-  // Assume everything is read out so we can close strax
-  fStraxHandler->End();
+
   std::cout<<"Finished end"<<std::endl;
 }
 
@@ -216,6 +240,7 @@ void DAQController::ReadData(int link){
   }
   
   u_int32_t lastRead = 0; // bytes read in last cycle. make sure we clear digitizers at run stop
+  long int readcycler = 0;
   while(fReadLoop){// || lastRead > 0){
     //if(fReadLoop==false)
     //  std::cout<<lastRead<<std::endl;
@@ -223,6 +248,13 @@ void DAQController::ReadData(int link){
     
     vector<data_packet> local_buffer;
     for(unsigned int x=0; x<fDigitizers[link].size(); x++){
+
+      // Every 1k reads check board status
+      if(readcycler%10000==0){
+	readcycler=0;
+	u_int32_t data = fDigitizers[link][x]->ReadRegister(0x8104);
+	std::cout<<"Board "<<fDigitizers[link][x]->bid()<<" has status "<<hex<<data<<dec<<std::endl;
+      }
       data_packet d;
       d.buff=NULL;
       d.size=0;
@@ -258,6 +290,7 @@ void DAQController::ReadData(int link){
     if(local_buffer.size()!=0)
       AppendData(local_buffer);
     local_buffer.clear();
+    readcycler++;
   }
 
 }
@@ -330,7 +363,7 @@ void DAQController::OpenProcessingThreads(){
     processingThread p;
     //p.inserter = new MongoInserter();
     p.inserter = new StraxInserter();
-    p.inserter->Initialize(fOptions, fLog, fStraxHandler, this);
+    p.inserter->Initialize(fOptions, fLog, this, fHostname);
     p.pthread = new std::thread(ProcessingThreadWrapper,
 			       static_cast<void*>(p.inserter));
     fProcessingThreads.push_back(p);

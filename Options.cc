@@ -121,6 +121,28 @@ int Options::GetInt(std::string path, int default_value){
   return -1;  
 }
 
+int Options::GetNestedInt(std::string path, int default_value){
+  // Parse string
+  std::vector<std::string> fields;
+  std::stringstream ss(path);
+  while( ss.good() ){
+    std::string substr;
+    getline( ss, substr, '.' );
+    fields.push_back( substr );
+  }
+  try{
+    auto val = bson_options[fields[0].c_str()];
+    for(unsigned int i=1; i<fields.size(); i++)
+      val = val[fields[i].c_str()];
+    return val.get_int32();
+  }catch(const std::exception &e){
+    std::cout<<"Exception: "<<e.what()<<std::endl;
+    std::cout<<"Failed to find path "<<path<<std::endl;
+    return default_value;
+  }
+  return 0;
+}
+
 std::string Options::GetString(std::string path, std::string default_value){
   try{
     return bson_options[path.c_str()].get_utf8().value.to_string();

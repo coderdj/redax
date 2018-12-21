@@ -64,7 +64,7 @@ public:
   int GetCrateOpt(CrateOptions &ret, std::string device="");
 
   int GetChannel(int bid, int cid);
-  
+  int GetNestedInt(std::string path, int default_value);
 private:
   std::string defaultPath = "defaults/daxOptions.json";
   DAXHelpers *fHelper;

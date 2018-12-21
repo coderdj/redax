@@ -4,6 +4,29 @@
 #include "V1724.hh"
 #include "DAQController.hh"
 
+void UpdateDACDatabase(std::string run_identifier,
+		       std::map<int, std::vector<u_int16_t>>dac_values,
+		       mongocxx::collection dac_collection){
+  using namespace bsoncxx::builder::stream;
+  auto search_doc = document{} << "run" <<  run_identifier << finalize;
+  auto update_doc = document{};
+  update_doc<< "$set" << open_document << "run" << run_identifier;
+  for(auto iter : dac_values){
+    update_doc << std::to_string(iter.first) << open_array <<
+      [&](array_context<> arr){
+      for (u_int32_t i = 0; i < iter.second.size(); i++)
+            arr << iter.second[i];
+    } << close_array;
+  }
+  update_doc<<close_document;
+  auto write_doc = update_doc<<finalize;
+  mongocxx::options::update options;
+  options.upsert(true);
+  dac_collection.update_one(search_doc.view(), write_doc.view(), options);
+
+}
+
+
 int main(int argc, char** argv){
 
   // Need to create a mongocxx instance and it must exist for
@@ -41,7 +64,8 @@ int main(int argc, char** argv){
   
   // Logging
   MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(suri, "xenonnt", "log", hostname, true);
+  int ret = logger->Initialize(suri, "xenonnt", "log", hostname,
+			       "dac_values", true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
     exit(-1);
@@ -186,11 +210,14 @@ int main(int argc, char** argv){
 	  fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
 				 options_collection, override_json);
 	  std::vector<int> links;
-	  if(controller->InitializeElectronics(fOptions, links) != 0){
+	  std::map<int, std::vector<u_int16_t>> written_dacs;
+	  if(controller->InitializeElectronics(fOptions, links, written_dacs) != 0){
 	    logger->Entry("Failed to initialize electronics", MongoLog::Error);
 	    controller->End();
 	  }
 	  else{
+	    logger->UpdateDACDatabase(fOptions->GetString("run_identifier", "default"),
+			      written_dacs);
 	    initialized = true;
 	    logger->Entry("Initialized electronics", MongoLog::Debug);
 	  }
@@ -239,8 +266,6 @@ int main(int argc, char** argv){
   
 
 }
-
-
 
 
 

@@ -11,29 +11,46 @@ StraxInserter::StraxInserter(){
   fFragmentLength=110*2;
   fStraxHeaderSize=31;
   fLog = NULL;
-  fStraxHandler=NULL;
   fErrorBit = false;
   fFirmwareVersion = -1;
+  fMissingVerified = 0;
+  fOutputPath = "";
+  fChunkNameLength = 6;
 }
 
 StraxInserter::~StraxInserter(){  
 }
 
-int StraxInserter::Initialize(Options *options, MongoLog *log,  StraxFileHandler *handler,
-			      DAQController *dataSource){
+int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
+			      std::string hostname){
   fOptions = options;
   fChunkLength = fOptions->GetLongInt("strax_chunk_length", 20e9); // default 20s
   fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
-
+  fHostname = hostname;
+  std::string run_name = fOptions->GetString("run_identifier", "run");
+  
   // To start we do not know which FW version we're dealing with (for data parsing)
   fFirmwareVersion = -1;
 
+  fMissingVerified = 0;
   fDataSource = dataSource;
   fLog = log;
   fErrorBit = false;
-  fStraxHandler = handler;
 
+  std::string output_path = fOptions->GetString("strax_output_path", "./");
+  try{    
+    std::experimental::filesystem::path op(output_path);
+    op /= run_name;
+    fOutputPath = op;
+    std::experimental::filesystem::create_directory(op);
+    return 0;
+  }
+  catch(...){
+    fLog->Entry("StraxInserter::Initialize tried to create output directory but failed."
+		" Check that you have permission to write here.", MongoLog::Error);
+    return -1;
+  }
   std::cout<<"Strax output initialized with "<<fChunkLength<<" ns chunks and "<<
     fChunkOverlap<<" ns overlap time. Fragments are "<<fFragmentLength<<" bytes."<<std::endl;
 
@@ -46,10 +63,7 @@ void StraxInserter::Close(){
 }
 
 
-int StraxInserter::ParseDocuments(
-				  std::map<std::string, std::string*> &strax_docs,
-				  data_packet dp				   
-				  ){
+void StraxInserter::ParseDocuments(data_packet dp){
   
   // Take a buffer and break it up into one document per channel
   int fragments_inserted = 0;
@@ -62,7 +76,7 @@ int StraxInserter::ParseDocuments(
 				       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
   u_int32_t size = dp.size;
   u_int32_t *buff = dp.buff;
-  
+  int smallest_latest_index_seen = -1;
   
   u_int32_t idx = 0;
   while(idx < size/sizeof(u_int32_t) &&
@@ -85,6 +99,7 @@ int StraxInserter::ParseDocuments(
       // If we don't know which firmware we're using, check now
       if(fFirmwareVersion == -1){
 	DetermineDataFormat(&(buff[idx]), event_size, channels_in_event);
+	fFirmwareVersion = 0; //n.b. fix this after the test!
 	if(fFirmwareVersion == 0)
 	  std::cout<<"Detected XENON1T firmware"<<std::endl;
 	else
@@ -92,7 +107,7 @@ int StraxInserter::ParseDocuments(
       }
 
       idx += 4; // Skip the header
-      
+
       for(unsigned int channel=0; channel<8; channel++){
 	if(!((channel_mask>>channel)&1)) // Make sure channel in data
 	  continue;
@@ -112,7 +127,7 @@ int StraxInserter::ParseDocuments(
 	// First, on the first instance of a channel we gotta check if
 	// the channel clock rolled over BEFORE this clock and adjust the counter
 	if(channel_time > 15e8 && dp.header_time<5e8 &&
-	   last_times_seen[channel] == 0xFFFFFFFF){
+	   last_times_seen[channel] == 0xFFFFFFFF && clock_counters[channel]!=0){
 	  clock_counters[channel]--;
 	}
 	// Now check the opposite
@@ -135,6 +150,16 @@ int StraxInserter::ParseDocuments(
 	// Get the CHUNK and decide if this event also goes into a PRE/POST file
 	u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
 	u_int64_t chunk_id = u_int64_t(Time64/fFullChunkLength);
+	if(chunk_id > 10000){
+	  std::cout<<"Chunk ID: "<<chunk_id<<" from time: "<<Time64<<" and length: "<<
+	    fFullChunkLength<<" with channel time: "<<channel_time<<" and reset counter: "<<
+	    clock_counters[channel]<<std::endl;
+	  throw(std::runtime_error("Exception in clock times"));
+	}
+	// Check if this is the smallest_latest_index_seen
+	if(smallest_latest_index_seen == -1 || int(chunk_id) < smallest_latest_index_seen)
+	  smallest_latest_index_seen = chunk_id;
+	
 	bool nextpre=false;//, prevpost=false;
 	if(((chunk_id+1)*fFullChunkLength)-Time64 < fChunkOverlap)
 	  nextpre=true;
@@ -226,9 +251,10 @@ int StraxInserter::ParseDocuments(
 	    chunk_index.insert(0, "0");
 
 	  if(!nextpre){// && !prevpost){	      
-	    if(strax_docs.find(chunk_index) == strax_docs.end())
-	      strax_docs[chunk_index] = new std::string();	    
-	    strax_docs[chunk_index]->append(fragment);
+	    if(fFragments.find(chunk_index) == fFragments.end()){
+	      fFragments[chunk_index] = new std::string();
+	    }
+	    fFragments[chunk_index]->append(fragment);
 	    fragments_inserted++;
 	  }
 	  else{// if(nextpre){
@@ -236,31 +262,16 @@ int StraxInserter::ParseDocuments(
 	    while(nextchunk_index.size() < fChunkNameLength)
 	      nextchunk_index.insert(0, "0");
 
-	    if(strax_docs.find(nextchunk_index+"_pre") == strax_docs.end())
-	      strax_docs[nextchunk_index+"_pre"] = new std::string();
-	    strax_docs[nextchunk_index+"_pre"]->append(fragment);
+	    if(fFragments.find(nextchunk_index+"_pre") == fFragments.end()){
+	      fFragments[nextchunk_index+"_pre"] = new std::string();
+	    }
+	    fFragments[nextchunk_index+"_pre"]->append(fragment);
 
-	    if(strax_docs.find(chunk_index+"_post") == strax_docs.end())
-	      strax_docs[chunk_index+"_post"] = new std::string();
-	    strax_docs[chunk_index+"_post"]->append(fragment);
+	    if(fFragments.find(chunk_index+"_post") == fFragments.end()){
+	      fFragments[chunk_index+"_post"] = new std::string();
+	    }
+	    fFragments[chunk_index+"_post"]->append(fragment);
 	  }
-	  /*else if(prevpost){
-	    std::string prevchunk_index = std::to_string(chunk_id-1);
-	    while(prevchunk_index.size() < fChunkNameLength)
-	      prevchunk_index.insert(0, "0");	    
-
-	    if(strax_docs.find(prevchunk_index+"_post") == strax_docs.end())
-	      strax_docs[prevchunk_index+"_post"] = new std::string();
-	    strax_docs[prevchunk_index+"_post"]->append(fragment);
-
-	    if(strax_docs.find(chunk_index+"_pre") == strax_docs.end())
-              strax_docs[chunk_index+"_pre"] = new std::string();
-            strax_docs[chunk_index+"_pre"]->append(fragment);
-
-	  }
-	  else
-	    std::cout<<"Oh no! Where should this data go?"<<std::endl;
-	  */
 	  fragment_index++;
 	  index_in_sample = max_sample;	  
 	}
@@ -271,42 +282,36 @@ int StraxInserter::ParseDocuments(
     else
       idx++;
   }
-  
+  if(smallest_latest_index_seen != -1)
+    WriteOutFiles(smallest_latest_index_seen);
   //blosc_destroy();
-  return fragments_inserted;
 }
 
 
 int StraxInserter::ReadAndInsertData(){
   
   std::vector <data_packet> *readVector=NULL;
-  int read_length = fDataSource->GetData(readVector);
-  std::map<std::string, std::string*> fragments; 
-  int buffered_fragments = 0;
-  
+  int read_length = fDataSource->GetData(readVector);  
+  fActive = true;
+  bool haddata=false;
   while(fActive || read_length>0){
     //std::cout<<"Factive: "<<fActive<<" read length: "<<read_length<<std::endl;
     if(readVector != NULL){
+      haddata=true;
       for(unsigned int i=0; i<readVector->size(); i++){
-	buffered_fragments += ParseDocuments(fragments, (*readVector)[i]);
+	ParseDocuments((*readVector)[i]);
 	delete[] (*readVector)[i].buff;
       }
       delete readVector;
       readVector=NULL;
-    }
-    //if(buffered_fragments>1000){
-    fStraxHandler->InsertFragments(fragments);
-    fragments.clear();
-    buffered_fragments=0;
-    //}
+    }    
 
     usleep(10); // 10ms sleep
     read_length = fDataSource->GetData(readVector);
   }
 
-  // At end of run insert whatever is left
-  if(fragments.size()>0)
-    fStraxHandler->InsertFragments(fragments);
+  if(haddata)
+    WriteOutFiles(1000000, true);
   return 0;  
 }
 
@@ -355,4 +360,131 @@ void StraxInserter::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
   
   return;      
 }
-		    
+
+
+
+void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
+  // Write the contents of fFragments to blosc-compressed files
+
+  std::map<std::string, std::string*>::iterator iter;
+  for(iter=fFragments.begin();
+      iter!=fFragments.end(); iter++){
+    std::string chunk_index = iter->first;
+    std::string idnr = chunk_index.substr(0, fChunkNameLength);
+    int idnrint = std::stoi(idnr);
+    if(!(idnrint < smallest_index_seen-1 || end))    
+      continue;
+    
+    if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, true)))
+      std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, true));
+
+    size_t uncompressed_size = iter->second->size();
+
+    // blosc it
+    //std::cout<<"Blosc-ing input of size "<<uncompressed_size<<" with overhead "<<BLOSC_MAX_OVERHEAD<<
+    //" and fragment id "<<chunk_index<<std::endl;
+    //std::cout<<"Attempted write path: "<<GetFilePath(chunk_index, true)<<std::endl;
+    char *out_buffer = new char[uncompressed_size+BLOSC_MAX_OVERHEAD];
+    int wsize = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size,  &((*iter->second)[0]),
+				   out_buffer, uncompressed_size+BLOSC_MAX_OVERHEAD, "lz4", 0, 2);
+    // was using BLOSCLZ but it complained
+    delete iter->second;
+    
+    std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
+    writefile.write(out_buffer, wsize);
+    delete[] out_buffer;
+    writefile.close();
+
+    // Move this chunk from *_TEMP to the same path without TEMP
+    if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
+      std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
+    std::experimental::filesystem::rename(GetFilePath(chunk_index, true),
+					  GetFilePath(chunk_index, false));
+    iter = fFragments.erase(iter);
+    
+    CreateMissing(idnrint);
+    if(iter==fFragments.end())
+      break;
+  } // End for through fragments
+  
+
+  if(end){
+    fFragments.clear();
+    std::experimental::filesystem::path write_path(fOutputPath);
+    std::string filename = fHostname;
+    write_path /= "THE_END";
+    if(!std::experimental::filesystem::exists(write_path)){
+      std::cout<<"Creating END directory at "<<write_path<<std::endl;
+      try{
+	std::experimental::filesystem::create_directory(write_path);
+      }
+      catch(...){};
+    }
+    std::stringstream ss;
+    ss<<std::this_thread::get_id();
+    write_path /= fHostname + "_" + ss.str();
+    std::ofstream outfile;
+    outfile.open(write_path, std::ios::out);
+    outfile<<"...my only friend";
+    outfile.close();
+  }
+
+}
+
+std::string StraxInserter::GetStringFormat(int id){
+  std::string chunk_index = std::to_string(id);
+  while(chunk_index.size() < fChunkNameLength)
+    chunk_index.insert(0, "0");
+  return chunk_index;
+}
+
+std::experimental::filesystem::path StraxInserter::GetDirectoryPath(std::string id,
+								       bool temp){
+  std::experimental::filesystem::path write_path(fOutputPath);
+  write_path /= id;
+  if(temp)
+    write_path+="_temp";
+  return write_path;
+}
+
+std::experimental::filesystem::path StraxInserter::GetFilePath(std::string id, bool temp){
+  std::experimental::filesystem::path write_path = GetDirectoryPath(id, temp);
+  std::string filename = fHostname;
+  std::stringstream ss;
+  ss<<std::this_thread::get_id();
+  filename += "_";
+  filename += ss.str();
+  write_path /= filename;
+  return write_path;
+}
+
+void StraxInserter::CreateMissing(u_int32_t back_from_id){
+
+  for(unsigned int x=fMissingVerified; x<back_from_id; x++){
+    std::string chunk_index = GetStringFormat(x);
+    std::string chunk_index_pre = chunk_index+"_pre";
+    std::string chunk_index_post = chunk_index+"_post";
+    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index, false))){
+      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
+	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
+      std::ofstream o;
+      o.open(GetFilePath(chunk_index, false));
+      o.close();
+    }
+    if(x!=0 && !std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, false))){
+      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
+	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_pre, false));
+      std::ofstream o;
+      o.open(GetFilePath(chunk_index_pre, false));
+      o.close();
+    }
+    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_post, false))){
+      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_post, false)))
+	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
+      std::ofstream o;
+      o.open(GetFilePath(chunk_index_post, false));
+      o.close();
+    }
+  }
+  fMissingVerified = back_from_id;
+}

@@ -58,7 +58,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
   if(timestamp > last_time){
 
     // Case 1. This is over 15s but seen_under_5 is true. Give 1 back
-    if(timestamp >= 15e8 && seen_under_5)
+    if(timestamp >= 15e8 && seen_under_5 && clock_counter != 0)
       return clock_counter-1;
 
     // Case 2. This is over 5s and seen_under_5 is true.
@@ -100,11 +100,11 @@ int V1724::GetClockCounter(u_int32_t timestamp){
     }
   }
   else{
-    //std::stringstream err;
-    //err<<"Something odd in your clock counters. t_new: "<<timestamp<<
-    //" last time: "<<last_time<<" over 15: "<<seen_over_15<<
-    //" under 5: "<<seen_under_5;
-    //fLog->Entry(err.str(), MongoLog::Warning);
+    std::stringstream err;
+    err<<"Something odd in your clock counters. t_new: "<<timestamp<<
+    " last time: "<<last_time<<" over 15: "<<seen_over_15<<
+    " under 5: "<<seen_under_5;
+    fLog->Entry(err.str(), MongoLog::Warning);
     // Counter equal to last time, so we're happy and keep the same counter
     return clock_counter;
   }  
@@ -122,8 +122,8 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
     fLog->Entry(err.str(), MongoLog::Warning);
     return -1;
   }
-  std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;
-  usleep(100); // don't ask
+  std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;  
+  usleep(5000); // don't ask
   return 0;
 }
 
@@ -139,6 +139,7 @@ unsigned int V1724::ReadRegister(unsigned int reg){
     fLog->Entry(err.str(), MongoLog::Warning);
     return 0xFFFFFFFF;
   }
+  usleep(5000);
   return temp;
 }
 
@@ -149,7 +150,8 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
   // the other, V1724G, has 512 MS/channel = 1MB/channel
   unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
-  u_int32_t *tempBuffer = new u_int32_t[BLT_SIZE*2];
+  unsigned int BUFFER_SIZE = 16*BLT_SIZE; //absurdly large maybe
+  u_int32_t *tempBuffer = new u_int32_t[BUFFER_SIZE];
 
   int count = 0;
   do{
@@ -168,6 +170,9 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
       stringstream err;
       err<<"Read error in board "<<fBID<<" after "<<count<<" reads: "<<dec<<ret;
       fLog->Entry(err.str(), MongoLog::Error);
+      u_int32_t data=0;
+      data = ReadRegister(0x8104);
+      std::cout<<"Board status: "<<hex<<data<<dec<<std::endl;
       delete[] tempBuffer;
       return 0;
     }
@@ -175,10 +180,10 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
     count++;
     blt_bytes+=nb;
 
-    if(blt_bytes>BLT_SIZE){
+    if(blt_bytes>BUFFER_SIZE){
       stringstream err;
       err<<"You managed to transfer more data than fits on board."<<
-	"Transferred: "<<blt_bytes<<" bytes, Buffer: "<<BLT_SIZE<<" bytes.";
+	"Transferred: "<<blt_bytes<<" bytes, Buffer: "<<BUFFER_SIZE<<" bytes.";
       fLog->Entry(err.str(), MongoLog::Error);
       
       delete[] tempBuffer;
@@ -221,10 +226,10 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // We can adjust a DAC offset register, which is 0xffff in range, is inversely
   // proportional to the baseline position, and has ~5% overshoot on either end.
   // So we use this information to get starting values:
-  u_int32_t starting_value = 0x1000; //u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
+  u_int32_t starting_value = u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
   int nChannels = 8;
   vector<u_int16_t> dac_values(nChannels, starting_value);
-  vector<bool> channel_finished(nChannels, false);
+  vector<int> channel_finished(nChannels, 0);
   vector<bool> update_dac(nChannels, true);
   
   // Now we need to load a simple configuration to the board in order to read
@@ -233,6 +238,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   int write_success = 0;
   try{
     write_success += WriteRegister(0xEF24, 0x1);       // Global reset
+    usleep(1000);
     write_success += WriteRegister(0xEF1C, 0x1);       // BERR 
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
     write_success += WriteRegister(0x8120, 0xFF);      // Channel mask
@@ -275,7 +281,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     // First check if we're finished and if so get out
     bool breakout = true;
     for(int channel=0; channel<nChannels; channel++){
-      if(channel_finished[channel])
+      if(channel_finished[channel]>=5)
         continue;
       breakout = false;
     }
@@ -294,7 +300,22 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     u_int32_t size = 0;
     
     WriteRegister(0xEF28, 0x1);       // Software clear any old data
-    usleep(1000);      
+    usleep(1000);
+
+    // Make sure we're ready for acquisition
+    u_int32_t data = 0;
+    int readycount = 0;
+    while(!(data&0x100) && readycount < 1000){
+      usleep(1000);
+      data = ReadRegister(0x8104);
+      readycount++;
+    }
+    if(readycount>=1000){
+      fLog->Entry("Timed out waiting for board to be ready in baselines", MongoLog::Warning);
+      return -1;
+    }
+    std::cout<<hex<<"Read board status :"<<data<<" in baselines"<<dec<<std::endl;
+    
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
     usleep(1000);
     WriteRegister(0x8108,0x1);    // Software trig reg      
@@ -303,7 +324,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     int readcount = 0;
     while(size == 0 && readcount < 1000){	
       size = ReadMBLT(buff);
-      usleep(10);
+      usleep(1000);
       readcount++;
       if(size>0 && size<=16){
 	std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
@@ -336,7 +357,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  if(!((cmask>>channel)&1))
 	    continue;
 	  u_int32_t csize = buff[idx]&0x7FFFFF;
-	  if(channel_finished[channel]){
+	  if(channel_finished[channel]>=5){
 	    idx+=csize;
 	    continue;
 	  }
@@ -371,15 +392,16 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    // less than we think we need to to avoid getting into some overshoot
 	    // see-saw type loop where we never hit the target.
 	    float absolute_unit = float(0xffff)/float(0x3fff);
-	    int adjustment = int(absolute_unit*((float(baseline)-float(target_value))));
+	    int adjustment = .6*int(absolute_unit*((float(baseline)-float(target_value))));
 	    //int adjustment = int(baseline)-int(target_value);
 	    //std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
 	    //std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
 	    if(abs(adjustment) < adjustment_threshold){
-	      channel_finished[channel]=true;
-	      std::cout<<"Channel "<<channel<<" finished"<<std::endl;
+	      channel_finished[channel]++;
+	      std::cout<<"Channel "<<channel<<" converging at step "<<channel_finished[channel]<<"/5"<<std::endl;
 	    }
 	    else{
+	      channel_finished[channel]=0;
 	      update_dac[channel] = true;
 	      if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel])
 		dac_values[channel]=0x0;
@@ -403,7 +425,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   }// end iteration loop
   
   for(unsigned int x=0; x<channel_finished.size(); x++){
-    if(channel_finished[x]!=true){
+    if(channel_finished[x]<2){ // Be a little more lenient in case it's just starting to converge
       std::stringstream error;
       error<<"Baseline routine did not finish for channel "<<x<<" (and maybe others)."<<std::endl;
       fLog->Entry(error.str(), MongoLog::Error);
