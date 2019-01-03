@@ -27,4 +27,4 @@ configuration of the final system. Use these links to navigate to the sub-pages.
   
 A brief overview of the complete system follows. Please refer to Figure 1.
 
-	![Figure 1: A diagram of the complete system]({{ site.url }}/docs/figures/daq_software_overview.png)
+![Figure 1: A diagram of the complete system]({{ site.url }}/docs/figures/daq_software_overview.png)
