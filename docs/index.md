@@ -24,16 +24,17 @@ if the number of channels is low, should be quite easy.
 This document provides setup steps in order, beginning with installation of prerequisites and ending in 
 configuration of the final system. Use these links to navigate to the sub-pages.
 
-  1. Installation of prerequisites
-  2. Installing software and helper programs
-  3. Configuration of backend databases
-  4. DAQ Configuration options
-  5. Examples of running the readout
+  1. (Installation of prerequisites)[prerequisites.md]
+  2. (Configuration of backend databases)[databases.md]
+  3. (Installing software and helper programs)[installation.md]
+  4. (DAQ Configuration options)[daq_options.md]
+  5. (Examples of running the readout)[how_to_run.md]
   
 A brief overview of the complete system follows. Please refer to Figure 1.
 
 <img src="figures/daq_software_overview.png" width="600">
 <strong>Figure 1: A diagram of the software components. Please refer to the text for details.</strong>
+<br>
 
 The system is based around a central MongoDB database (green box "DAQ Database" in the middle) containing several
 subcollections and facilitating communcation between each component. Each readout node (red boxes on left) is 
