@@ -1,6 +1,27 @@
 # Installation of Prerequisites
 
-This section lists all the nontrivial prerequisites needed. We're assuming an Ubuntu 18.04 LTS system.
+This section lists all the prerequisites needed. We're assuming an Ubuntu 18.04 LTS system.
+
+## Hardware notes
+
+The most basic system will consist of a CAEN V1724 connected via optical link to a CAEN A3818 or A2818 PCI(e) card installed in the same PC where the software will run. More complex setups, for example using a V2718 crate controller to facilitate synchronized starting of multiple V1724, are of course also possible.
+
+**Note:** the V1724 can be either used with the XENON1T custom DPP firmware or with the default firmware without 'zero-length-encoding' enabled. ZLE support may be included in a future release if it is needed.
+
+## Libraries from the package repo
+
+  * [Blosc](http://blosc.org/) is needed for compression. 
+  * Normal build libraries required. Note that we're using C++17 so require a relatively recent gcc, in case you're on an older OS.
+  
+Install with: `sudo apt-get install build-essential libblosc-dev`
+
+## CAEN Libraries
+
+  * CAENVMElib v2.5+
+  * Driver for your CAEN PCI card
+
+Both of these are available from [CAEN](http://www.caen.it) directly. We also maintain a private repository in the XENON1T organization called daq_dependencies with the production versions of all drivers and firmwares. 
+
 
 ## MongoDB CXX Driver
 
