@@ -6,7 +6,7 @@ D. Coderre, 3. January 2019
 Redax is a DAQ readout code based on CAEN electronics. It is designed to be used with V1724 digitizers
 connected via their front optical ports to A3818 PCIe cards, but it can also be used for other similar
 setups, for example with different digitizer models or configuration strategies (some modification 
-could be required in some cases). Output is into the (strax)[https://github.com/axfoundation/strax] 
+could be required in some cases). Output is into the [strax](https://github.com/axfoundation/strax) 
 input format. This documentation should get you up and running with redax. At the 
 time of writing the software is still in heavy development so if there are any issues with this 
 documentation please file an issue on GitHub.
