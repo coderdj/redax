@@ -80,8 +80,12 @@ To restart:
 
 **Enable authentication**
 
-MongoDB has a bit of a bad security reputation since it contains no security protection at all by default, this must be manually configured. Therefore a bunch of smart people created databases that were completely open to the outside world, 
-and of course a bunch of these were compromised for ransom, and it was a whole thing. Don't me one of those guys.
+MongoDB has had a bit of a bad security reputation since it contains no security protection at all by default. This must 
+be manually configured. Therefore a bunch of smart people working at sometimes surprisingly professional-sounding places and 
+storing also surprisingly sensitive data (much more important than our temporary DAQ data) created databases that were 
+completely open to the outside world. Of course a bunch of obviously smarter but morally deficient people then gained 
+access to these machines, which is so easy you might do it by accident, and deleted all the data in demand of a ransom, 
+which was also never paid. It was a whole thing. Don't be one of those guys and put at least a password on your database.
 
 See the official docs [here](https://docs.mongodb.com/manual/tutorial/enable-authentication/).
 
