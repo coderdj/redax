@@ -68,21 +68,21 @@ google and is reproduced here in condensed form.
 **Also note that you absolutely must set a password for the database, so do not skip the final steps.**
 
 The most up to date version is found in a repository maintained by the mongo devs. Add the key:
-
-`sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927 `
-
+```
+sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927 `
+```
 Create a list:
-
-`echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.2.list`
-
+```
+echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.2.list
+```
 Get update:
-
-`sudo apt-get update`
-
+```
+sudo apt-get update
+```
 Install:
-
-`sudo apt-get install -y mongodb-org`
-
+```
+sudo apt-get install -y mongodb-org
+```
 There may be other steps in production if you want your server visible from the outside world, for example. But for local access you don't need to change anything else. Note that if you want your sever available within your subnet and not just via localhost you may need to change the address in your mongo configuration file from 'localhost' (or 127.0.0.1) to your server's fixed IP. Do the password step first though.
 
 **Start the process**
@@ -91,13 +91,9 @@ Not just now but any time you want to control the process you just use systemctl
 
 `sudo systemctl start mongod`
 
-To stop:
+To stop: `sudo systemctl stop mongod` 
 
-`sudo systemctl stop mongod` 
-
-To restart:
-
-`sudo systemctl restart mongod`
+To restart: `sudo systemctl restart mongod`
 
 **Enable authentication**
 
@@ -111,12 +107,13 @@ which was also never paid. It was a whole thing. Don't be one of those guys and 
 See the official docs [here](https://docs.mongodb.com/manual/tutorial/enable-authentication/).
 
 Log in to the database:
-
-`mongo --host 127.0.0.1 --port 27017`
+```
+mongo --host 127.0.0.1 --port 27017
+```
 
 Create a user in database 'admin' with full control:
-
-`use admin
+```
+use admin
 db.createUser(
   {
     user: "user",
@@ -124,29 +121,44 @@ db.createUser(
     roles: [ { role: "userAdminAnyDatabase", db: "admin" },
              { role: "readWriteAnyDatabase", db: "admin" } ]
   }
-)`
+)
+```
 
 This is the bare minimum user configuration for a useful DB. For our full deployment we will create several database users and give each only the permissions it needs to operate.
 
 Open the file /etc/mongod.conf and change the config file to enable auth. The lines are:
 
-`security:
-  authorization: enabled`
+```
+security:
+  authorization: enabled
+```
   
 Restart the process:
 
-`sudo systemctl restart mongod`
+```sudo systemctl restart mongod```
 
 Now try to log in like before… you should get in but any command (i.e. 'show dbs) should fail, right? If it doesn't fail something went wrong. If it does fail then you did it right and are now secure. I still wouldn't expose my database to the internet… but it's probably fine in your subnet.
 
 You can log in now by providing a user, password, and authentication database like so:
 
-`mongo -u user -p password --authenticationDatabase=admin --host=127.0.0.1 --port=27017`
+```mongo -u user -p password --authenticationDatabase=admin --host=127.0.0.1 --port=27017```
 
 Or using a connection string like so:
 
-`mongo mongodb://user:password@127.0.0.1:27017/admin`
+```mongo mongodb://user:password@127.0.0.1:27017/admin```
 
 Another note on security. A database isn't really meant to be a public-facing thing like an api. So try to avoid any unnecessary exposure to the internet (certainly) or public/semipublic subnets. There's a simple eve API included in 
 the redax repo for access to the database (in our case by the slow control system). It is easy to expand this
 to do whatever you want. 
+
+## Anaconda Environment for the broker and system monitor
+
+If you use the broker, system monitor, and API functionalities you need python3 and some libraries. If you're installing this on a test or shared system you might consider installing everything in an [anaconda](https://www.anaconda.com/) environment.
+
+Here are the required packages via pip (you may need to install it):
+```
+pip install psutil pymongo 
+# for API
+pip install eve bcrypt
+```
+
