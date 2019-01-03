@@ -24,11 +24,11 @@ if the number of channels is low, should be quite easy.
 This document provides setup steps in order, beginning with installation of prerequisites and ending in 
 configuration of the final system. Use these links to navigate to the sub-pages.
 
-  1. (Installation of prerequisites)[prerequisites.md]
-  2. (Configuration of backend databases)[databases.md]
-  3. (Installing software and helper programs)[installation.md]
-  4. (DAQ Configuration options)[daq_options.md]
-  5. (Examples of running the readout)[how_to_run.md]
+  1. [Installation of prerequisites](prerequisites.md)
+  2. [Configuration of backend databases](databases.md)
+  3. [Installing software and helper programs](installation.md)
+  4. [DAQ Configuration options](daq_options.md)
+  5. [Examples of running the readout](how_to_run.md)
   
 A brief overview of the complete system follows. Please refer to Figure 1.
 
