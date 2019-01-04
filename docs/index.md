@@ -1,6 +1,19 @@
 ---
-sidebar:
-  nav: "docs"
+docs:
+  - title: Installation Guide
+    children:
+      - title: "Intro"
+        url: /docs/index.md
+      - title: "Pre-install"
+        url: /docs/prerequisites.md
+      - title: "DB Configuration"
+        url: /docs/databases.md
+      - title: "Installation"
+        url: /docs/installation.md
+      - title: "Options reference"
+        url: /docs/daq_options.md
+      - title: "Simple use case"
+        url: /docs/how_to_run.md
 
 ---
 
