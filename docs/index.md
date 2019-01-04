@@ -1,20 +1,10 @@
----
-sidebar:
-  - title: Installation Guide
-    children:
-      - title: "Intro"
-        url: /docs/index.md
-      - title: "Pre-install"
-        url: /docs/prerequisites.md
-      - title: "DB Configuration"
-        url: /docs/databases.md
-      - title: "Installation"
-        url: /docs/installation.md
-      - title: "Options reference"
-        url: /docs/daq_options.md
-      - title: "Simple use case"
-        url: /docs/how_to_run.md
----
+## Contents
+* [Intro](index.md) 
+* [Pre-install](prerequisites.md) 
+* [DB config](databases.md) 
+* [Installation](installation.md) 
+* [Options reference](daq_options.md) 
+* [Example operation](how_to_run.md)
 
 # redax Docs
 D. Coderre, 3. January 2019
