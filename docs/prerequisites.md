@@ -1,3 +1,11 @@
+## Contents
+* [Intro](index.md) 
+* [Pre-install](prerequisites.md) 
+* [DB config](databases.md) 
+* [Installation](installation.md) 
+* [Options reference](daq_options.md) 
+* [Example operation](how_to_run.md)
+
 # Installation of Prerequisites
 
 This section lists all the prerequisites needed. We're assuming an Ubuntu 18.04 LTS system.
