@@ -14,7 +14,6 @@ sidebar:
         url: /docs/daq_options.md
       - title: "Simple use case"
         url: /docs/how_to_run.md
-
 ---
 
 # redax Docs
