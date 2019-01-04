@@ -33,6 +33,7 @@ The form of the document is the following:
 The status enum has the following values:
 
 |Value	|State |
+| ----- | ----- |
 |0	|Idle |
 |1	|Arming (in the process of initializing, baselines, etc) |
 |2	|Armed. Ready to start |
@@ -88,6 +89,7 @@ Because some of these fields require slightly more explanation a table has been 
 ```
 
 |Field	|Description |
+| ----- | ----- |
 |detector	|Either 'tpc', 'muon_veto', or 'neutron_veto'. Or whatever funny thing you've got in your lab. |
 |active	|The user can set whether this detector is 'active' or not. If it's not active then we don't care about it's status. In fact we can't care since some readers will be reused when running in combined modes and may not longer belong to their original detectors.|
 |stop_after	|How many minutes (or seconds? check code) until the run automatically restarts. This is a global DAQ state setting, not the setting for a single run. So if you want to run for an hour you set this to 60 minutes, put the detector active, and the broker should handle giving you the 1 hour runs. |
@@ -114,11 +116,13 @@ The control database is used to propagate commands from the broker to the reader
      "command" : "arm" 
 }    
 ```
+
 |Field	|Description |
+| ----- | ----- |
 |options_override	|Override specific options in the options ini document. Mostly used to set custom output paths so that we're writing to the right place for each run. |
 |mode	|Options file to use for this run. Corresponds to the 'name' field of the options doc. |
 |user	|Who started the run? Corresponds to the last person to change the detector_status doc during normal operation. Exceptional stop commands can be automatically issued by various subsystems as well in case of errors.
-host	List of all hosts to which this command is directed. Readers and crate controllers will only process commands addressed to them. |
+|host	|List of all hosts to which this command is directed. Readers and crate controllers will only process commands addressed to them. |
 |acknowledged	|Before attempting to process a command all reader and crate controller processes will first acknowledge the command as received. This does not indicate that processing the command was successful! It just indicates the thing tried. The broker has to watch for the appropriate state change of the slave nodes in order to determine if the command achieved its goal. |
 |command	|This is the actual command. 'arm' gets the DAQ ready to start. 'start' starts readout by sending the S-in signal. 'send_stop_signal' puts the s-in to zero. 'stop' resets readout processes. |
 
@@ -144,6 +148,7 @@ identify the user. The field 'message' is the message itself, and 'priority' is 
 gives the standard priorities:
 
 |Priority	|Value	|Use |
+| ----- | ----- | ------ |
 |0	|DEBUG	|Debug output for developers. Can either be silenced in production or added with a TTL expiry index (see next section). |
 |1	|MESSAGE	|Normal log output that is important to propagate during normal operation, but does not indicate any exceptional state. |
 |2	|WARNING	|Inform the user of an exceptional situation. However this flag is reserved for minor issues that the system will handle on its own and should require no user input. |
