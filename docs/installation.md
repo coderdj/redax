@@ -81,3 +81,39 @@ Running it is the same as running the reader:
 
 Assuming you run that command on daq0 you'll have a crate controller process running called daq0_ccontrol_0. Identically 
 to the reader process this program will immediately begin polling and updating the DAQ database.
+
+## Broker Process
+
+The broker is a lightweight process and can run anywhere without fear of high resource use. It is also a vital process, 
+so be sure to run it somewhere it can't be 'cut off' from the rest of the system (i.e. within the subnet, one one of the 
+readout PCs probably). 
+
+The broker is started with:
+```
+cd redax/broker
+python broker.py --num=0 --config=options.ini
+```
+
+Here **num** is a similar ID number to the one provided to the readout and crate controller nodes (set to zero if you just 
+have one broker). The file **options.ini** provides options for connectivity to the DAQ and runs databases as well as 
+configuration options for various parameters such as timeouts. See the inline comments for more details on these options, 
+though the defaults are likely fine except for the database URIs.
+
+The broker will immediately start monitoring the state documents (if there are any) in the daq_control collection of the 
+daq database. It will also update the aggregate_status collection (again, only if any detectors were defined) by polling 
+the status collection.
+
+## Optional Process: System Monitor
+
+If using [nodiaq](https://github.com/coderdj/nodiaq) there is funtionality to display key system parameters like CPU, 
+memory, and disk usage of each host. An exceedingly simple system monitor is included, which dumps diagnostic data into 
+a capped collection for display. 
+
+This is simply run with:
+```
+cd redax/monitor
+python monitor.py
+```
+
+Currently the database connection has to be defined in the script. At some point we'll update that to take those options 
+on the command line. 10 points to the person who updates the docs once that happens.
