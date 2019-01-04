@@ -1,3 +1,9 @@
+---
+sidebar:
+  nav: "docs"
+
+---
+
 # redax Docs
 D. Coderre, 3. January 2019
 
