@@ -1,5 +1,5 @@
 ---
-docs:
+sidebar:
   - title: Installation Guide
     children:
       - title: "Intro"
