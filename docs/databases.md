@@ -1,3 +1,11 @@
+## Contents
+* [Intro](index.md) 
+* [Pre-install](prerequisites.md) 
+* [DB config](databases.md) 
+* [Installation](installation.md) 
+* [Options reference](daq_options.md) 
+* [Example operation](how_to_run.md)
+
 # Configuration of Backend Databases
 
 There are two separate databases defined in the DAQ: the DAQ database and the runs database. In principle they could 
