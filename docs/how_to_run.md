@@ -1,3 +1,11 @@
+## Contents
+* [Intro](index.md) 
+* [Pre-install](prerequisites.md) 
+* [DB config](databases.md) 
+* [Installation](installation.md) 
+* [Options reference](daq_options.md) 
+* [Example operation](how_to_run.md)
+
 # Examples of Running the Program
 
 *Fair disclaimer: I didn't test all these steps together yet so something might go wrong. Report if so. Or if you fix it update the docs (and remove the disclaimer)*
