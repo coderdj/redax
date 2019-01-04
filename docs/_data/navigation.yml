@@ -1,5 +1,5 @@
 docs:
-  - title: Installtion Guide
+  - title: Installation Guide
     children:
       - title: "Intro"
         url: /docs/index.md
