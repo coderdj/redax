@@ -33,6 +33,7 @@ configuration of the final system. Use these links to navigate to the sub-pages.
 A brief overview of the complete system follows. Please refer to Figure 1.
 
 <img src="figures/daq_software_overview.png" width="600">
+<br>
 <strong>Figure 1: A diagram of the software components. Please refer to the text for details.</strong>
 <br>
 
