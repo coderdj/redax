@@ -1,3 +1,11 @@
+## Contents
+* [Intro](index.md) 
+* [Pre-install](prerequisites.md) 
+* [DB config](databases.md) 
+* [Installation](installation.md) 
+* [Options reference](daq_options.md) 
+* [Example operation](how_to_run.md)
+
 # Redax installation and initial configuration
  
  This section explains how to install and configure redax with a simple example deployment strategy involving two readout 
