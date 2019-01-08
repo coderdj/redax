@@ -490,7 +490,7 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
   if(val == 0) rval = 0xffffffff;
   while(counter < ntries){
     rval = ReadRegister(reg);
-    if((rval&mask) == val)
+    if((val == 1 && (rval&mask)) || (val == 0 && !(rval&mask)))
       return true;
     counter++;
     usleep(sleep);
