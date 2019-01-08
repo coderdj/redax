@@ -486,12 +486,17 @@ int V1724::End(){
 
 bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep, u_int32_t val){
   int counter = 0;
+  u_int32_t rval = 0;
+  if(val == 0) rval = 0xffffffff;
   while(counter < ntries){
-    u_int32_t rval = ReadRegister(reg);
+    rval = ReadRegister(reg);
     if((rval&mask) == val)
       return true;
     counter++;
     usleep(sleep);
   }
+  std::cout<<"MonitorRegister failed for "<<hex<<reg<<" with mask "<<
+    mask<<" and register value "<<rval<<"... couldn't get "<<val<<dec<<
+    std::endl;
   return false;
 }
