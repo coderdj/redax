@@ -30,7 +30,16 @@ class DBInterface():
 
     def GetHostStatus(self):
         ret = []
-        for host in self.collections["status"].distinct("host"):
+        # 'distinct' would be good here but I've been getting errors calling distinct
+        # on a capped collection. So manually geta  list of hosts
+
+        # Limit to last 500 docs
+        cursor = self.collections["status"].find().sort("_id", -1).limit(500)
+        hosts = []
+        for doc in cursor:
+            if doc['host'] not in hosts:
+                hosts.append(doc['host'])
+        for host in hosts:
             doc = list(self.collections['status'].find({"host": host}).sort("_id", -1).limit(1))[0]
             ret.append(doc)
         return ret

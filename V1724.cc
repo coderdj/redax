@@ -302,7 +302,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
     // Make sure we can acquire
     if(MonitorRegister(0x8104, 0x100, 1000, 1000) != true){
+      u_int32_t dat = ReadRegister(0x8178);
       fLog->Entry("Timed out waiting for board to be ready in baseline", MongoLog::Warning);
+      std::cout<<"Board ready timeout: register 8174 value is "<<hex<<dat<<dec<<std::endl;
       return -1;
     }
     
