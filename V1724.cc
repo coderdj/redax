@@ -294,8 +294,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       return -2;
     }
     
-    u_int32_t *buff = NULL;
-    u_int32_t size = 0;
     
     WriteRegister(0xEF28, 0x1);       // Software clear any old data
     usleep(1000);
@@ -321,23 +319,34 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       fLog->Entry("Timed out waiting for event ready in baselines", MongoLog::Warning);
       return -1;
     }    
-    
-    int readcount = 0;
-    while(size == 0 && readcount < 1000){	
-      size = ReadMBLT(buff);
-      usleep(1000);
-      readcount++;
-      if(size>0 && size<=16){
-	std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
-	size = 0;
-	delete[] buff;
-	buff = NULL;
-      }	
-    }
+
+    // Read data
+    u_int32_t *buff = NULL;
+    u_int32_t size = 0;
+    size = ReadMBLT(buff);
+
+    // Deactivate board
     WriteRegister(0x8100, 0x0);
-    if(readcount >= 1000)
-      continue;
+
+    // Ensure the board is no longer running before continuing
+    if(MonitorRegister(0x8104, 0x4, 1000, 1000, 0x0) != true){
+      fLog->Entry("Timed out waiting for acquisition to stop in baselines",
+		  MongoLog::Warning);
+      return -1;
+    }
     
+    // Check for mal formed data
+    if(size>0 && size<=16){
+      std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
+      delete[] buff;      
+      continue;
+    }
+    if(size == 0){
+      std::cout<<"No event though board said there would be one"<<std::endl;
+      if(buff != NULL) delete[] buff;
+      continue;
+    }
+        
     // Parse
     unsigned int idx = 0;
     while(idx < size/sizeof(u_int32_t)){
