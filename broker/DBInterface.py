@@ -21,6 +21,9 @@ class DBInterface():
             "run": self.runs_db["run"],
             "options": self.dax_db["options"]
         }
+
+        # Remove any commands from previous runs
+        self.collections['outgoing'].drop()
         
         self.hostname = hostname
         
