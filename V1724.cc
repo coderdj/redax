@@ -237,22 +237,20 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // in case the hardware has an issue.
   int write_success = 0;
   try{
-    write_success += WriteRegister(0xEF24, 0x1);       // Global reset
-    usleep(1000);
+    write_success += WriteRegister(0xEF24, 0x1);       // Global reset    
     write_success += WriteRegister(0xEF1C, 0x1);       // BERR 
     write_success += WriteRegister(0xEF00, 0x10);      // Channel memory
-    write_success += WriteRegister(0x8120, 0xFF);      // Channel mask
     write_success += WriteRegister(0x8020, 0x1F4);     // Buffer size
 
-    write_success += WriteRegister(0x811C, 0x110);
-    write_success += WriteRegister(0x81A0, 0x200);
-    write_success += WriteRegister(0x8100, 0x0);
-    write_success += WriteRegister(0x800C, 0xA);
-    write_success += WriteRegister(0x8098, 0x1000);
-    write_success += WriteRegister(0x8000, 0x310);
+    //write_success += WriteRegister(0x811C, 0x110);
+    //write_success += WriteRegister(0x81A0, 0x200);
+    //write_success += WriteRegister(0x8100, 0x0);
+    //write_success += WriteRegister(0x800C, 0xA);
+    //write_success += WriteRegister(0x8098, 0x1000);
+    //write_success += WriteRegister(0x8000, 0x310);
     write_success += WriteRegister(0x8080, 0x1310000);
-    write_success += WriteRegister(0x8034, 0x0);
-    write_success += WriteRegister(0x8038, 0x1);
+    //write_success += WriteRegister(0x8034, 0x0);
+    //write_success += WriteRegister(0x8038, 0x1);
 
   }
   catch(const std::exception &e){
@@ -302,24 +300,25 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     WriteRegister(0xEF28, 0x1);       // Software clear any old data
     usleep(1000);
 
-    // Make sure we're ready for acquisition
-    u_int32_t data = 0;
-    int readycount = 0;
-    while(!(data&0x100) && readycount < 1000){
-      usleep(1000);
-      data = ReadRegister(0x8104);
-      readycount++;
-    }
-    if(readycount>=1000){
-      fLog->Entry("Timed out waiting for board to be ready in baselines", MongoLog::Warning);
+    // Make sure we can acquire
+    if(MonitorRegister(0x8104, 0x100, 1000, 1000) != true){
+      fLog->Entry("Timed out waiting for board to be ready in baseline", MongoLog::Warning);
       return -1;
     }
-    std::cout<<hex<<"Read board status :"<<data<<" in baselines"<<dec<<std::endl;
     
-    WriteRegister(0x8100,0x4);//x24?   // Acq control reg
-    usleep(1000);
+    // Start acquisition
+    WriteRegister(0x8100,0x4);//x24?   // Acq control reg    
+    if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
+      fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
+      return -1;
+    }
+    
+    // Send SW trigger
     WriteRegister(0x8108,0x1);    // Software trig reg      
-    usleep(1000);
+    if(MonitorRegister(0x8104, 0x8, 1000, 1000) != true){
+      fLog->Entry("Timed out waiting for event ready in baselines", MongoLog::Warning);
+      return -1;
+    }    
     
     int readcount = 0;
     while(size == 0 && readcount < 1000){	
@@ -333,11 +332,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	buff = NULL;
       }	
     }
-    if(readcount >= 1000){
-      WriteRegister(0x8100, 0x0);
-      continue;
-    }
     WriteRegister(0x8100, 0x0);
+    if(readcount >= 1000)
+      continue;
     
     // Parse
     unsigned int idx = 0;
@@ -448,19 +445,8 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     // We updated, or at least tried to update
     update_dac[x]=false;
     
-    // Define a counter to give the DAC time to be set if needed
-    int counter = 0; 
-    while(counter < 100){
-      u_int32_t data = 0x4;
-      data = ReadRegister((0x1088)+(0x100*x)); // DAC ready register
-      if(data&0x4){
-	usleep(1000);
-	counter++;
-	continue;
-      }
-      break;
-    }
-    if(counter >= 100){
+    // Give the DAC time to be set if needed
+    if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
       stringstream errorstr;
       errorstr<<"Timed out waiting for channel "<<x<<" in DAC setting";
       fLog->Entry(errorstr.str(), MongoLog::Error);
@@ -475,24 +461,14 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
       return -1;
     }
 
-    // Wait for it to kick in
-    counter = 0;
-    while(counter < 100){
-      u_int32_t data = 0x4;
-      data = ReadRegister((0x1088)+(0x100*x));
-      if(data&0x4){
-	usleep(1000);
-	counter++;
-	continue;
-      }
-      break;
-    }
-    if(counter >= 100){
+    // Give the DAC time to be set if needed
+    if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
       stringstream errorstr;
       errorstr<<"Timed out waiting for channel "<<x<<" after DAC setting";
       fLog->Entry(errorstr.str(), MongoLog::Error);
       return -1;
     }
+
   }
   return 0;
   
@@ -506,3 +482,14 @@ int V1724::End(){
   return 0;
 }
 
+bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep, u_int32_t val){
+  int counter = 0;
+  while(counter < ntries){
+    u_int32_t rval = ReadRegister(reg);
+    if((rval&mask) == val)
+      return true;
+    counter++;
+    usleep(sleep);
+  }
+  return false;
+}
