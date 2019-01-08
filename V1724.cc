@@ -296,8 +296,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     }
     
     
-    WriteRegister(0xEF28, 0x1);       // Software clear any old data
-    usleep(1000);
+    //WriteRegister(0xEF28, 0x1);       // Software clear any old data
+    //usleep(1000);
 
     // Make sure we can acquire
     if(MonitorRegister(0x8104, 0x100, 1000, 1000) != true){
