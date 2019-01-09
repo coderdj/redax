@@ -93,10 +93,11 @@ class DAQBroker():
                     force_restart = True
                 
                 # OK, so we should be running. What could to possibilities be?
-                # If IDLE, start the arm command
-                if self.dets[det]['status'] == self.status_codes["IDLE"]:
+                # If IDLE, start the arm command but not if armed_at is set 
+                if (self.dets[det]['status'] == self.status_codes["IDLE"] and
+                    (self.dets[det]['armed_at'] == None)):
 
-                    self.dets[det]['diagnosis'] = 'processing'                    
+                    self.dets[det]['diagnosis'] = 'processing'
 
                     # Can we even arm this run? As in are all the necessary nodes available?
                     if not self.CheckRunPlausibility(doc['mode'], det):
