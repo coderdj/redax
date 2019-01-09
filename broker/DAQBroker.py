@@ -68,7 +68,7 @@ class DAQBroker():
                 det_doc = { "mode": doc['mode'], 'status': self.status_codes["IDLE"],
                             'stop_after': doc['stop_after'], 'active': doc['active'],
                             "user": doc['user'], "comment": doc['comment'], "hosts": [],
-                            "diagnosis": "processing", "rate": 0, "buff": 0}
+                            "diagnosis": "processing", "rate": 0, "buff": 0, 'armed_at': None}
                 self.dets[det] = det_doc
 
                 
@@ -79,6 +79,7 @@ class DAQBroker():
             # just created the det_doc (why wait a second?)
             if doc['active'] == 'true' and det in self.dets.keys():
                 #print("CASE 4")
+                #print(self.dets[det])
                 # Make sure our det_doc has the right info
                 self.dets[det]['active'] = doc['active']
                 self.dets[det]['comment'] = doc['comment']
@@ -95,7 +96,8 @@ class DAQBroker():
                 # OK, so we should be running. What could to possibilities be?
                 # If IDLE, start the arm command but not if armed_at is set 
                 if (self.dets[det]['status'] == self.status_codes["IDLE"] and
-                    (self.dets[det]['armed_at'] == None)):
+                    ('armed_at' not in self.dets[det].keys() or self.dets[det]['armed_at'] == None or
+                     (datetime.datetime.utcnow() - self.dets[det]['armed_at']).total_seconds() > self.arm_timeout)):
 
                     self.dets[det]['diagnosis'] = 'processing'
 
@@ -103,7 +105,7 @@ class DAQBroker():
                     if not self.CheckRunPlausibility(doc['mode'], det):
                         print("Run implausible")
                         continue
-
+                    
                     pending_commands += self.MakeCommand("arm", doc)
                         
                 # If ARMED, send the start command
@@ -233,6 +235,9 @@ class DAQBroker():
             buff = 0
             if doc['status'] == c["ARMING"] or doc['status'] == c['ARMED']:
                 arming = True
+            if ('armed_at' in doc and doc['armed_at'] != None and
+                (datetime.datetime.utcnow() - doc['armed_at']).total_seconds()<=self.arm_timeout):
+                arming = True
 
             if 'hosts' not in doc or len(doc['hosts'])==0:
                 # No hosts, idle by default
@@ -361,6 +366,7 @@ class DAQBroker():
             # and set the other stuff
             self.dets[det]['status'] = self.status_codes["ARMING"]
             self.dets[det]['armed_at'] = datetime.datetime.utcnow()
+            self.dets[det]['started_at'] = None
 
         elif command == 'start':
             # clear armed_at
