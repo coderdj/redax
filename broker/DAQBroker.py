@@ -152,7 +152,7 @@ class DAQBroker():
                         self.dets[det]['armed_at'] = None
 
                 # If anything else, send one (one!) reset command and throw if it doesn't help
-                else: #if self.dets[det]['status'] in [self.status_codes['ERROR'],
+                elif self.dets[det]['armed_at'] == None: 
                     #self.status_codes['TIMEOUT'],
                     #self.status_codes['UNDECIDED']]:
                     #print("CASE 5")
