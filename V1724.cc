@@ -157,9 +157,9 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   int count = 0;
   do{
     try{
-      ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
+      ret = CAENVME_BLTReadCycle(fBoardHandle, fBaseAddress,
 				     ((unsigned char*)tempBuffer)+blt_bytes,
-				     BLT_SIZE, cvA32_U_MBLT, cvD64, &nb);
+				     BLT_SIZE, cvA32_U_BLT, cvD32, &nb);
     }catch(std::exception E){
       std::cout<<fBoardHandle<<" sucks"<<std::endl;
       std::cout<<"BLT_BYTES: "<<blt_bytes<<std::endl;
