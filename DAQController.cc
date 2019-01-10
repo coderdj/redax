@@ -77,7 +77,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 
       // Load DAC. n.b.: if you set the DAC value in your ini file you'll overwrite
       // the fancy stuff done here!
-      vector<u_int16_t>dac_values(8, 0x1000);
+      vector<u_int16_t>dac_values(8, 0x0);
 
       // Multiple options here
       std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
@@ -85,6 +85,11 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       if(BL_MODE == "fit"){      
 	int nominal_dac = fOptions->GetInt("baseline_value", 16000);
 	std::cout<<"Setting baselines for digi "<<digi->bid()<<std::endl;
+
+	// Set starting values to most recent run
+	fLog->GetDACValues(digi->bid(), -1, dac_values);
+
+	// Go
 	success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
       }
       else if(BL_MODE == "cached"){

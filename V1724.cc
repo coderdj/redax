@@ -228,8 +228,16 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // proportional to the baseline position, and has ~5% overshoot on either end.
   // So we use this information to get starting values:
   u_int32_t starting_value = u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
-  int nChannels = 8;
+  unsigned int nChannels = 8;
   vector<u_int16_t> dac_values(nChannels, starting_value);
+  if(end_values[0]!=0 && end_values.size() == nChannels){ // use start values if sent
+    std::cout<<"Found good start values for digi "<<fBID<<": ";
+    for(unsigned int x=0; x<end_values.size(); x++){
+      dac_values[x] = end_values[x];
+      std::cout<<dac_values[x]<<" ";
+    }
+    std::cout<<std::endl;
+  }
   vector<int> channel_finished(nChannels, 0);
   vector<bool> update_dac(nChannels, true);
   
@@ -279,7 +287,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
     // First check if we're finished and if so get out
     bool breakout = true;
-    for(int channel=0; channel<nChannels; channel++){
+    for(unsigned int channel=0; channel<nChannels; channel++){
       if(channel_finished[channel]>=5)
         continue;
       breakout = false;

@@ -79,20 +79,52 @@ int MongoLog::GetDACValues(int bid, int reference_run,
   std::string runstring = std::to_string(reference_run);
   while(runstring.size()<6)
     runstring.insert(0, "0");
-  auto doc = fDAC_collection.find_one(bsoncxx::builder::stream::document{}<<
-				      "run" << runstring <<
-				      bsoncxx::builder::stream::finalize);
-  if(!doc)
-    return -1;
 
-  try{
-    dac_values.clear();
-    bsoncxx::array::view channel_arr = (*doc).view()[std::to_string(bid)].get_array().value;
-    for(bsoncxx::array::element ele : channel_arr)
-      dac_values.push_back(ele.get_int32());
-    return 0;
-  }catch(const std::exception &e){
-    dac_values = std::vector<u_int16_t>(8, 4000);
+  bsoncxx::document::view res;
+  if(reference_run >= 0){
+    auto doc = fDAC_collection.find_one(bsoncxx::builder::stream::document{}<<
+					"run" << runstring <<
+					bsoncxx::builder::stream::finalize);
+    if(!doc) return -1;
+    res = (*doc).view();
+
+    try{
+      // Make sure key exists before loading                                                               
+      if(res.find(std::to_string(bid)) != res.end()){
+	dac_values.clear();
+	bsoncxx::array::view channel_arr = res[std::to_string(bid)].get_array().value;
+	for(bsoncxx::array::element ele : channel_arr)
+	  dac_values.push_back(ele.get_int32());
+	return 0;
+      }
+    }catch(...){
+      dac_values = std::vector<u_int16_t>(8, 1000);
+    }
   }
+  else{ // either it's this driver or C++ but this is way harder than it should be
+    auto sort_order = bsoncxx::builder::stream::document{} <<
+      "_id" << -1 << bsoncxx::builder::stream::finalize;
+    auto opts = mongocxx::options::find{};
+    opts.sort(sort_order.view());    
+    auto cursor = fDAC_collection.find({}, opts);
+    auto doc = cursor.begin();
+    if(doc==cursor.end()) // No docs
+      return -1;
+    res = *doc;
+    
+    try{
+      // Make sure key exists before loading                                                               
+      if(res.find(std::to_string(bid)) != res.end()){
+	dac_values.clear();
+	bsoncxx::array::view channel_arr = res[std::to_string(bid)].get_array().value;
+	for(bsoncxx::array::element ele : channel_arr)
+	  dac_values.push_back(ele.get_int32());
+	return 0;
+      }
+    }catch(...){
+      dac_values = std::vector<u_int16_t>(8, 1000);
+    }
+  }
+    
   return -1;
 }
