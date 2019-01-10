@@ -143,48 +143,73 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     }
   }
 
-  // Look at this later! This initializes all boards to SW controlled
-  // and inactive. Will need option for HW control.
-  std::cout<<"Setting register off"<<std::endl;
   for( auto const& link : fDigitizers ) {
+    
     for(auto digi : link.second){
+
+      // Ensure digitizer is ready to start
+      if(digi->MonitorRegister(0x8104, 0x100, 1000, 1000)!=true){
+	fLog->Entry("Digitizer not ready to start after init", MongoLog::Warning);
+	return -1;
+      }
+
+      // Start command (waits for S-IN)
       digi->WriteRegister(0x8100, 0x5);
     }
   }
   fStatus = DAXHelpers::Armed;
 
-  //std::cout<<"Printing to string"<<std::endl;
-  //std::cout<<fOptions->ExportToString()<<std::endl;
-
-
   return 0;
 }
 
-void DAQController::Start(){
+int DAQController::Start(){
   if(fOptions->GetInt("run_start", 0) == 0){
     for( auto const& link : fDigitizers ){      
       for(auto digi : link.second){
+
+	// Ensure digitizer is ready to start
+	if(digi->MonitorRegister(0x8104, 0x100, 1000, 1000)!=true){
+	  fLog->Entry("Digitizer not ready to start after sw command sent", MongoLog::Warning);
+	  return -1;
+	}
+
+	// Send start command
 	digi->WriteRegister(0x8100, 0x4);
+
+	// Ensure digitizer is started
+	if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
+	  fLog->Entry("Timed out waiting for acquisition to start after SW start sent",
+		      MongoLog::Warning);
+	  return -1;
+	}
       }
     }
   }
   fStatus = DAXHelpers::Running;
-  return;
+  return 0;
 }
 
-void DAQController::Stop(){
+int DAQController::Stop(){
 
   std::cout<<"Deactivating boards"<<std::endl;
   for( auto const& link : fDigitizers ){      
     for(auto digi : link.second){
+      
       digi->WriteRegister(0x8100, 0x0);
+
+      // Ensure digitizer is stopped 
+      if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000, 0x0) != true){
+          fLog->Entry("Timed out waiting for acquisition to stop after SW stop sent",
+                      MongoLog::Warning);
+          return -1;
+      }
     }
-  }      
+  }
   fLog->Entry("Stopped digitizers", MongoLog::Debug);
 
   fReadLoop = false; // at some point.
   fStatus = DAXHelpers::Idle;
-  return;
+  return 0;
 }
 void DAQController::End(){
   Stop();

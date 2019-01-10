@@ -135,7 +135,10 @@ int main(int argc, char** argv){
       if(command == "start"){
 	
 	if(controller->status() == 2) {
-	  controller->Start();
+
+	  if(controller->Start()!=0){	   
+	    continue;
+	  }
 	  
 	  // Nested tried cause of nice C++ typing
 	  try{
@@ -160,7 +163,9 @@ int main(int argc, char** argv){
 	// "stop" is also a general reset command and can be called any time
 	logger->Entry("Received stop command from user "+
 		      (doc)["user"].get_utf8().value.to_string(), MongoLog::Message);
-	controller->Stop();
+	if(controller->Stop()!=0)
+	  logger->Entry("DAQ failed to stop. Will continue clearing program memory.", MongoLog::Error);
+	
 	current_run_id = "none";
 	if(readoutThreads.size()!=0){
 	  for(auto t : readoutThreads){

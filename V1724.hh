@@ -34,7 +34,9 @@ class V1724{
   };
 
   int LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac);
-  
+  bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
+                       int sleep, u_int32_t val=1);
+
  private:
   int fBoardHandle;
   int fLink, fCrate, fBID;
@@ -47,8 +49,7 @@ class V1724{
   bool seen_over_15;
 
   MongoLog *fLog;
-  bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
-		       int sleep, u_int32_t val=1);
+
 };
 
 

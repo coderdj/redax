@@ -39,8 +39,8 @@ public:
   };
   std::string run_mode();    
   
-  void Start();
-  void Stop();
+  int Start();
+  int Stop();
   void ReadData(int link);
   void End();
 
