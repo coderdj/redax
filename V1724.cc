@@ -195,10 +195,10 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
 
 
   // Now, unfortunately we need to make one copy of the data here or else our memory
-  // usage explodes. We declare above a buffer of 8MB, which is the maximum capacity
+  // usage explodes. We declare above a buffer of several MB, which is the maximum capacity
   // of the board in case every channel is 100% saturated (the practical largest
   // capacity is certainly smaller depending on settings). But if we just keep reserving
-  // 8MB blocks and filling 500kB with actual data, we're gonna run out of memory.
+  // O(MB) blocks and filling 50kB with actual data, we're gonna run out of memory.
   // So here we declare the return buffer as *just* large enough to hold the actual
   // data and free up the rest of the memory reserved as buffer.
   // In tests this does not seem to impact our ability to read out the V1724 at the

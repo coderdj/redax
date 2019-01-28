@@ -85,7 +85,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
     // 0xFFFFFFFF are used as padding it seems
     
     if(buff[idx]>>20 == 0xA00){ // Found a header, start parsing
-      u_int32_t event_size = buff[idx]&0xFFFF; // In bytes
+      u_int32_t event_size = buff[idx]&0xFFFFFFF; // In bytes
       u_int32_t channel_mask = buff[idx+1]&0xFF; // Channels in event
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
       u_int32_t board_fail  = buff[idx+1]&0x4000000; //Board failed. Never saw this set.
@@ -331,10 +331,10 @@ void StraxInserter::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
   unsigned int idx = 4;
   
   for(unsigned int ch=0; ch<channels_in_event; ch++){
-    u_int32_t channel_event_size = buff[idx];
+    u_int32_t channel_event_size = buff[idx]&0x7FFFFF; // bit indices 0-22 (23-bit)
     u_int32_t channel_time_tag = buff[idx+1];
 
-    // Check 1: Would adding channel_event_size to idx go over size or event
+    // Check 1: Would adding channel_event_size to idx go over size of event
     if(channel_event_size + idx > event_size){
       fFirmwareVersion = 1; // DEFAULT (no ZLE)
       return;
