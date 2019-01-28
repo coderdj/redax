@@ -11,7 +11,8 @@ V1724::~V1724(){
 
 int V1724::Init(int link, int crate, int bid, unsigned int address=0){
 
-  // Oh yes I will
+  /*
+  // I am hoping that minesweeper will no longer be needed
   // MINESWEEPER
   stringstream command;
   command<<"(cd /home/xedaq/minesweeper && echo `./minesweeper -l "<<
@@ -20,7 +21,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address=0){
   int retsys = system(command.str().c_str());
   cout<<"Returned: "<<retsys<<endl;
   usleep(1000);
-  //
+  */
 	  
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
