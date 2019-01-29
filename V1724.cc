@@ -330,6 +330,12 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       return -1;
     }    
 
+    // Mega paranoia. Reg 8104 has already indicated an event is ready. But let's see how
+    // big this event is and print (debug step)
+    u_int32_t event_size_data=0;
+    event_size_data = ReadRegister(0x814C);
+    std::cout<<"(BL) Next event size is gonna be: "<<dec<<event_size_data<<" 32-bit words"<<std::endl;
+    
     // Read data
     u_int32_t *buff = NULL;
     u_int32_t size = 0;
@@ -405,6 +411,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    baseline = int(float(tbase) / ((float(bcount))));
 	  
 	  if(baseline>=0){
+
 	    // Time for the **magic**. We want to see how far we are off from nominal and
 	    // adjust up and down accordingly. We will always adjust just a tiny bit
 	    // less than we think we need to to avoid getting into some overshoot
