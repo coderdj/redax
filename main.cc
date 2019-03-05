@@ -262,11 +262,12 @@ int main(int argc, char** argv){
 	"status" << controller->status() <<
 	"buffer_length" << controller->buffer_length()/1e6 <<
 	"run_mode" << controller->run_mode() <<
-	"current_run_id" << current_run_id;
-	for( auto const& kPair : controller->GetDataPerDigi() ){
-	  std::cout<<kPair.first<<" "<<kPair.second/1e6<<std::endl;
-	  insert_doc << std::to_string(kPair.first) << kPair.second/1e6;
-	}
+	"current_run_id" << current_run_id <<
+	"boards" << bsoncxx::builder::stream::open_document <<
+	[&](bsoncxx::builder::stream::key_context<> doc){
+	for( auto const& kPair : controller->GetDataPerDigi() )	  
+	  doc << std::to_string(kPair.first) << kPair.second/1e6;
+	} << bsoncxx::builder::stream::close_document;
 	//auto final_doc = insert_doc << bsoncxx::builder::stream::finalize;
 	status.insert_one(insert_doc << bsoncxx::builder::stream::finalize);
 
