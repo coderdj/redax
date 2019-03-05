@@ -256,14 +256,15 @@ int main(int argc, char** argv){
       // Gonna have to separate this
       // Need function controller->GetDataPerDigi() that returns map by value and clears prv member
       // need to put that map into BSON.
-      auto insert_doc = bsoncxx::builder::stream::document{} <<
-	"host" << hostname <<
-	  "rate" << controller->GetDataSize()/1e6 <<
-	  "status" << controller -> status() <<
-	  "buffer_length" << controller->buffer_length()/1e6 <<
-	  "run_mode" << controller->run_mode() <<
-	  "current_run_id" << current_run_id;
+      auto insert_doc = bsoncxx::builder::stream::document{};
+      insert_doc << "host" << hostname <<
+	"rate" << controller->GetDataSize()/1e6 <<
+	"status" << controller->status() <<
+	"buffer_length" << controller->buffer_length()/1e6 <<
+	"run_mode" << controller->run_mode() <<
+	"current_run_id" << current_run_id;
 	for( auto const& kPair : controller->GetDataPerDigi() ){
+	  std::cout<<kPair.first<<" "<<kPair.second/1e6<<std::endl;
 	  insert_doc << std::to_string(kPair.first) << kPair.second/1e6;
 	}
 	//auto final_doc = insert_doc << bsoncxx::builder::stream::finalize;
@@ -280,6 +281,7 @@ int main(int argc, char** argv){
 	*/
     }catch(const std::exception &e){
       std::cout<<"Can't connect to DB to update."<<std::endl;
+      std::cout<<e.what()<<std::endl;
     }
     usleep(1000000);
   }
