@@ -252,14 +252,32 @@ int main(int argc, char** argv){
     controller->CheckErrors();
 
     try{
-      status.insert_one(bsoncxx::builder::stream::document{} <<
+
+      // Gonna have to separate this
+      // Need function controller->GetDataPerDigi() that returns map by value and clears prv member
+      // need to put that map into BSON.
+      auto insert_doc = bsoncxx::builder::stream::document{} <<
+	"host" << hostname <<
+	  "rate" << controller->GetDataSize()/1e6 <<
+	  "status" << controller -> status() <<
+	  "buffer_length" << controller->buffer_length()/1e6 <<
+	  "run_mode" << controller->run_mode() <<
+	  "current_run_id" << current_run_id;
+	for( auto const& kPair : controller->GetDataPerDigi() ){
+	  insert_doc << std::to_string(kPair.first) << kPair.second/1e6;
+	}
+	//auto final_doc = insert_doc << bsoncxx::builder::stream::finalize;
+	status.insert_one(insert_doc << bsoncxx::builder::stream::finalize);
+
+	/*status.insert_one(bsoncxx::builder::stream::document{} <<
 			"host" << hostname <<
-			"rate" << controller->GetDataSize()/1e6 <<
+			"rate" << controller->GetDataSize()/1e6 <<			
 			"status" << controller->status() <<
 			"buffer_length" << controller->buffer_length()/1e6 <<
 			"run_mode" << controller->run_mode() <<
 			"current_run_id" << current_run_id <<
 			bsoncxx::builder::stream::finalize);
+	*/
     }catch(const std::exception &e){
       std::cout<<"Can't connect to DB to update."<<std::endl;
     }

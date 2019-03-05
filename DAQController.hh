@@ -28,9 +28,9 @@ public:
 			    std::map<int, std::vector<u_int16_t>>&written_dacs);
 
   // Get data (return new buffer and size)
-  double data_rate(){
-    return 0;
-  };
+  //double data_rate(){
+  //  return 0;
+  //};
   int status(){
     return fStatus;
   };
@@ -46,11 +46,12 @@ public:
 
   int GetData(std::vector <data_packet> *&retVec);
     
-  // Statis wrapper so we can call ReadData in a std::thread
+  // Static wrapper so we can call ReadData in a std::thread
   static void* ReadThreadWrapper(void* data, int link);
   static void* ProcessingThreadWrapper(void* data);
 
   u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;};
+  std::map<int, u_int64_t> GetDataPerDigi();
   bool CheckErrors();
   
   
@@ -71,9 +72,12 @@ private:
   std::vector<data_packet> *fRawDataBuffer;
   int fStatus;
   int fNProcessingThreads;
+  string fHostname;
+  
+  // For reporting to frontend
   u_int64_t fBufferLength;
   u_int64_t fDatasize;
-  string fHostname;
+  std::map<int, u_int64_t> fDataPerDigi;
   
   
 };

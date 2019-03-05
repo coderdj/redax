@@ -21,7 +21,8 @@ class DBInterface():
             "run": self.runs_db["run"],
             "options": self.dax_db["options"]
         }
-
+        self.detectors = config['DETECTORS']['MasterDAQConfig']
+        
         # Remove any commands from previous runs
         self.collections['outgoing'].drop()
         

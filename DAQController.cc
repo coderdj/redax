@@ -314,6 +314,9 @@ void DAQController::ReadData(int link){
       }
       if(d.size>0){
 	fDatasize += d.size;
+	if(fDataPerDigi.find(d.bid) == fDataPerDigi.end())
+	  fDataPerDigi[d.bid] = 0;
+	fDataPerDigi[d.bid] += d.size;
 	local_buffer.push_back(d);
       }
     }
@@ -323,6 +326,15 @@ void DAQController::ReadData(int link){
     readcycler++;
   }
 
+}
+
+std::map<int, u_int64_t> DAQController::GetDataPerDigi(){
+  // Return a map of data transferred per digitizer since last update
+  // and clear the private map
+  std::map retmap = fDataPerDigi;
+  for(auto const &kPair : fDataPerDigi)
+    fDataPerDigi[kPair.first] = 0;
+  return retmap;
 }
 
 void DAQController::AppendData(vector<data_packet> &d){
