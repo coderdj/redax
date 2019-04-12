@@ -37,11 +37,11 @@ while(1):
     
 
     # Decision time. Are we actually in our goal state? If not what should we do?
-    # DAQControl.SolveProblem(latest_status, goal_state)
-
+    DAQControl.SolveProblem(latest_status, goal_state)
+    MongoConnector.ProcessCommands()
 
     # Time to report back
-    # MongoConnector.UpdateAggregateStatus(latest_status)
+    MongoConnector.UpdateAggregateStatus()
     
     # Print an update
     print("Update %s"%datetime.datetime.utcnow())
@@ -50,5 +50,5 @@ while(1):
             print("Detector %s INACTIVE"%detector)
             continue
         print("Detector %s should be ACTIVE and is %s"%(
-            detector, state_codes[latest_status['detector']['status']]))
-    time.sleep(5)
+            detector, state_codes[latest_status[detector]['status']]))
+    time.sleep(2)

@@ -36,6 +36,8 @@ class MongoConnect():
         self.runs_db = MongoClient(
             config['DEFAULT']['RunsDatabaseURI']%os.environ['RUNS_MONGO_PASSWORD'])[rdbn]
 
+        self.latest_settings = {}
+        
         # Translation to human-readable statuses
         self.statuses = ['Idle', 'Arming', 'Armed', 'Running', 'Error', 'Timeout', 'Unknown']
 
@@ -111,6 +113,25 @@ class MongoConnect():
         # Now compute aggregate status
         self.AggregateStatus()
 
+    def UpdateAggregateStatus(self):
+        '''
+        Put current aggregate status into DB
+        '''
+        for detector in self.latest_status.keys():
+            doc = {
+                "status": self.latest_status[detector]['status'],
+                "number": -1,
+                "detector": detector,
+                "rate": self.latest_status[detector]['rate'],
+                "readers": len(self.latest_status[detector]['readers'].keys()),
+                "time": datetime.datetime.utcnow(),
+                "buff": self.latest_status[detector]['buffer'],
+                "mode": self.latest_status[detector]['mode'],
+            }
+            if 'number' in self.latest_status[detector].keys():
+                doc['number'] = self.latest_status[detector]['number']
+            self.collections['aggregate_status'].insert(doc)
+        
     def AggregateStatus(self):
 
         # Compute the total status of each detector based on the most recent updates
@@ -129,12 +150,23 @@ class MongoConnect():
             status = None
             rate = 0
             mode = None
+            buff = 0
             for reader in self.latest_status[detector]['readers'].keys():
                 doc = self.latest_status[detector]['readers'][reader]
                 try:
                     rate += doc['rate']
                 except:
                     rate += 0.
+                try:
+                    buff += doc['buffer_length']
+                except:
+                    buff += 0
+                    
+                if mode == None and 'run_mode' in doc.keys():
+                    mode = doc['run_mode']
+                elif 'run_mode' in doc.keys() and doc['run_mode'] != mode:
+                    mode = 'undefined'
+                
                     
                 # If we haven't set the status yet we automatically set it here
                 if status == None:
@@ -180,6 +212,8 @@ class MongoConnect():
 
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
+            self.latest_status[detector]['mode'] = mode
+            self.latest_status[detector]['buffer'] = buff
 
 
     def GetWantedState(self):
@@ -191,13 +225,28 @@ class MongoConnect():
             if command is None:
                 print("Error! Wanted to find command for detector %s but it isn't there"%detector)
             retdoc[detector] = command
+        self.latest_settings = retdoc
         return retdoc
 
     def GetConfiguredNodes(self, detector, link_mv, link_nv):
         '''
         Get the nodes we want from the config file
         '''
-        return [], []
+        retnodes = []
+        retcc = []
+        retnodes = [r for r in self.latest_status[detector]['readers'].keys()]
+        retcc = [r for r in self.latest_status[detector]['controller'].keys()]
+        if detector == 'tpc' and self.latest_settings[detector]['link_nv']:
+            for r in self.latest_status['neutron_veto']['readers'].keys():
+                retnodes.append(r)
+            for	r in self.latest_status['neutron_veto']['controller'].keys():
+                retcc.append(r)
+        if detector == 'tpc' and self.latest_settings[detector]['link_mv']:
+            for	r in self.latest_status['muon_veto']['readers'].keys():
+                retnodes.append(r)
+            for r in self.latest_status['muon_veto']['controller'].keys():
+                retcc.append(r)
+        return retnodes, retcc
 
     def GetRunMode(self, mode):
         '''
@@ -218,7 +267,7 @@ class MongoConnect():
             print(E)
         return None
 
-    def GetHostsForMode(self, run_mode):
+    def GetHostsForMode(self, mode):
         '''
         Get the nodes we need from the run mode
         '''
@@ -248,18 +297,19 @@ class MongoConnect():
         '''
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
-
+        print("SEND COMMAND %s to %s"%(command, detector))
         number = None
         if command == 'arm':
-            number = self.GetNextRunNumber()        
-        self.command_queue.append({
+            number = self.GetNextRunNumber()
+            self.latest_status[detector]['number'] = number
+        self.outgoing_commands.append({
             "command": command,
             "user": user,
             "detector": detector,
             "mode": mode,
             "number": number,
             "host": host_list,
-            "createdAt": datetime.datetime.utcnow() + datetime.datetime.timedelta(0, delay)
+            "createdAt": datetime.datetime.utcnow() + datetime.timedelta(0, delay)
         })
         return
 
@@ -268,18 +318,33 @@ class MongoConnect():
         Process our internal command queue
         '''
         nowtime = datetime.datetime.utcnow()
-        for command in self.command_queue:
+        afterlist = []
+        for command in self.outgoing_commands:
             if command['createdAt'] <= nowtime:
                 self.collections['outgoing_commands'].insert(command)
+            else:
+                afterlist.append(command)
+        self.outgoing_commands = afterlist
         return
 
     def LogError(self):
         print("HERE IS WHERE YOU WOULD LOG AN ERROR")
 
+    def GetRunStart(self, number):
+        doc = self.collections['run'].find_one({"number": number}, {"start": 1})
+        if doc is not None:
+            return doc['start']
+        return None
+
     def InsertRunDoc(self, detector, goal_state):
 
         number = self.GetNextRunNumber()
-
+        self.latest_status[detector]['number'] = number
+        if detector == 'tpc' and goal_state[detector]['link_nv']:
+            self.latest_status['neutron_veto']['number'] = number
+        if detector == 'tpc' and goal_state[detector]['link_mv']:
+            self.latest_status['muon_veto']['number'] = number
+        
         run_doc = {
             "number": number,
             'detector': detector,
