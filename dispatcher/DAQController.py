@@ -111,24 +111,24 @@ class DAQController():
             # Send stop command if we have to
             if (
                     # TPC not in Idle, error, timeout
-                    (latest_status['tpc'] in active_states) or
+                    (latest_status['tpc']['status'] in active_states) or
                     # MV linked and not in Idle, error, timeout
-                    (latest_status['muon_veto'] in active_states and
+                    (latest_status['muon_veto']['status']  in active_states and
                      goal_state['tpc']['link_mv'] == 'true') or
                     # NV linked and not in Idle, error, timeout
-                    (latest_status['neutron_veto'] in active_states and
+                    (latest_status['neutron_veto']['status']  in active_states and
                      goal_state['tpc']['link_nv'] == 'true')
             ):
-                CheckTimeouts('tpc')
+                self.CheckTimeouts('tpc')
 
         # 1b - deal with MV but only if MV not linked to TPC
         if goal_state['tpc']['link_mv'] == 'false' and goal_state['muon_veto']['active'] == 'false':
-            if latest_status['muon_veto'] in active_states:
-                CheckTimeouts('muon_veto')
+            if latest_status['muon_veto']['status']  in active_states:
+                self.CheckTimeouts('muon_veto')
         # 1c - deal with NV but only if NV not linked to TPC
         if goal_state['tpc']['link_nv'] == 'false' and goal_state['neutron_veto']['active'] == 'false':
-            if latest_status['neutron_veto'] in active_states:
-                CheckTimeouts('neutron_veto')
+            if latest_status['neutron_veto']['status']  in active_states:
+                self.CheckTimeouts('neutron_veto')
 
         '''
         CASE 2: DETECTORS ARE ACTIVE
@@ -262,6 +262,11 @@ class DAQController():
                                detector, self.goal_state[detector]['mode'])
         self.mongo.SendCommand("stop", readers, self.goal_state[detector]['user'],
                                detector, self.goal_state[detector]['mode'], 5)
+        try:
+            self.mongo.SetStopTime(self.latest_status[detector]['number'])
+        except Exception as E:
+            print(E)
+            print("Wanted to stop run but no associated number")
         return
             
     def CheckTimeouts(self, detector):
@@ -276,7 +281,7 @@ class DAQController():
         
         sendstop = False
         nowtime = datetime.datetime.utcnow()
-
+        print("Check timeout")
         # Case 1: maybe we sent a stop, arm, or start command and are still in the timeout
         if ((detector in self.stop_command_sent.keys() and
              (nowtime - self.stop_command_sent[detector]).total_seconds() <= self.stop_timeout) or
@@ -285,12 +290,14 @@ class DAQController():
             (detector in self.start_command_sent.keys() and
              (nowtime - self.start_command_sent[detector]).total_seconds() <= self.start_timeout)):
             # We're in a normal waiting period. Return later if still a problem
+            self.error_stop_count[detector] = 0
             return
 
         # Case 2: we're not timing out at all, send the stop command
         if (detector not in self.stop_command_sent.keys() or self.stop_command_sent[detector] is None):
             sendstop = True
             self.stop_command_sent[detector] = nowtime
+            self.error_stop_count[detector] = 0
         
         # make sure this detector in self.error_stop_count
         if detector not in self.error_stop_count.keys() or self.error_stop_count[detector] is None:
@@ -315,14 +322,16 @@ class DAQController():
         elif (detector in self.stop_command_sent.keys() and
               ( (nowtime - self.stop_command_sent[detector]).total_seconds() >
                 (self.stop_timeout + (self.error_stop_count[detector]*self.stop_timeout)))):
+
             # If error_stop_count is already at the maximum we throw a ERROR then do nothing
-            if self.error_stop_count >= self.stop_retries and self.error_thrown == False:
+            if self.error_stop_count[detector] >= self.stop_retries and self.error_thrown == False:
                 self.ThrowError()
-            elif self.error_stop_count < self.stop_retries:
+            elif self.error_stop_count[detector] < self.stop_retries:
                 sendstop = True
-                self.error_stop_count += 1
+                self.error_stop_count[detector] += 1
 
         if sendstop:
+            print("SENT STOP")
             self.StopDetector(detector)
 
         return

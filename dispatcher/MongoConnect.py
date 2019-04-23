@@ -292,7 +292,15 @@ class MongoConnect():
             print("wtf, first run?")
             return 0
         return list(cursor)[0]['number']+1
-    
+
+    def SetStopTime(self, number):
+        '''
+        Set's the 'end' field of the run doc to the current time if not done yet
+        '''
+        print("Updating run %i with end time"%number)
+        self.collections['run'].update_one({"number": int(number), "end": {"$exists": False}},
+                                          {"$set": {"end": datetime.datetime.utcnow()}})
+        
     def SendCommand(self, command, host_list, user, detector, mode="", delay=0):
         '''
         Send this command to these hosts. If delay is set then wait that amount of time
