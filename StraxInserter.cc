@@ -99,7 +99,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
       // If we don't know which firmware we're using, check now
       if(fFirmwareVersion == -1){
 	DetermineDataFormat(&(buff[idx]), event_size, channels_in_event);
-	fFirmwareVersion = 0; //n.b. fix this after the test!
+	// fFirmwareVersion = 0; //n.b. fix this after the test!
 	if(fFirmwareVersion == 0)
 	  std::cout<<"Detected XENON1T firmware"<<std::endl;
 	else
@@ -342,10 +342,10 @@ void StraxInserter::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
     
     // Check 2: Our samples are 14-bit so if bits 14/15 or 30/31 of these words are
     // non-zero then this must be the DPP_XENON firmware
-    if( (channel_time_tag>>14 != 0) || (channel_time_tag>>15 != 0) ||
-	(channel_time_tag>>30 != 0) || (channel_time_tag>>31 != 0) ||
-	(channel_event_size>>14 != 0) || (channel_event_size>>15 != 0) ||
-	(channel_event_size>>30 != 0) || (channel_event_size>>31 != 0) ){
+    if( (channel_time_tag>>14&1) || (channel_time_tag>>15&1) ||
+	(channel_time_tag>>30&1) || (channel_time_tag>>31&1) ||
+	(channel_event_size>>14&1) || (channel_event_size>>15&1) ||
+	(channel_event_size>>30&1) || (channel_event_size>>31&1) ){
       fFirmwareVersion = 0;
       return;
     }
