@@ -75,26 +75,20 @@ class DAQController():
         # This check will reset our timeout timers as needed
         for det in latest_status.keys():
             # If we are IDLE we gonna assume any previous 'START, STOP, ARM' commands invalid
-            if latest_status[det] == self.st['IDLE']:
+            if latest_status[det]['status'] == self.st['IDLE']:
                 if det in self.stop_command_sent.keys():
                     self.stop_command_sent[det] = None
-                if det in self.stop_command_count.keys():
-                    self.stop_command_count[det] = 0
-                if det in self.arm_command_sent.keys():
-                    self.arm_command_sent[det] = None
-                if det in self.start_command_sent.keys():
-                    self.start_command_sent[det] = None
+                if det in self.error_stop_count.keys():
+                    self.error_stop_count[det] = 0
             # If we are ARMED we will assume any previous ARM commands worked
-            if latest_status[det] == self.st['ARMED']:
+            if latest_status[det]['status'] == self.st['ARMED']:
                 if det in self.arm_command_sent.keys():
                     self.arm_command_sent[det] = None
             # If we are RUNNING we also assume the previous RUN command worked
-            if latest_status[det] == self.st['RUNNING']:
+            if latest_status[det]['status'] == self.st['RUNNING']:
                 if det in self.start_command_sent.keys():
                     self.start_command_sent[det] = None
-                if det in self.arm_command_sent.keys():
-                    self.arm_command_sent[det] = None
-        
+         
         
         '''
         CASE 1: DETECTORS ARE INACTIVE
@@ -105,7 +99,8 @@ class DAQController():
         if we try to activate it.
         '''
         # 1a - deal with TPC and also with MV and NV, but only if they're linked
-        active_states = [self.st['ARMING'], self.st['ARMED'], self.st['RUNNING']]
+        active_states = [self.st['ARMING'], self.st['ARMED'], self.st['RUNNING'], self.st['UNDECIDED'],
+                         self.st['ERROR'], self.st['TIMEOUT']]
         if goal_state['tpc']['active'] == 'false':
 
             # Send stop command if we have to
@@ -256,6 +251,10 @@ class DAQController():
         readers, cc = self.mongo.GetConfiguredNodes(detector, self.goal_state['tpc']['link_mv'],
                                                     self.goal_state['tpc']['link_nv'])
 
+        # Set all timeouts to nothing
+        self.arm_command_sent[detector] = None
+        self.start_command_sent[detector] = None
+        
         # We do not need to check the 'stop_command_sent' because this function is
         # exclusively called through the CheckTimeouts wrapper
         self.mongo.SendCommand("stop", cc, self.goal_state[detector]['user'],
@@ -281,13 +280,13 @@ class DAQController():
         
         sendstop = False
         nowtime = datetime.datetime.utcnow()
-        print("Check timeout")
+        
         # Case 1: maybe we sent a stop, arm, or start command and are still in the timeout
-        if ((detector in self.stop_command_sent.keys() and
+        if ((detector in self.stop_command_sent.keys() and self.stop_command_sent[detector] != None and
              (nowtime - self.stop_command_sent[detector]).total_seconds() <= self.stop_timeout) or
-            (detector in self.arm_command_sent.keys() and
+            (detector in self.arm_command_sent.keys() and self.arm_command_sent[detector] != None and
              (nowtime - self.arm_command_sent[detector]).total_seconds() <= self.arm_timeout) or
-            (detector in self.start_command_sent.keys() and
+            (detector in self.start_command_sent.keys() and self.start_command_sent[detector]!= None and
              (nowtime - self.start_command_sent[detector]).total_seconds() <= self.start_timeout)):
             # We're in a normal waiting period. Return later if still a problem
             self.error_stop_count[detector] = 0
@@ -306,20 +305,20 @@ class DAQController():
         # Case 3: Something timed out. We'll clear the previous command sent and start a
         # new timeout based on our current stop command
         # 3a: ARM timeout
-        if (detector in self.arm_command_sent.keys() and
+        if (detector in self.arm_command_sent.keys() and self.arm_command_sent[detector] != None and
             (nowtime-self.arm_command_sent[detector]).total_seconds() > self.arm_timeout):
             self.arm_command_sent[detector] = None
             sendstop = True
             self.stop_command_sent[detector] = nowtime
         # 3b: START timeout
-        elif (detector in self.start_command_sent.keys() and
+        elif (detector in self.start_command_sent.keys() and self.start_command_sent[detector]!=None and
               (nowtime-self.start_command_sent[detector]).total_seconds() > self.start_timeout):
             self.start_command_sent[detector] = None
             sendstop = True
             self.stop_command_sent[detector] = nowtime
         # 3c: STOP timeout. And this is where the thing can get stuck so we gotta toss an
         # error if it goes on too long
-        elif (detector in self.stop_command_sent.keys() and
+        elif (detector in self.stop_command_sent.keys() and self.stop_command_sent[detector] != None and
               ( (nowtime - self.stop_command_sent[detector]).total_seconds() >
                 (self.stop_timeout + (self.error_stop_count[detector]*self.stop_timeout)))):
 

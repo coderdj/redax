@@ -87,7 +87,6 @@ class MongoConnect():
                 if controller == "":
                     continue
                 self.latest_status[detector]['controller'][controller] = {}
-                
         
     def GetUpdate(self):
 
@@ -151,6 +150,7 @@ class MongoConnect():
             rate = 0
             mode = None
             buff = 0
+            #print(self.latest_status)
             for reader in self.latest_status[detector]['readers'].keys():
                 doc = self.latest_status[detector]['readers'][reader]
                 try:
@@ -236,16 +236,17 @@ class MongoConnect():
         retcc = []
         retnodes = [r for r in self.latest_status[detector]['readers'].keys()]
         retcc = [r for r in self.latest_status[detector]['controller'].keys()]
-        if detector == 'tpc' and self.latest_settings[detector]['link_nv']:
+        if detector == 'tpc' and self.latest_settings[detector]['link_nv'] == 'true':
             for r in self.latest_status['neutron_veto']['readers'].keys():
                 retnodes.append(r)
             for	r in self.latest_status['neutron_veto']['controller'].keys():
                 retcc.append(r)
-        if detector == 'tpc' and self.latest_settings[detector]['link_mv']:
+        if detector == 'tpc' and self.latest_settings[detector]['link_mv'] == 'true':
             for	r in self.latest_status['muon_veto']['readers'].keys():
                 retnodes.append(r)
             for r in self.latest_status['muon_veto']['controller'].keys():
                 retcc.append(r)
+        print(retnodes)
         return retnodes, retcc
 
     def GetRunMode(self, mode):
