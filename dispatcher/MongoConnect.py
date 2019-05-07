@@ -365,7 +365,7 @@ class MongoConnect():
         ini = self.GetRunMode(goal_state[detector]['mode'])
         if ini is not None and 'source' in ini.keys():
             run_doc['source'] = {'type': ini['source']}
-        run_doc['reader'] = {'ini': ini}
+        run_doc['ini'] = ini
 
         # If the user started the run with a comment add that too
         if "comment" in goal_state[detector] and goal_state[detector]['comment'] != "":
