@@ -49,7 +49,7 @@ class MongoConnect():
             'outgoing_commands': self.dax_db['control'],
             'log': self.dax_db['log'],
             'options': self.dax_db['options'],
-            'run': self.runs_db['run']
+            'run': self.runs_db[config['DEFAULT']['RunsDatabaseCollection']]
         }
 
         self.outgoing_commands = []
@@ -308,14 +308,17 @@ class MongoConnect():
         '''
         print("SEND COMMAND %s to %s"%(command, detector))
         number = None
+        n_id = None
         if command == 'arm':
             number = self.GetNextRunNumber()
+            n_id = (str(number)).zfill(6)
             self.latest_status[detector]['number'] = number
         self.outgoing_commands.append({
             "command": command,
             "user": user,
             "detector": detector,
             "mode": mode,
+            "options_override": {"run_identifier": n_id},
             "number": number,
             "host": host_list,
             "createdAt": datetime.datetime.utcnow() + datetime.timedelta(0, delay)
@@ -390,3 +393,4 @@ class MongoConnect():
         run_doc['start'] = datetime.datetime.utcnow()
         
         self.collections['run'].insert_one(run_doc)
+        return number

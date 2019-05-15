@@ -231,7 +231,7 @@ class DAQController():
             self.start_command_sent[detector] is None):
             run_mode = self.goal_state[detector]['mode']
             host_list, cc = self.mongo.GetHostsForMode(run_mode)
-            self.mongo.InsertRunDoc(detector, self.goal_state)
+            run = self.mongo.InsertRunDoc(detector, self.goal_state)
             self.mongo.SendCommand("start", host_list, self.goal_state[detector]['user'],
                                    detector, self.goal_state[detector]['mode'])
             self.mongo.SendCommand("start", cc, self.goal_state[detector]['user'],
