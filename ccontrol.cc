@@ -32,7 +32,8 @@ int main(int argc, char** argv){
 
   // Logging
   MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(mongo_uri, "xenonnt", "log", hostname, true);
+  int ret = logger->Initialize(mongo_uri, "xenonnt", "log", hostname, 
+			       "", true);
   if(ret!=0){
     std::cout<<"Log couldn't be initialized. Exiting."<<std::endl;
     exit(-1);
