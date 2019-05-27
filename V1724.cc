@@ -241,6 +241,15 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   }
   vector<int> channel_finished(nChannels, 0);
   vector<bool> update_dac(nChannels, true);
+
+  // The CAEN edge-case demons hiding somewhere between the library, PCIe card,
+  // and digitizer demand a FULL RESET of the board...
+  CAENVME_End(fBoardHandle);
+  int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
+  if(a != cvSuccess){
+    fLog->Entry("Failed to init in the baseline routine", MongoLog::Warning);
+    return -1;
+  }
   
   // Now we need to load a simple configuration to the board in order to read
   // some data. try/catch cause CAENVMElib fails poorly (segfault) sometimes
