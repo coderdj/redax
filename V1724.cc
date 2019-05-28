@@ -428,7 +428,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	continue;      
       
       float absolute_unit = float(0xffff)/float(0x3fff);      
-      int adjustment = .1*int(absolute_unit*((float(baseline_per_channel[channel])-float(nominal_value))));
+      int adjustment = .5*int(absolute_unit*((float(baseline_per_channel[channel])-float(nominal_value))));
       //int adjustment = int(baseline)-int(target_value);
       //std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
       //std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
