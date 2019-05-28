@@ -233,7 +233,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // make a decent guess here.
   u_int32_t starting_value = u_int32_t( (0x3fff-nominal_value)*((0.9*0xffff)/0x3fff) + 3277);
   vector<u_int16_t> dac_values(nChannels, starting_value);
-  if(end_values[0]!=0 && end_values.size() == nChannels){ // use start values if sent
+  if(end_values[0]!=0 && end_values.size() == (unsigned int)(nChannels)){ // use start values if sent
     std::cout<<"Found good start values for digi "<<fBID<<": ";
     for(unsigned int x=0; x<end_values.size(); x++){
       dac_values[x] = end_values[x];
@@ -250,7 +250,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
     // First check if maybe we're done already
     bool breakout = true;
-    for(unsigned int channel=0; channel<nChannels; channel++){
+    for(int channel=0; channel<nChannels; channel++){
       if(channel_finished[channel] >= repeat_this_many)
 	continue;
       breakout=false;
@@ -324,7 +324,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
       return -1;
     }
-    for(unsigned int trig=0; trig<triggers_per_iteration; trig++){
+    for(int trig=0; trig<triggers_per_iteration; trig++){
 
       // Send SW trigger
       WriteRegister(0x8108,0x1);    // Software trig reg
@@ -366,7 +366,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    if(!((cmask>>channel)&1))
 	      continue;
 	    u_int32_t csize = buff[idx]&0x7FFFFF;
-	    if(channel_finished[channel]>=5){
+	    if(channel_finished[channel]>=repeat_this_many){
 	      idx+=csize;
 	      continue;
 	    }
@@ -414,7 +414,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     WriteRegister(0x8100, 0x0);
     
     // Get average from total
-    for(unsigned int channel=0; channel<nChannels; channel++)
+    for(int channel=0; channel<nChannels; channel++)
       baseline_per_channel[channel]/=good_triggers_per_channel[channel];
 
     
@@ -423,7 +423,10 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     // adjust up and down accordingly. We will always adjust just a tiny bit
     // less than we think we need to to avoid getting into some overshoot
     // see-saw type loop where we never hit the target.
-    for(unsigned int channel=0; channel<nChannels; channel++){
+    for(int channel=0; channel<nChannels; channel++){
+      if(channel_finished[channel]>=repeat_this_many)
+	continue;      
+      
       float absolute_unit = float(0xffff)/float(0x3fff);      
       int adjustment = .1*int(absolute_unit*((float(baseline_per_channel[channel])-float(nominal_value))));
       //int adjustment = int(baseline)-int(target_value);
