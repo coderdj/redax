@@ -313,15 +313,15 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
       return -1;
     }
-    usleep(1000);
+    usleep(50000);
 
     //write trigger
     for(int ntrig=0; ntrig<triggers_per_iteration; ntrig++){
       WriteRegister(0x8108,0x1);    // Software trig reg
-      if(MonitorRegister(0x8104, 0x8, 1000, 1000) != true){
+      /*if(MonitorRegister(0x8104, 0x8, 1000, 1000) != true){
 	fLog->Entry("Timed out waiting for event ready in baselines", MongoLog::Warning);
 	return -1;
-      }
+	}*/
       usleep(50000);
     }
     
