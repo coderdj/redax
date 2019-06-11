@@ -427,7 +427,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       }
       else{
 	channel_finished[channel]=0;
-	//update_dac[channel] = true;
+	update_dac[channel] = true;
 	if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel]){
 	  dac_values[channel]=0x0;
 	  std::cout<<"Channel "<<channel<<" DAC to zero"<<std::endl;
@@ -443,6 +443,16 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	}
       }
     } // End final channel adjustment       
+    current_iteration++;
+
+    // Load DAC    
+    if(LoadDAC(dac_values, update_dac)!=0){
+      std::stringstream error;
+      error<<"Digitizer "<<fBID<<" failed to load DAC in baseline routine.";
+      fLog->Entry(error.str(), MongoLog::Error);
+      return -2;
+    }
+    
     
   } // end while(current_iteration < ntries)
 
