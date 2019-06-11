@@ -315,7 +315,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	fLog->Entry("Timed out waiting for event ready in baselines", MongoLog::Warning);
 	return -1;
       }
-      usleep(1000);
+      usleep(50000);
     }
     
     // disable adc
