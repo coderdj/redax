@@ -300,6 +300,13 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // ****************************
   while(current_iteration < ntries){
 
+    bool breakout=true;
+    for(unsigned int x=0; x<channel_finished.size(); x++){
+      if(channel_finished[x]<repeat_this_many)
+	breakout=false;
+    }
+    if(breakout)
+      break;
     // enable adc    
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
     if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
