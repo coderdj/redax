@@ -214,28 +214,32 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
 
 int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 			      int nominal_value, int ntries){
-  // This is the third rewrite of this function in an attempt to avert an edge
-  // case where the digitizers freeze up. In a previous attempt it was noticed
-  // that re-initializing digitizers more often cased more lockups. So this time
-  // we will not reset, disable, or reinitialize any digitizer at all ever.
+  // The point of this function is to set the voltage offset per channel such
+  // that the baseline is at exactly 16000 (or whatever value is set in the
+  // config file). Somehow, even though all we're doing is calling functions
+  // from the CAEN API, this particular code crashes boards. They get stuck in
+  // some unresponsive state and have to be hard-rebooted. So if you see an absurd
+  // number of usleeps or strange polling of obscure registers it's because
+  // that's some step in the voodoo magic that was done to make this run
+  // without crashing.
 
+  
   // Initial parameters:
-  // adjustment_threshold - how close we have to be to say 'good enough'
   int adjustment_threshold = 5;
   int current_iteration=0;
   int nChannels = 8;
-  // repeat_this_many - how many times we have to get the right answer before we're satisfied
   int repeat_this_many=5;
-  // triggers_per_iteration - how many samples (triggers) per iteration
   int triggers_per_iteration = 10;
 
   
   // Determine starting values. If the flag 'start_provided' is set then the
   // initial argument vector already has our start values. If not then we can
   // make a decent guess here.
-  u_int32_t starting_value = u_int32_t( (0x3fff-nominal_value)*((0.9*0xffff)/0x3fff) + 3277);
+  u_int32_t starting_value = u_int32_t( (0x3fff-nominal_value)*
+					((0.9*0xffff)/0x3fff) + 3277);
   vector<u_int16_t> dac_values(nChannels, starting_value);
-  if(end_values[0]!=0 && end_values.size() == (unsigned int)(nChannels)){ // use start values if sent
+  if(end_values[0]!=0 && end_values.size() ==
+     (unsigned int)(nChannels)){ // use start values if sent
     std::cout<<"Found good start values for digi "<<fBID<<": ";
     for(unsigned int x=0; x<end_values.size(); x++){
       dac_values[x] = end_values[x];
@@ -294,8 +298,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     fLog->Entry(error.str(), MongoLog::Error);
     return -2;
   }
-  
-  usleep(50000);
+ 
 
   // ****************************
   // Main loop
@@ -309,7 +312,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     }
     if(breakout)
       break;
-    // enable adc    
+    // enable adc
+    usleep(10000);
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
     if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
       fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
@@ -1012,12 +1016,14 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     //update_dac[x]=false;
     
     // Give the DAC time to be set if needed
+    /*
     if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
       stringstream errorstr;
       errorstr<<"Timed out waiting for channel "<<x<<" in DAC setting";
       fLog->Entry(errorstr.str(), MongoLog::Error);
       return -1;
     }
+    */
 
     // Now write channel DAC values
     if(WriteRegister((0x1098)+(0x100*x), dac_values[x])!=0){
@@ -1028,12 +1034,14 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     }
 
     // Give the DAC time to be set if needed
+    /*
     if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
       stringstream errorstr;
       errorstr<<"Timed out waiting for channel "<<x<<" after DAC setting";
       fLog->Entry(errorstr.str(), MongoLog::Error);
       return -1;
     }
+    */
 
   }
   return 0;
