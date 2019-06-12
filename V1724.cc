@@ -263,7 +263,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   int write_success = 0;
   try{
     write_success += WriteRegister(0xEF24, 0x1);       // Global reset
-    write_success += WriteRegister(0xEF1C, 0x1);       // BERR
+    write_success += WriteRegister(0xEF1C, 0xFF);       // Events per BLT
     write_success += WriteRegister(0xEF00, 0x130);      // Channel memory
     write_success += WriteRegister(0x811C, 0x110);
     write_success += WriteRegister(0x81A0, 0x200);
