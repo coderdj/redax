@@ -262,18 +262,18 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // Now reload all the registers we need for taking a bit of data
   int write_success = 0;
   try{
-    write_success += WriteRegister(0xEF24, 0x1);       // Global reset
-    write_success += WriteRegister(0xEF1C, 0xFF);       // Events per BLT
-    write_success += WriteRegister(0xEF00, 0x130);      // Channel memory
-    write_success += WriteRegister(0x811C, 0x110);
-    write_success += WriteRegister(0x81A0, 0x200);
+    write_success += WriteRegister(0xEF24, 0x1);       // SOFTWARE RESET
+    write_success += WriteRegister(0xEF1C, 0xFF);      // Events per BLT (Up to 0xff)
+    write_success += WriteRegister(0xEF00, 0x30);      // BERR and ALIGN64
+    //write_success += WriteRegister(0x811C, 0x110);     // FRONT PANEL (not needed here?)
+    //write_success += WriteRegister(0x81A0, 0x200);   // What is this?
     write_success += WriteRegister(0x8100, 0x0);
-    write_success += WriteRegister(0x800C, 0xA);
-    write_success += WriteRegister(0x8098, 0x1000);
-    write_success += WriteRegister(0x8000, 0x310);
-    write_success += WriteRegister(0x8080, 0x1310000);
-    write_success += WriteRegister(0x8034, 0x0);
-    write_success += WriteRegister(0x8038, 0x1);
+    write_success += WriteRegister(0x800C, 0xA);       // Buffer org must be 0xA
+    // write_success += WriteRegister(0x8098, 0x1000);    
+    //write_success += WriteRegister(0x8000, 0x310);   // self-trigger config shouldn't be needed here
+    write_success += WriteRegister(0x8080, 0x1000000); //0x1310000); // no self-trig
+    //write_success += WriteRegister(0x8034, 0x0);
+    write_success += WriteRegister(0x8038, 0x0);       // pre-trigger samples
 
   }
   catch(const std::exception &e){
