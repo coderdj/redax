@@ -247,12 +247,14 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   vector<bool> update_dac(nChannels, true);
 
   // Perform a single initialization of the boards
-  CAENVME_End(fBoardHandle);
+  /*CAENVME_End(fBoardHandle);
   int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
   if(a != cvSuccess){
     fLog->Entry("Failed to CAEN init in baseline routine", MongoLog::Warning);
     return -1;
   }
+  */
+  
   // Now reload all the registers we need for taking a bit of data
   int write_success = 0;
   try{
