@@ -1016,14 +1016,14 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     //update_dac[x]=false;
     
     // Give the DAC time to be set if needed
-    /*
+    
     if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
       stringstream errorstr;
       errorstr<<"Timed out waiting for channel "<<x<<" in DAC setting";
       fLog->Entry(errorstr.str(), MongoLog::Error);
       return -1;
     }
-    */
+    
 
     // Now write channel DAC values
     if(WriteRegister((0x1098)+(0x100*x), dac_values[x])!=0){
@@ -1034,14 +1034,14 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     }
 
     // Give the DAC time to be set if needed
-    /*
+    
     if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
       stringstream errorstr;
       errorstr<<"Timed out waiting for channel "<<x<<" after DAC setting";
       fLog->Entry(errorstr.str(), MongoLog::Error);
       return -1;
     }
-    */
+    
 
   }
   return 0;
