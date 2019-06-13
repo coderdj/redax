@@ -173,6 +173,7 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
       err<<"Read error in board "<<fBID<<" after "<<count<<" reads: "<<dec<<ret;
       fLog->Entry(err.str(), MongoLog::Error);
       u_int32_t data=0;
+      WriteRegister(0xEF24, 0xFFFFFFFF);
       data = ReadRegister(0x8104);
       std::cout<<"Board status: "<<hex<<data<<dec<<std::endl;
       delete[] tempBuffer;
@@ -262,9 +263,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // Now reload all the registers we need for taking a bit of data
   int write_success = 0;
   try{
-    //write_success += WriteRegister(0xEF24, 0x1);       // SOFTWARE RESET
+    write_success += WriteRegister(0xEF24, 0x1);       // SOFTWARE RESET
     //write_success += WriteRegister(0xEF1C, 0x1);      // Events per BLT (Up to 0xff)
-    //write_success += WriteRegister(0xEF00, 0x30);      // BERR and ALIGN64
+    write_success += WriteRegister(0xEF00, 0x30);      // BERR and ALIGN64
     //write_success += WriteRegister(0x811C, 0x110);     // FRONT PANEL (not needed here?)
     //write_success += WriteRegister(0x81A0, 0x200);   // What is this?
     //write_success += WriteRegister(0x8100, 0x0);
@@ -282,6 +283,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     fLog->Entry(error.str(), MongoLog::Error);
     return -2;
   }
+
   // Slightly more palatable error, at least CAENVMElib is recognizing a failure
   // and not just seg faulting
   if(write_success!=0){
@@ -298,7 +300,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     fLog->Entry(error.str(), MongoLog::Error);
     return -2;
   }
- 
+  sleep(1);
 
   // ****************************
   // Main loop
@@ -313,13 +315,13 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     if(breakout)
       break;
     // enable adc
-    usleep(50000);
+    //usleep(50000);
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
     if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
       fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
       return -1;
     }
-    usleep(1000);
+    //usleep(1000);
 
     //write trigger
     for(int ntrig=0; ntrig<triggers_per_iteration; ntrig++){
@@ -429,7 +431,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	continue;
 
       float absolute_unit = float(0xffff)/float(0x3fff);
-      int adjustment = .2*int(absolute_unit*((float(baseline_per_channel[channel])-
+      int adjustment = .5*int(absolute_unit*((float(baseline_per_channel[channel])-
 					      float(nominal_value))));
       //int adjustment = int(baseline)-int(target_value);
       //std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
