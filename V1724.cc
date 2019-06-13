@@ -313,13 +313,13 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     if(breakout)
       break;
     // enable adc
-    usleep(10000);
+    usleep(1000);
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
     if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
       fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
       return -1;
     }
-    usleep(10000);
+    usleep(1000);
 
     //write trigger
     for(int ntrig=0; ntrig<triggers_per_iteration; ntrig++){
@@ -328,12 +328,12 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	fLog->Entry("Timed out waiting for event ready in baselines", MongoLog::Warning);
 	return -1;
 	}*/
-      usleep(10000);
+      usleep(1000);
     }
     
     // disable adc
     WriteRegister(0x8100,0x0);//x24?   // Acq control reg
-    usleep(10000);
+    usleep(1000);
     
     // Read data
     u_int32_t *buff = NULL;
