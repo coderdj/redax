@@ -330,7 +330,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	fLog->Entry("Timed out waiting for event ready in baselines", MongoLog::Warning);
 	return -1;
 	}*/
-      //usleep(1000);
+      usleep(1000);
     }
     
     // disable adc
@@ -399,7 +399,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  }
 	  idx += csize-2;
 	  // Toss if signal inside
-	  if(abs(maxval-minval>20)){
+	  if(abs(maxval-minval>30)){
 	    std::cout<<"Signal in baseline, channel "<<channel
 		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
 	  }
@@ -430,6 +430,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     for(int channel=0; channel<nChannels; channel++){
       if(channel_finished[channel]>=repeat_this_many)
 	continue;
+      if(good_triggers_per_channel[channel]==0)
+	continue;
 
       float absolute_unit = float(0xffff)/float(0x3fff);
       int adjustment = .5*int(absolute_unit*((float(baseline_per_channel[channel])-
@@ -456,7 +458,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	else {
 	  std::cout<<"Had channel "<<channel<<" at "<<dac_values[channel];
 	  dac_values[channel]+=(adjustment);
-	  std::cout<<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<baseline_per_channel[channel]<<std::endl;
+	  std::cout<<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<
+	    baseline_per_channel[channel]<<
+	    " ("<<good_triggers_per_channel[channel]<<" iterations)"<<std::endl;
 	}
       }
     } // End final channel adjustment       
