@@ -1047,6 +1047,8 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     
 
   }
+  // Sleep a bit because apparently checking the register means nothing
+  usleep(5000);
   return 0;
   
 }
