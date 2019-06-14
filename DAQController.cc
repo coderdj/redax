@@ -60,6 +60,18 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	std::stringstream mess;
 	mess<<"Initialized digitizer "<<d.board;
 	fLog->Entry(mess.str(), MongoLog::Debug);
+
+	// Load initial registers
+	int write_success = 0;
+	write_success += digi->WriteRegister(0xEF24, 0x1);
+	write_success += digi->WriteRegister(0xEF00, 0x30);
+	if(write_success!=0){
+	  std::stringstream error;
+	  error<<"Digitizer "<<d.board<<" unable to load pre-registers.";
+	  fLog->Entry(error.str(), MongoLog::Error);
+	  fStatus = DAXHelpers::Idle;
+	  return -1;	  
+	}
     }
     else{
       std::stringstream err;
@@ -69,6 +81,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       return -1;
     }
   }
+
+  sleep(2);
   
   // Load registers into digitizers
   std::cout<<"Loading registers"<<std::endl;

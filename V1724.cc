@@ -261,7 +261,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   */
   
   // Now reload all the registers we need for taking a bit of data
-  int write_success = 0;
+  /*int write_success = 0;
   try{
     write_success += WriteRegister(0xEF24, 0x1);       // SOFTWARE RESET
     //write_success += WriteRegister(0xEF1C, 0x1);      // Events per BLT (Up to 0xff)
@@ -291,7 +291,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     error<<"Digitizer "<<fBID<<" unable to load registers for baselines.";
     fLog->Entry(error.str(), MongoLog::Error);
     return -2;
-  }
+    }*/
 
   // Load up the DAC values
   if(LoadDAC(dac_values, update_dac)!=0){
@@ -300,7 +300,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     fLog->Entry(error.str(), MongoLog::Error);
     return -2;
   }
-  sleep(2);
+  //sleep(2);
 
   // ****************************
   // Main loop
