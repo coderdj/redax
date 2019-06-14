@@ -424,7 +424,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     if(channel_finished[x]<2){ // Be a little more lenient in case it's just starting to converge
       std::stringstream error;
       error<<"Baseline routine did not finish for channel "<<x<<" (and maybe others)."<<std::endl;
-      fLog->Entry(error.str(), MongoLog::Warning);
+      fLog->Entry(error.str(), MongoLog::Message);
       return -1;
     }
   }
