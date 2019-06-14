@@ -381,7 +381,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  }
 	  idx+=2;
 
-	  int sub=2;
 	  for(unsigned int i=0; i<csize-2; i++){
 	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
 	      continue;
