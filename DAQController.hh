@@ -5,7 +5,6 @@
 #include "V1724.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
-#include "MongoInserter.hh"
 #include "StraxInserter.hh"
 
 struct processingThread{
