@@ -35,13 +35,16 @@ int main(int argc, char** argv){
    
   std::string current_run_id="none";
   
-  // Accept 2 arguments
+  // Accept at least 2 arguments
   if(argc<3){
     std::cout<<"Welcome to DAX. Run with a unique ID and a valid mongodb URI"<<std::endl;
     std::cout<<"e.g. ./dax ID mongodb://user:pass@host:port/authDB"<<std::endl;
     std::cout<<"...exiting"<<std::endl;
     exit(0);
   }
+  string dbname = "xenonnt";
+  if(argc >= 4)
+    dbname = argv[3];
 
   // We will consider commands addressed to this PC's ID 
   char chostname[HOST_NAME_MAX];
@@ -57,14 +60,14 @@ int main(int argc, char** argv){
   string suri = argv[2];  
   mongocxx::uri uri(suri.c_str());
   mongocxx::client client(uri);
-  mongocxx::database db = client["xenonnt"];
+  mongocxx::database db = client[dbname];
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
   
   // Logging
   MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(suri, "xenonnt", "log", hostname,
+  int ret = logger->Initialize(suri, dbname, "log", hostname,
 			       "dac_values", true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
