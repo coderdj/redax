@@ -124,7 +124,7 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
     return -1;
   }
   // std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;  
-  usleep(5000); // don't ask
+  //usleep(5000); // don't ask
   return 0;
 }
 
@@ -140,7 +140,7 @@ unsigned int V1724::ReadRegister(unsigned int reg){
     fLog->Entry(err.str(), MongoLog::Warning);
     return 0xFFFFFFFF;
   }
-  usleep(5000);
+  //usleep(5000);
   return temp;
 }
 
@@ -300,7 +300,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     fLog->Entry(error.str(), MongoLog::Error);
     return -2;
   }
-  sleep(1);
+  sleep(2);
 
   // ****************************
   // Main loop
