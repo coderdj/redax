@@ -124,7 +124,6 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
     return -1;
   }
   // std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;  
-  //usleep(5000); // don't ask
   return 0;
 }
 
@@ -140,7 +139,6 @@ unsigned int V1724::ReadRegister(unsigned int reg){
     fLog->Entry(err.str(), MongoLog::Warning);
     return 0xFFFFFFFF;
   }
-  //usleep(5000);
   return temp;
 }
 
@@ -217,12 +215,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 			      int nominal_value, int ntries){
   // The point of this function is to set the voltage offset per channel such
   // that the baseline is at exactly 16000 (or whatever value is set in the
-  // config file). Somehow, even though all we're doing is calling functions
-  // from the CAEN API, this particular code crashes boards. They get stuck in
-  // some unresponsive state and have to be hard-rebooted. So if you see an absurd
-  // number of usleeps or strange polling of obscure registers it's because
-  // that's some step in the voodoo magic that was done to make this run
-  // without crashing.
+  // config file). The DAC seems to be a very sensitive thing and there
+  // are some strategically placed sleep statements (placed via trial, error,
+  // and tears) throughout the code. Take care if changing things here.
 
   
   // Initial parameters:
@@ -258,7 +253,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     fLog->Entry(error.str(), MongoLog::Error);
     return -2;
   }
-  //sleep(2);
 
   // ****************************
   // Main loop
@@ -273,23 +267,20 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     if(breakout)
       break;
     // enable adc
-    //usleep(50000);
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
     if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
       fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
       return -1;
     }
-    //usleep(1000);
 
     //write trigger
     for(int ntrig=0; ntrig<triggers_per_iteration; ntrig++){
       WriteRegister(0x8108,0x1);    // Software trig reg
-      usleep(1000);
+      usleep(1000);                 // Give time for event?
     }
     
     // disable adc
     WriteRegister(0x8100,0x0);//x24?   // Acq control reg
-    //usleep(1000);
     
     // Read data
     u_int32_t *buff = NULL;
@@ -390,9 +381,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       float absolute_unit = float(0xffff)/float(0x3fff);
       int adjustment = .5*int(absolute_unit*((float(baseline_per_channel[channel])-
 					      float(nominal_value))));
-      //int adjustment = int(baseline)-int(target_value);
-      //std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
-      //std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
+
       if(abs(float(baseline_per_channel[channel])-float(nominal_value)) < adjustment_threshold){
 	channel_finished[channel]++;
 	std::cout<<"Channel "<<channel<<" converging at step "<<
@@ -435,7 +424,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     if(channel_finished[x]<2){ // Be a little more lenient in case it's just starting to converge
       std::stringstream error;
       error<<"Baseline routine did not finish for channel "<<x<<" (and maybe others)."<<std::endl;
-      fLog->Entry(error.str(), MongoLog::Error);
+      fLog->Entry(error.str(), MongoLog::Warning);
       return -1;
     }
   }
@@ -486,7 +475,8 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     
 
   }
-  // Sleep a bit because apparently checking the register means nothing
+  // Sleep a bit because apparently checking the register means nothing and you
+  // gotta wait a little for the actual voltage to be updated
   usleep(5000);
   return 0;
   

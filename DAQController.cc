@@ -82,7 +82,9 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     }
   }
 
-  sleep(2);
+  // For the sake of sanity and sleeping through the night, do not remove this statement.
+  sleep(2); // <-- this one. Leave it here.
+  // Seriously. This sleep statement is absolutely vital.
   
   // Load registers into digitizers
   std::cout<<"Loading registers"<<std::endl;
@@ -103,8 +105,13 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	// Set starting values to most recent run
 	fLog->GetDACValues(digi->bid(), -1, dac_values);
 
-	// Go
-	success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
+	// Try up to five times since sometimes will not converge. If the function
+	// returns -2 it means it crashed hard so don't bother trying again.
+	int tries=0;
+	do{	 
+	  success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
+	  tries++;
+	} while(tries<5 && success==-1);
       }
       else if(BL_MODE == "cached"){
 	int rrun = fOptions->GetInt("baseline_reference_run", -1);
@@ -156,7 +163,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       if(success!=0){
 	//LOG
 	fStatus = DAXHelpers::Idle;
-	fLog->Entry("Failed to write registers.", MongoLog::Warning);
+	fLog->Entry("Failed to configure digitizers.", MongoLog::Warning);
 	return -1;
       }
     }
