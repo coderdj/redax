@@ -344,7 +344,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  }
 	  idx += csize-2;
 	  // Toss if signal inside
-	  if(abs(maxval-minval>30)){
+	  if(abs((int)(maxval)-(int)(minval))>30){
 	    std::cout<<"Signal in baseline, channel "<<channel
 		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
 	  }
