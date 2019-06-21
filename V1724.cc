@@ -344,16 +344,17 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  }
 	  idx += csize-2;
 	  // Toss if signal inside
-	  if(abs(maxval-minval>30)){
+	  if(abs((int)(maxval)-(int)(minval))>30){
 	    std::cout<<"Signal in baseline, channel "<<channel
 		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
 	  }
-	  else
-	    baseline = (float(tbase) / ((float(bcount))));
+	  else{
+	      baseline = (float(tbase) / ((float(bcount))));
 
-	  // Add to total
-	  baseline_per_channel[channel]+= baseline;
-	  good_triggers_per_channel[channel]+=1.;
+	      // Add to total
+	      baseline_per_channel[channel]+= baseline;
+	      good_triggers_per_channel[channel]+=1.;
+	  }
 	} // end for loop through channels
 	//delete[] buff;
 	//break;

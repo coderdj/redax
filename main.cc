@@ -1,14 +1,26 @@
 #include <iostream>
 #include <string>
 #include <iomanip>
+#include <csignal>
 #include "V1724.hh"
 #include "DAQController.hh"
+
+bool b_run = true;
+
+void SignalHandler(int signum) {
+    std::cout << "Received signal "<<signum<<std::endl;
+    b_run = false;
+    return;
+}
 
 int main(int argc, char** argv){
 
   // Need to create a mongocxx instance and it must exist for
   // the entirety of the program. So here seems good.
   mongocxx::instance instance{};
+
+  signal(SIGINT, SignalHandler);
+  signal(SIGTERM, SignalHandler);
    
   std::string current_run_id="none";
   
@@ -61,7 +73,7 @@ int main(int argc, char** argv){
   
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
-  while(1){
+  while(b_run){
 
     // Try to poll for commands
     bsoncxx::stdx::optional<bsoncxx::document::value> querydoc;
