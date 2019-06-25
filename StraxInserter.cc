@@ -28,6 +28,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fChunkLength = fOptions->GetLongInt("strax_chunk_length", 20e9); // default 20s
   fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
+  fCompressor = fOptions->GetString("compressor", "blosc");
   fHostname = hostname;
   std::string run_name = fOptions->GetString("run_identifier", "run");
   
@@ -381,10 +382,9 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     size_t uncompressed_size = iter->second->size();
 
     // blosc it
-    string COMPRESSOR = "lz4";
     char *out_buffer = NULL;
     int wsize = 0;
-    if(COMPRESSOR == "blosc"){
+    if(fCompressor == "blosc"){
       out_buffer = new char[uncompressed_size+BLOSC_MAX_OVERHEAD];
       wsize = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size,  &((*iter->second)[0]),
 				   out_buffer, uncompressed_size+BLOSC_MAX_OVERHEAD, "lz4", 0, 2);

@@ -69,7 +69,7 @@ private:
   DAQController *fDataSource;
   bool fActive;
   bool fErrorBit;
-
+  std::string fCompressor;
   std::map<std::string, std::string*> fFragments;
   
 };
