@@ -9,6 +9,9 @@ int main(int argc, char** argv){
     std::cout<<"Where MONGO_URI is the URI of the command DB"<<std::endl;
     return -1;
   }
+  std::string dbname = "xenonnt";
+  if(argc >=3)
+    dbname = argv[3];
 
   // Control and status DB connectivity
   // We're going to poll control for commands
@@ -16,7 +19,7 @@ int main(int argc, char** argv){
   std::string mongo_uri = argv[2];
   mongocxx::uri uri(mongo_uri.c_str());
   mongocxx::client client(uri);
-  mongocxx::database db = client["xenonnt"];
+  mongocxx::database db = client[dbname];
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
@@ -32,7 +35,7 @@ int main(int argc, char** argv){
 
   // Logging
   MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(mongo_uri, "xenonnt", "log", hostname, 
+  int ret = logger->Initialize(mongo_uri, dbname, "log", hostname, 
 			       "", true);
   if(ret!=0){
     std::cout<<"Log couldn't be initialized. Exiting."<<std::endl;
