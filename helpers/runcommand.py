@@ -5,9 +5,9 @@ from pymongo import MongoClient
 command = sys.argv[1]
 
 #client = MongoClient("mongodb://reader:%s@127.0.0.1:27017/dax"%os.environ["MONGO_PASSWORD"])
-client = MongoClient("mongodb://dax:%s@ds129770.mlab.com:29770/dax"%os.environ["MONGO_PASSWORD"])
+client = MongoClient("mongodb://daq:WIMPfinder@localhost:27017/admin")
 
-db = client['dax']
+db = client['xenonnt']
 collection = db['control']
 
 try:
@@ -16,7 +16,7 @@ except:
     hostname = os.uname()[1]
     print("No hostname provided so assuming it's running locally at %s"%hostname)
 
-hostname = ['fdaq00_controller_0', 'fdaq00_controller_1']
+hostname = ['fdaq00_reader_7']
 
 try:
     run_num = int(sys.argv[4])
@@ -36,7 +36,7 @@ doc = {}
 if command == 'start':
 
     doc = {
-        "detector": "TPC",
+        "detector": "NaI",
         "command": "start",
         "run": run_num,
         "mode": runmode,
@@ -47,7 +47,7 @@ if command == 'start':
 elif command == 'stop':
 
     doc = {
-        "detector": "TPC",
+        "detector": "NaI",
         "command": "stop",
         "run": run_num,
         "mode": runmode,
@@ -58,7 +58,7 @@ elif command == 'stop':
 elif command == 'arm':
 
     doc = {
-        "detector": "TPC",
+        "detector": "NaI",
         "mode": runmode,
         "command": "arm",
         "run": run_num,

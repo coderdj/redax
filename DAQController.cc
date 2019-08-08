@@ -169,19 +169,22 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     }
   }
 
-  for( auto const& link : fDigitizers ) {
-    
-    for(auto digi : link.second){
+  if(fOptions->GetInt("run_start", 0) == 1){
+	  
+	for( auto const& link : fDigitizers ) {
 
-      // Ensure digitizer is ready to start
-      if(digi->MonitorRegister(0x8104, 0x100, 1000, 1000)!=true){
-	fLog->Entry("Digitizer not ready to start after init", MongoLog::Warning);
-	return -1;
-      }
+		for(auto digi : link.second){
 
-      // Start command (waits for S-IN)
-      digi->WriteRegister(0x8100, 0x5);
-    }
+		// Ensure digitizer is ready to start
+		if(digi->MonitorRegister(0x8104, 0x100, 1000, 1000)!=true){
+		fLog->Entry("Digitizer not ready to start after init", MongoLog::Warning);
+		return -1;
+		}
+
+		// Start command (waits for S-IN)
+		digi->WriteRegister(0x8100, 0x5);
+		}
+	}
   }
   fStatus = DAXHelpers::Armed;
 
@@ -203,7 +206,7 @@ int DAQController::Start(){
 	digi->WriteRegister(0x8100, 0x4);
 
 	// Ensure digitizer is started
-	if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
+	if(digi->MonitorRegister(0x8104, 0x4, 1000, 100000) != true){
 	  fLog->Entry("Timed out waiting for acquisition to start after SW start sent",
 		      MongoLog::Warning);
 	  return -1;

@@ -33,7 +33,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   std::string run_name = fOptions->GetString("run_identifier", "run");
   
   // To start we do not know which FW version we're dealing with (for data parsing)
-  fFirmwareVersion = -1;
+  fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
 
   fMissingVerified = 0;
   fDataSource = dataSource;
@@ -114,7 +114,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	if(!((channel_mask>>channel)&1)) // Make sure channel in data
 	  continue;
 
-	u_int32_t channel_size = event_size / channels_in_event;
+	u_int32_t channel_size = (event_size - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
 
 	if(fFirmwareVersion == 0){
@@ -343,22 +343,20 @@ void StraxInserter::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
     
     // Check 2: Our samples are 14-bit so if bits 14/15 or 30/31 of these words are
     // non-zero then this must be the DPP_XENON firmware
-    if( (channel_time_tag>>14&1) || (channel_time_tag>>15&1) ||
-	(channel_time_tag>>30&1) || (channel_time_tag>>31&1) ||
-	(channel_event_size>>14&1) || (channel_event_size>>15&1) ||
-	(channel_event_size>>30&1) || (channel_event_size>>31&1) ){
+    if( (channel_time_tag>>14&1) || (channel_time_tag>>30&1) ||
+	(channel_event_size>>14&1) || (channel_event_size>>30&1)){
       fFirmwareVersion = 0;
       return;
     }
 
-    idx += channel_event_size;            
+    idx += channel_event_size;
   } // end for
 
   if(idx == event_size-1)
-    fFirmwareVersion = 0;
+	fFirmwareVersion = 0;
   else
     fFirmwareVersion = 1;
-  
+
   return;      
 }
 

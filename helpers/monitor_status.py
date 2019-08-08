@@ -4,12 +4,12 @@ import os
 import time
 
 #client = pymongo.MongoClient("mongodb://daq:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"])
-client = MongoClient("mongodb://dax:%s@ds129770.mlab.com:29770/dax"%os.environ["MONGO_PASSWORD"])
+client = MongoClient("mongodb://daq:WIMPfinder@localhost:27017/admin")
 
-db = client['dax']
+db = client['xenonnt']
 collection = db['status']
 
-clients = ["fdaq00"]
+clients = ["fdaq00_reader_7"]
 STATUS = ["Idle", "Arming", "Armed", "Running", "Error"]
 
 while 1:

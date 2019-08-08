@@ -33,7 +33,7 @@ public:
   const static int Error   = 3;  // Major operational impact
   const static int Fatal   = 4;  // Program gonna die
 
-  int Entry(std::string message, int priority=Message);
+  int Entry(std::string message, int priority=1);
 
   int GetDACValues(int bid, int reference_run,
 		   std::vector<u_int16_t>&dac_values);

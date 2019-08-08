@@ -306,7 +306,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     unsigned int idx = 0;
     while(idx < size/sizeof(u_int32_t)){
       if(buff[idx]>>20==0xA00){ // header
+	u_int32_t esize = buff[idx]&0xFFFFFFF;
 	u_int32_t cmask = buff[idx+1]&0xFF;
+	u_int32_t csize = (esize - 4) / cmask;
 	idx += 4;
 
 	// Loop through channels
@@ -319,17 +321,15 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
 	  if(!((cmask>>channel)&1))
 	    continue;
-	  u_int32_t csize = buff[idx]&0x7FFFFF;
 	  if(channel_finished[channel]>=repeat_this_many){
 	    idx+=csize;
 	    continue;
 	  }
-	  idx+=2;
 
-	  for(unsigned int i=0; i<csize-2; i++){
+	  for(unsigned int i=0; i<csize; i++){
 	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
 	      continue;
-	    
+
 	    tbase += buff[idx+i]&0xFFFF;
 	    tbase += (buff[idx+i]>>16)&0xFFFF;
 	    bcount+=2;
@@ -342,7 +342,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
 	      maxval=(buff[idx+i]>>16)&0xFFFF;
 	  }
-	  idx += csize-2;
+	  idx += csize;
 	  // Toss if signal inside
 	  if(abs((int)(maxval)-(int)(minval))>30){
 	    std::cout<<"Signal in baseline, channel "<<channel
