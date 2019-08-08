@@ -353,7 +353,7 @@ void StraxInserter::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
   } // end for
 
   if(idx == event_size-1)
-	fFirmwareVersion = 0;
+    fFirmwareVersion = 0;
   else
     fFirmwareVersion = 1;
 
