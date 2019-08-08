@@ -206,7 +206,7 @@ int DAQController::Start(){
 	digi->WriteRegister(0x8100, 0x4);
 
 	// Ensure digitizer is started
-	if(digi->MonitorRegister(0x8104, 0x4, 1000, 100000) != true){
+	if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
 	  fLog->Entry("Timed out waiting for acquisition to start after SW start sent",
 		      MongoLog::Warning);
 	  return -1;
