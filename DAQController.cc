@@ -51,7 +51,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   for(auto d : fOptions->GetBoards("V1724", fHostname)){
     std::cout<<"New digitizer "<<d.board<<std::endl;
     V1724 *digi = new V1724(fLog);
-    if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){      
+    if(digi->Init(options, d.link, d.crate, d.board, d.vme_address)==0){      
 	fDigitizers[d.link].push_back(digi);
 	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){
 	  std::cout<<"Defining new optical link "<<d.link<<std::endl;
@@ -169,19 +169,22 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     }
   }
 
-  for( auto const& link : fDigitizers ) {
-    
-    for(auto digi : link.second){
+  if(fOptions->GetInt("run_start", 0) == 1){
+	
+	for(auto const& link : fDigitizers ) {
 
-      // Ensure digitizer is ready to start
-      if(digi->MonitorRegister(0x8104, 0x100, 1000, 1000)!=true){
-	fLog->Entry("Digitizer not ready to start after init", MongoLog::Warning);
-	return -1;
-      }
+		for(auto digi : link.second){
 
-      // Start command (waits for S-IN)
-      digi->WriteRegister(0x8100, 0x5);
-    }
+		// Ensure digitizer is ready to start
+		if(digi->MonitorRegister(0x8104, 0x100, 1000, 1000)!=true){
+		fLog->Entry("Digitizer not ready to start after init", MongoLog::Warning);
+		return -1;
+		}
+
+		// Start command (waits for S-IN)
+		digi->WriteRegister(0x8100, 0x5);
+		}
+	}
   }
   fStatus = DAXHelpers::Armed;
 
