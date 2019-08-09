@@ -36,6 +36,14 @@ int V1724::Init(Options *options, int link, int crate, int bid, unsigned int add
 
   // To start we do not know which FW version we're dealing with (for data parsing)
   fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
+  if(fFirmwareVersion == -1){
+	cout<<"Firmware version unspecified in options"<<endl;
+	return -1;
+  }
+  if((fFirmwareVersion != 0) && (fFirmwareVersion != 1)){
+	cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<endl;
+	return -1;
+  }
 
   fLink = link;
   fCrate = crate;
@@ -316,19 +324,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	u_int32_t esize = buff[idx]&0xFFFFFFF;
 	u_int32_t cmask = buff[idx+1]&0xFF;
 	u_int32_t csize = (esize - 4) / cmask;
-	u_int32_t channels_in_event = __builtin_popcount(cmask);
-
-	// Here's the time to determine firmware version if not known
-    if(fFirmwareVersion == -1){
-	  DetermineDataFormat(&(buff[idx]), esize, channels_in_event);
-	  // fOptions->Override({"firmware_version": fFirmwareVersion});
-	  if(fFirmwareVersion == 0){
-	    std::cout<<"Detected XENON1T firmware"<<std::endl;
-	  }
-	  else{
-	    std::cout<<"Detected stock firmware"<<std::endl;
-      }
-    }
 
 	idx += 4;
 	// Loop through channels
@@ -506,46 +501,6 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
   usleep(5000);
   return 0;
   
-}
-
-
-void V1724::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
-					u_int16_t channels_in_event){
-  /*
-    This function copied from StraxInserter class to determine firmware 
-    xenon custom or default (ZLE disabled) firmware setting.
-   */
-
-  // Start after header
-  unsigned int idx = 4;
-  
-  for(unsigned int ch=0; ch<channels_in_event; ch++){
-    u_int32_t channel_event_size = buff[idx]&0x7FFFFF; // bit indices 0-22 (23-bit)
-    u_int32_t channel_time_tag = buff[idx+1];
-
-    // Check 1: Would adding channel_event_size to idx go over size of event
-    if(channel_event_size + idx > event_size){
-      fFirmwareVersion = 1; // DEFAULT (no ZLE)
-      return;
-    }
-    
-    // Check 2: Our samples are 14-bit so if bits 14/15 or 30/31 of these words are
-    // non-zero then this must be the DPP_XENON firmware
-    if( (channel_time_tag>>14&1) || (channel_time_tag>>30&1) ||
-	(channel_event_size>>14&1) || (channel_event_size>>30&1)){
-      fFirmwareVersion = 0;
-      return;
-    }
-
-    idx += channel_event_size;
-  } // end for
-
-  if(idx == event_size-1)
-    fFirmwareVersion = 0;
-  else
-    fFirmwareVersion = 1;
-
-  return;
 }
 
 int V1724::End(){

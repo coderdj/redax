@@ -34,6 +34,14 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   
   // To start we do not know which FW version we're dealing with (for data parsing)
   fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
+  if(fFirmwareVersion == -1){
+	cout<<"Firmware version unspecified in options"<<endl;
+	return -1;
+  }
+  if((fFirmwareVersion != 0) && (fFirmwareVersion != 1)){
+	cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<endl;
+	return -1;
+  }
 
   fMissingVerified = 0;
   fDataSource = dataSource;
@@ -97,16 +105,6 @@ void StraxInserter::ParseDocuments(data_packet dp){
       // since this call is in a loop
       if(board_fail==1)
 	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
-      
-      // If we don't know which firmware we're using, check now
-      if(fFirmwareVersion == -1){
-	DetermineDataFormat(&(buff[idx]), event_size, channels_in_event);
-	// fFirmwareVersion = 0; //n.b. fix this after the test!
-	if(fFirmwareVersion == 0)
-	  std::cout<<"Detected XENON1T firmware"<<std::endl;
-	else
-	  std::cout<<"Detected stock firmware"<<std::endl;
-      }
 
       idx += 4; // Skip the header
 
@@ -315,51 +313,6 @@ int StraxInserter::ReadAndInsertData(){
     WriteOutFiles(1000000, true);
   return 0;  
 }
-
-void StraxInserter::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
-					u_int16_t channels_in_event){
-  /*
-    This function should automatically sense which data format we're dealing with. 
-    It does this by looking at various control words and trying to deduce from their
-    values what this must be. We were unable to think of a 100% deterministic way to 
-    say beyond any doubt which format this is, but we think the combination of circumstance
-    required to fool this series of checks is so unlikely there is no realistic chance
-    of choosing incorrectly.
-    And if we do it will just seg fault, not explode.
-   */
-
-  // Start after header
-  unsigned int idx = 4;
-  
-  for(unsigned int ch=0; ch<channels_in_event; ch++){
-    u_int32_t channel_event_size = buff[idx]&0x7FFFFF; // bit indices 0-22 (23-bit)
-    u_int32_t channel_time_tag = buff[idx+1];
-
-    // Check 1: Would adding channel_event_size to idx go over size of event
-    if(channel_event_size + idx > event_size){
-      fFirmwareVersion = 1; // DEFAULT (no ZLE)
-      return;
-    }
-    
-    // Check 2: Our samples are 14-bit so if bits 14/15 or 30/31 of these words are
-    // non-zero then this must be the DPP_XENON firmware
-    if( (channel_time_tag>>14&1) || (channel_time_tag>>30&1) ||
-	(channel_event_size>>14&1) || (channel_event_size>>30&1)){
-      fFirmwareVersion = 0;
-      return;
-    }
-
-    idx += channel_event_size;
-  } // end for
-
-  if(idx == event_size-1)
-    fFirmwareVersion = 0;
-  else
-    fFirmwareVersion = 1;
-
-  return;      
-}
-
 
 
 void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){

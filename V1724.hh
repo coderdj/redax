@@ -39,9 +39,6 @@ class V1724{
                        int sleep, u_int32_t val=1);
 
  private:
-  void DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
-			   u_int16_t channels_in_event);
-
   Options *fOptions;
   int fBoardHandle;
   int fLink, fCrate, fBID;

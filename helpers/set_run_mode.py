@@ -28,6 +28,7 @@ run_mode = {
     "strax_fragment_length": 220,
     "baseline_dac_mode": "fit",
     "baseline_value": 16000,
+    "firmware_version": 1,
     "boards":
     [
         {"crate": 0, "link": 4, "board": 165,
