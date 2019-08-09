@@ -5,7 +5,7 @@ import os
 
 
 
-client = MongoClient("mongodb://daq:WIMPfinder@localhost:27017/admin")
+client = MongoClient("mongodb://daq:%s@localhost:27017/admin"%os.environ["MONGO_PASSWORD"])
 #uri = "mongodb://admin:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"]
 #client = pymongo.MongoClient(uri)
 db = client['xenonnt']
