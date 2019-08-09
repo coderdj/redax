@@ -5,9 +5,8 @@ import os
 
 
 
-client = MongoClient("mongodb://daq:WIMPfinder@localhost:27017/admin")
-#uri = "mongodb://admin:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"]
-#client = pymongo.MongoClient(uri)
+mongo_uri = "mongodb://daq:%s@localhost:27017/admin"%os.environ["MONGO_PASSWORD"]
+client = pymongo.MongoClient(mongo_uri)
 db = client['xenonnt']
 collection = db['options']
 
@@ -17,7 +16,7 @@ run_mode_default_firmware = {
     "user": "zhut",
     "description": "Setup for default firmware",
     "detector" : "NaI",
-    "mongo_uri": "mongodb://daq:WIMPfinder@localhost:27017/admin",
+    "mongo_uri": mongo_uri,
     "mongo_database": "xenonnt",
     "mongo_collection": "test_0_NaI",
     "run_start":0,
@@ -119,7 +118,7 @@ run_mode_custom_firmware.update(
     "user": "zhut",
     "description": "Setup for custom firmware",
     "detector" : "NaI",
-    "mongo_uri": "mongodb://daq:WIMPfinder@localhost:27017/admin",
+    "mongo_uri": mongo_uri,
     "mongo_database": "xenonnt",
     "mongo_collection": "test_1_NaI",
     "run_start":0,
