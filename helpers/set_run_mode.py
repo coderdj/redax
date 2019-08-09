@@ -17,7 +17,7 @@ run_mode = {
     "user": "zhut",
     "description": "Setup for default firmware",
     "detector" : "NaI",
-    "mongo_uri": "mongodb://daq:WIMPfinder@localhost:27017/admin",
+    "mongo_uri": "mongodb://daq:%s@localhost:27017/admin"%os.environ["MONGO_PASSWORD"],
     "mongo_database": "xenonnt",
     "mongo_collection": "test_NaI",
     "run_start":0,
