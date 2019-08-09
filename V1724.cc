@@ -1,6 +1,8 @@
 #include "V1724.hh"
+#include "Options.hh"
 
 V1724::V1724(MongoLog  *log){
+  fOptions = NULL;
   fBoardHandle=fLink=fCrate=fBID=-1;
   fBaseAddress=0;
   fLog = log;
@@ -9,7 +11,7 @@ V1724::~V1724(){
   End();
 }
 
-int V1724::Init(int link, int crate, int bid, unsigned int address=0){
+int V1724::Init(Options *options, int link, int crate, int bid, unsigned int address=0){
 
   /*
   // I am hoping that minesweeper will no longer be needed
@@ -30,6 +32,11 @@ int V1724::Init(int link, int crate, int bid, unsigned int address=0){
     fBoardHandle = -1;
     return -1;
   }
+  fOptions = options;
+
+  // To start we do not know which FW version we're dealing with (for data parsing)
+  fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
+
   fLink = link;
   fCrate = crate;
   fBID = bid;
@@ -301,7 +308,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     // Now we're going to acquire 'n' triggers
     std::vector<double>baseline_per_channel(nChannels, 0);
     std::vector<double>good_triggers_per_channel(nChannels, 0);
-    
+
     // Parse
     unsigned int idx = 0;
     while(idx < size/sizeof(u_int32_t)){
@@ -309,10 +316,28 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	u_int32_t esize = buff[idx]&0xFFFFFFF;
 	u_int32_t cmask = buff[idx+1]&0xFF;
 	u_int32_t csize = (esize - 4) / cmask;
-	idx += 4;
+	u_int32_t channels_in_event = __builtin_popcount(cmask);
 
+	// Here's the time to determine firmware version if not known
+    if(fFirmwareVersion == -1){
+	  DetermineDataFormat(&(buff[idx]), esize, channels_in_event);
+	  // fOptions->Override({"firmware_version": fFirmwareVersion});
+	  if(fFirmwareVersion == 0){
+	    std::cout<<"Detected XENON1T firmware"<<std::endl;
+	  }
+	  else{
+	    std::cout<<"Detected stock firmware"<<std::endl;
+      }
+    }
+
+	idx += 4;
 	// Loop through channels
 	for(unsigned int channel=0; channel<8; channel++){
+		
+	  if(fFirmwareVersion == 0){
+	    csize = buff[idx] - 2; // In words (4 bytes). The -2 is cause of header
+	    idx += 2;
+	  }
 
 	  float baseline = -1.;
 	  long int tbase = 0;
@@ -481,6 +506,46 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
   usleep(5000);
   return 0;
   
+}
+
+
+void V1724::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
+					u_int16_t channels_in_event){
+  /*
+    This function copied from StraxInserter class to determine firmware 
+    xenon custom or default (ZLE disabled) firmware setting.
+   */
+
+  // Start after header
+  unsigned int idx = 4;
+  
+  for(unsigned int ch=0; ch<channels_in_event; ch++){
+    u_int32_t channel_event_size = buff[idx]&0x7FFFFF; // bit indices 0-22 (23-bit)
+    u_int32_t channel_time_tag = buff[idx+1];
+
+    // Check 1: Would adding channel_event_size to idx go over size of event
+    if(channel_event_size + idx > event_size){
+      fFirmwareVersion = 1; // DEFAULT (no ZLE)
+      return;
+    }
+    
+    // Check 2: Our samples are 14-bit so if bits 14/15 or 30/31 of these words are
+    // non-zero then this must be the DPP_XENON firmware
+    if( (channel_time_tag>>14&1) || (channel_time_tag>>30&1) ||
+	(channel_event_size>>14&1) || (channel_event_size>>30&1)){
+      fFirmwareVersion = 0;
+      return;
+    }
+
+    idx += channel_event_size;
+  } // end for
+
+  if(idx == event_size-1)
+    fFirmwareVersion = 0;
+  else
+    fFirmwareVersion = 1;
+
+  return;
 }
 
 int V1724::End(){
