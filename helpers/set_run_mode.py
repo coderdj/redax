@@ -12,13 +12,14 @@ collection = db['options']
 
 run_mode_default_firmware = {
 	"_id": "5d30e9d05e13ab6116c43bf9",
+
     "name": "default_firmware_settings",
     "user": "zhut",
     "description": "Setup for default firmware",
     "detector" : "NaI",
-    "mongo_uri": mongo_uri,
+    "mongo_uri": "mongodb://daq:%s@localhost:27017/admin"%os.environ["MONGO_PASSWORD"],
     "mongo_database": "xenonnt",
-    "mongo_collection": "test_0_NaI",
+    "mongo_collection": "test_NaI",
     "run_start":0,
     "strax_chunk_overlap": 500000000,
     "strax_header_size": 31,
@@ -108,6 +109,7 @@ run_mode_default_firmware = {
 		},
 	],
     "channels":{"165":[0, 1, 2, 3, 4, 5, 6, 7]},
+
 }
 
 run_mode_custom_firmware = run_mode_default_firmware.copy()
@@ -222,6 +224,7 @@ run_mode_custom_firmware.update(
 		}
 	],
     "channels":{"165":[0, 1, 2, 3, 4, 5, 6, 7]},
+
 }
 )
 

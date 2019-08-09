@@ -321,10 +321,10 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     unsigned int idx = 0;
     while(idx < size/sizeof(u_int32_t)){
       if(buff[idx]>>20==0xA00){ // header
-	u_int32_t esize = buff[idx]&0xFFFFFFF;	
+
+	u_int32_t esize = buff[idx]&0xFFFFFFF;
 	u_int32_t cmask = buff[idx+1]&0xFF;
-	u_int32_t csize = -1;
-	
+	u_int32_t csize = (esize - 4) / cmask;
 	idx += 4;
 	// Loop through channels
 	for(unsigned int channel=0; channel<8; channel++){
@@ -334,7 +334,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    idx += 2;
 	  }
 	  else if(fFirmwareVersion == 1){
-		csize = (esize - 4) / cmask;
+		csize = (esize - 4) / __builtin_popcount(cmask);
 	  }
 
 	  float baseline = -1.;

@@ -112,7 +112,8 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	if(!((channel_mask>>channel)&1)) // Make sure channel in data
 	  continue;
 
-	u_int32_t channel_size = -1;
+
+	u_int32_t channel_size = (event_size - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
 
 	if(fFirmwareVersion == 0){
