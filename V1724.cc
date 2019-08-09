@@ -1,6 +1,8 @@
 #include "V1724.hh"
+#include "Options.hh"
 
 V1724::V1724(MongoLog  *log){
+  fOptions = NULL;
   fBoardHandle=fLink=fCrate=fBID=-1;
   fBaseAddress=0;
   fLog = log;
@@ -9,7 +11,7 @@ V1724::~V1724(){
   End();
 }
 
-int V1724::Init(int link, int crate, int bid, unsigned int address=0){
+int V1724::Init(Options *options, int link, int crate, int bid, unsigned int address=0){
 
   /*
   // I am hoping that minesweeper will no longer be needed
@@ -30,6 +32,19 @@ int V1724::Init(int link, int crate, int bid, unsigned int address=0){
     fBoardHandle = -1;
     return -1;
   }
+  fOptions = options;
+
+  // To start we do not know which FW version we're dealing with (for data parsing)
+  fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
+  if(fFirmwareVersion == -1){
+	cout<<"Firmware version unspecified in options"<<endl;
+	return -1;
+  }
+  if((fFirmwareVersion != 0) && (fFirmwareVersion != 1)){
+	cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<endl;
+	return -1;
+  }
+
   fLink = link;
   fCrate = crate;
   fBID = bid;
@@ -301,16 +316,23 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     // Now we're going to acquire 'n' triggers
     std::vector<double>baseline_per_channel(nChannels, 0);
     std::vector<double>good_triggers_per_channel(nChannels, 0);
-    
+
     // Parse
     unsigned int idx = 0;
     while(idx < size/sizeof(u_int32_t)){
       if(buff[idx]>>20==0xA00){ // header
+	u_int32_t esize = buff[idx]&0xFFFFFFF;
 	u_int32_t cmask = buff[idx+1]&0xFF;
-	idx += 4;
+	u_int32_t csize = (esize - 4) / cmask;
 
+	idx += 4;
 	// Loop through channels
 	for(unsigned int channel=0; channel<8; channel++){
+		
+	  if(fFirmwareVersion == 0){
+	    csize = buff[idx] - 2; // In words (4 bytes). The -2 is cause of header
+	    idx += 2;
+	  }
 
 	  float baseline = -1.;
 	  long int tbase = 0;
@@ -319,17 +341,15 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
 	  if(!((cmask>>channel)&1))
 	    continue;
-	  u_int32_t csize = buff[idx]&0x7FFFFF;
 	  if(channel_finished[channel]>=repeat_this_many){
 	    idx+=csize;
 	    continue;
 	  }
-	  idx+=2;
 
-	  for(unsigned int i=0; i<csize-2; i++){
+	  for(unsigned int i=0; i<csize; i++){
 	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
 	      continue;
-	    
+
 	    tbase += buff[idx+i]&0xFFFF;
 	    tbase += (buff[idx+i]>>16)&0xFFFF;
 	    bcount+=2;
@@ -342,7 +362,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
 	      maxval=(buff[idx+i]>>16)&0xFFFF;
 	  }
-	  idx += csize-2;
+	  idx += csize;
 	  // Toss if signal inside
 	  if(abs((int)(maxval)-(int)(minval))>30){
 	    std::cout<<"Signal in baseline, channel "<<channel

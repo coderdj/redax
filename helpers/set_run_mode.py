@@ -1,77 +1,114 @@
 import pymongo
 from pymongo import MongoClient
+from bson.objectid import ObjectId
 import os
 
 
 
-client = MongoClient("mongodb://dax:%s@ds129770.mlab.com:29770/dax"%os.environ["MONGO_PASSWORD"])
+client = MongoClient("mongodb://daq:WIMPfinder@localhost:27017/admin")
 #uri = "mongodb://admin:%s@127.0.0.1:27017/admin"%os.environ["MONGO_PASSWORD"]
 #client = pymongo.MongoClient(uri)
-db = client['dax']
+db = client['xenonnt']
 collection = db['options']
 
 run_mode = {
-    "name": "test",
-    "user": "elykov",
-    "description": "Initial test mode",
-    "mongo_uri": "mongodb://reader:%s@127.0.0.1:27017/dax",
-    "mongo_database": "data",
-    "mongo_collection": "test",
+	"_id": ObjectId("5d30e9d05e13ab6116c43bf9"),
+    "name": "default_firmware_settings",
+    "user": "zhut",
+    "description": "Setup for default firmware",
+    "detector" : "NaI",
+    "mongo_uri": "mongodb://daq:WIMPfinder@localhost:27017/admin",
+    "mongo_database": "xenonnt",
+    "mongo_collection": "test_NaI",
+    "run_start":0,
+    "strax_chunk_overlap": 500000000,
+    "strax_header_size": 31,
+    "strax_output_path": "/home/zhut/raw",
+    "strax_chunk_length": 5000000000,
+    "strax_fragment_length": 220,
+    "baseline_dac_mode": "fit",
+    "baseline_value": 16000,
+    "firmware_version": 1,
     "boards":
     [
-        {"crate": 0, "link": 0, "board": 100,
-            "vme_address": "0", "type": "V1724"},
-        {"crate": 0, "link": 1, "board": 0,
-            "vme_address": "0", "type": "V2718"}
+        {"crate": 0, "link": 4, "board": 165,
+            "vme_address": "FFFF0000", "type": "V1724", "host": "fdaq00_reader_7"},
     ],
-    "registers":
-    [
-        {"reg": "EF24", "val": "1", "board": -1},
-        {"reg": "EF1C", "val": "1", "board": -1},
-        {"reg": "EF00", "val": "10", "board": -1},
-        {"reg": "8120", "val": "FF", "board": -1},
-        {"reg": "8000", "val": "310", "board": -1},
-        {"reg": "8080", "val": "310000", "board": -1},
-        {"reg": "800C", "val": "A", "board": -1},
-        {"reg": "8020", "val": "258", "board": -1},
-        {"reg": "811C", "val": "110", "board": -1},
-        {"reg": "8100", "val": "0", "board": -1},
-        {"reg": "81A0", "val": "200", "board": -1},
-        {"reg": "8098", "val": "1000", "board": -1},
-        {"reg": "8038", "val": "12C", "board": -1},
-        {"reg": "8060", "val": "3e8", "board": -1},
-        {"reg": "8078", "val": "12C", "board": -1}
-    ],
-    "V2718":[{
-        "led_trig": 1, 
-        "s_in": 1, 
-        "m_veto": 1, 
-        "n_veto": 1, 
-        "pulser_freq": 400}
-    ],
-    "DDC-10":[{        
-        #some paraeters for DDC10 HEV dunno if should be here or in a separate doc
-         "rise_time_cut": 30,
-         "required": "true",
-         "window": 300,
-         "parameter_0": 0,
-         "prescaling": 100,
-         "parameter_2": 0,
-         "integration_threshold": 450000,
-         "parameter_3": 10000,
-         "outer_ring_factor": 2,
-         "inner_ring_factor": 1,
-         "width_cut": 30,
-         "component_status": 6,
-         "sign": 0,
-         "delay": 400,
-         "parameter_1": 0,
-         "address": "192.168.131.62",
-         "signal_threshold": 200}
-    ],
-    "V1495": [{
-        "on" : 1}
-    ]
+    "registers" : [
+		{
+			"comment" : "board reset register",
+			"board" : -1,
+			"reg" : "EF24",
+			"val" : "0"
+		},
+		{
+			"comment" : "events per BLT-originally it was 1",
+			"board" : -1,
+			"reg" : "EF1C",
+			"val" : "1"
+		},
+		{
+			"comment" : "Front Panel Trigger Out Enable Mask",
+			"board" : -1,
+			"reg" : "8110",
+			"val" : "00000000"
+		},
+		{
+			"comment" : "for  BUSY on TRG_OUT, LVDS new management, General Purpose I/O, LVDS[15-4] outputs, LVDS[3-0] inputs, TRG/CLK at TTL level (139) or NIM level (138)",
+			"board" : -1,
+			"reg" : "811C",
+			"val" : "D0138"
+		},
+		{
+			"comment" : "BERR register, 10=enable BERR",
+			"board" : -1,
+			"reg" : "EF00",
+			"val" : "10"
+		},
+		{
+			"comment" : "Trigger logic: 80000000 is software only, software + external C0000000",
+			"board" : -1,
+			"reg" : "810C",
+			"val" : "C0000000"
+		},
+		{
+			"comment" : "Post Trigger (time between trigger and end of time window). 80 for 2.5 us",
+			"board" : -1,
+			"reg" : "8114",
+			"val" : "80"
+		},
+		{
+			"comment" : "Channel enable mask. FF= all channels on",
+			"board" : -1,
+			"reg" : "8120",
+			"val" : "FF"
+		},
+		{
+			"comment" : "Buffer organization register. A for new FW.",
+			"board" : -1,
+			"reg" : "800C",
+			"val" : "A"
+		},
+		{
+			"comment" : "DAC default configuration. 1000 = neg unipolar + offset, 1000",
+			"board" : -1,
+			"reg" : "8098",
+			"val" : "1000"
+		},
+		{
+			"comment" : "50: NO ZS + Falling + Sequential + External signal + Non Overlap Triggers, 20050 same with ZLE",
+			"board" : -1,
+			"reg" : "8000",
+			"val" : "50"
+		},
+		{
+			"comment" : "Event size register. Required for new FW. Words.",
+			"board" : -1,
+			"reg" : "8020",
+			"val" : "0"
+		},
+	],
+    "channels":{"165":[0, 1, 2, 3, 4, 5, 6, 7]},
 }
 
 if collection.find_one({"name": run_mode['name']}) is not None:

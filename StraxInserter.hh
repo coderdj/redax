@@ -48,8 +48,6 @@ public:
 private:
   void ParseDocuments(data_packet dp);
   void WriteOutFiles(int smallest_index_seen, bool end=false);
-  void DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
-			   u_int16_t channels_in_event);
   
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
   std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
