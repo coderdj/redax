@@ -319,24 +319,22 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	idx += 4;
 	// Loop through channels
 	for(unsigned int channel=0; channel<8; channel++){		
-
+	  if(!((cmask>>channel)&1))
+            continue;
+	  
 	  float baseline = -1.;
 	  long int tbase = 0;
 	  int bcount = 0;
 	  unsigned int minval = 0x3fff, maxval=0;
 
-	  if(!((cmask>>channel)&1))
-	    continue;
-	  if(channel_finished[channel]>=repeat_this_many){
-	    idx+=csize;
-	    continue;
-	  }
-
 	  if(fFirmwareVersion == 0){
             csize = buff[idx] - 2; // In words (4 bytes). The -2 is cause of header
             idx += 2;
           }
-
+	  if(channel_finished[channel]>=repeat_this_many){
+	    idx+=csize;
+	    continue;
+	  }
 	  for(unsigned int i=0; i<csize; i++){
 	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
 	      continue;
