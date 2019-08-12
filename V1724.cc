@@ -1,8 +1,8 @@
 #include "V1724.hh"
 #include "Options.hh"
 
-V1724::V1724(MongoLog  *log){
-  fOptions = NULL;
+V1724::V1724(MongoLog  *log, Options *options){
+  fOptions = options;
   fBoardHandle=fLink=fCrate=fBID=-1;
   fBaseAddress=0;
   fLog = log;
@@ -11,7 +11,7 @@ V1724::~V1724(){
   End();
 }
 
-int V1724::Init(Options *options, int link, int crate, int bid, unsigned int address){
+int V1724::Init(int link, int crate, int bid, unsigned int address){
 	  
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
@@ -20,7 +20,6 @@ int V1724::Init(Options *options, int link, int crate, int bid, unsigned int add
     fBoardHandle = -1;
     return -1;
   }
-  fOptions = options;
 
   // To start we do not know which FW version we're dealing with (for data parsing)
   fFirmwareVersion = fOptions->GetInt("firmware_version", -1);

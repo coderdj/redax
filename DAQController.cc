@@ -50,8 +50,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   fStatus = DAXHelpers::Arming;
   for(auto d : fOptions->GetBoards("V1724", fHostname)){
     std::cout<<"New digitizer "<<d.board<<std::endl;
-    V1724 *digi = new V1724(fLog);
-    if(digi->Init(options, d.link, d.crate, d.board, d.vme_address)==0){      
+    V1724 *digi = new V1724(fLog, fOptions);
+    if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){      
 	fDigitizers[d.link].push_back(digi);
 	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){
 	  std::cout<<"Defining new optical link "<<d.link<<std::endl;
