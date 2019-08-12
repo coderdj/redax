@@ -169,23 +169,14 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     }
   }
 
-  if(fOptions->GetInt("run_start", 0) == 1){
-	
-	for(auto const& link : fDigitizers ) {
-
-		for(auto digi : link.second){
-
-		// Ensure digitizer is ready to start
-		if(digi->MonitorRegister(0x8104, 0x100, 1000, 1000)!=true){
-		fLog->Entry("Digitizer not ready to start after init", MongoLog::Warning);
-		return -1;
-		}
-
-		// Start command (waits for S-IN)
-		digi->WriteRegister(0x8100, 0x5);
-		}
-	}
-  }
+  for(auto const& link : fDigitizers ) {    
+    for(auto digi : link.second){      
+      if(fOptions->GetInt("run_start", 0) == 1)
+	digi->WriteRegister(0x8100, 0x5);
+      else
+	digi->WriteRegister(0x8100, 0x0);
+    }
+  }  
   fStatus = DAXHelpers::Armed;
 
   return 0;

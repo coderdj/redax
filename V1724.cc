@@ -171,6 +171,7 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
     if( (ret != cvSuccess) && (ret != cvBusError) ){
       stringstream err;
       err<<"Read error in board "<<fBID<<" after "<<count<<" reads: "<<dec<<ret;
+      err<<" and transferred "<<nb<<" bytes this read";
       fLog->Entry(err.str(), MongoLog::Error);
       u_int32_t data=0;
       WriteRegister(0xEF24, 0xFFFFFFFF);
