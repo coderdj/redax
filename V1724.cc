@@ -310,7 +310,10 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       if(buff[idx]>>20==0xA00){ // header
 	u_int32_t esize = buff[idx]&0xFFFFFFF;
 	u_int32_t cmask = buff[idx+1]&0xFF;
-	u_int32_t csize = (esize - 4) / __builtin_popcount(cmask);
+	u_int32_t csize = 0;
+	u_int32_t n_chan = __builtin_popcount(cmask);
+	if(n_chan > 0)
+	  csize = (esize-4)/n_chan;
 
 	idx += 4;
 	// Loop through channels
