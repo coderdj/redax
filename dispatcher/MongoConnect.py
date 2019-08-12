@@ -29,6 +29,7 @@ class MongoConnect():
         # Define DB connectivity. Log is separate to make it easier to split off if needed
         dbn = config['DEFAULT']['ControlDatabaseName']
         rdbn = config['DEFAULT']['RunsDatabaseName']
+        print("Initializing with DB name %s"%dbn)
         self.dax_db = MongoClient(
             config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])[dbn]
         self.log_db = MongoClient(
@@ -255,7 +256,7 @@ class MongoConnect():
         '''
         if mode is None:
             return None
-        doc = self.collections["options"].find_one({"name": mode})
+        doc = self.collections["options"].find_one({"name": mode})        
         try:
             newdoc = {**dict(doc)}
             if "includes" in doc.keys():
@@ -265,6 +266,7 @@ class MongoConnect():
             return newdoc
         except Exception as E:
             # LOG ERROR
+            print("Exception in doc pulling")
             print(E)
         return None
 
@@ -273,18 +275,21 @@ class MongoConnect():
         Get the nodes we need from the run mode
         '''
         if mode is None:
+            print("MODE NONE")
             return [], []
         doc = self.GetRunMode(mode)
         if doc is None:
+            print("DOC NONE")
             return [], []
         cc = []
         hostlist = []
+        print(doc['boards'])
         for b in doc['boards']:
             if b['type'] == 'V1724' and b['host'] not in hostlist:
                 hostlist.append(b['host'])
             elif b['type'] == 'V2718':
                 cc.append(b['host'])
-
+        print(hostlist)
         return hostlist, cc
 
     def GetNextRunNumber(self):
@@ -339,7 +344,7 @@ class MongoConnect():
         self.outgoing_commands = afterlist
         return
 
-    def LogError(self):
+    def LogError(self, reporter, message, priority):
         print("HERE IS WHERE YOU WOULD LOG AN ERROR")
 
     def GetRunStart(self, number):

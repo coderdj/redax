@@ -152,6 +152,7 @@ class DAQController():
                     (latest_status['neutron_veto']['status'] == self.st['RUNNING'] or
                      goal_state['tpc']['link_nv'] == 'false')
             ):
+                print("Checking run turnover TPC")
                 self.CheckRunTurnover('tpc')
 
             # Maybe we're already ARMED and should start a run
@@ -164,6 +165,7 @@ class DAQController():
                     # NV ARMED or UNLINKED
                     (latest_status['neutron_veto']['status'] == self.st['ARMED'] or
                      goal_state['tpc']['link_nv'] == 'false')):
+                print("Starting TPC")
                 self.StartDetector('tpc')
                 
             # Maybe we're IDLE and should arm a run
@@ -176,12 +178,14 @@ class DAQController():
                     # NV IDLE or UNLINKED
                     (latest_status['neutron_veto']['status'] == self.st['IDLE'] or
                      goal_state['tpc']['link_nv'] == 'false')):
+                print("Arming TPC")
                 self.ArmDetector('tpc')
                 
             # Maybe someone is either in error or timing out or we're in some weird mixed state
             # I think this can just be an 'else' because if we're not in some state we're happy
             # with we should probably check if a reset is in order.
             else:
+                print("Checking timeouts cause don't know what to do")
                 self.CheckTimeouts('tpc')
                 
         # 2b, 2c. In case the MV and/or NV are UNLINKED and ACTIVE we can treat them
@@ -215,6 +219,7 @@ class DAQController():
             self.arm_command_sent[detector] is None):
             run_mode = self.goal_state[detector]['mode']
             host_list, cc = self.mongo.GetHostsForMode(run_mode)
+            print("Crate controller: %s"%cc)
             for c in cc:
                 host_list.append(c)
             self.mongo.SendCommand("arm", host_list, self.goal_state[detector]['user'],
@@ -340,7 +345,7 @@ class DAQController():
         '''
         Throw a general error that the DAQ is stuck
         '''
-        self.mongo.LogError("dispatcher", "Dispatcher control loop can't get DAQ out of stuck state")
+        self.mongo.LogError("dispatcher", "Dispatcher control loop can't get DAQ out of stuck state", self.st['ERROR'])
 
     def CheckRunTurnover(self, detector):
         '''
