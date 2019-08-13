@@ -57,8 +57,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
     return 0;
   }
   catch(...){
-    fLog->Entry("StraxInserter::Initialize tried to create output directory but failed."
-		" Check that you have permission to write here.", MongoLog::Error);
+    fLog->Entry(MongoLog::Error, "StraxInserter::Initialize tried to create output directory but failed. Check that you have permission to write here.");
     return -1;
   }
   std::cout<<"Strax output initialized with "<<fChunkLength<<" ns chunks and "<<

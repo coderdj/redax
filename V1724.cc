@@ -103,11 +103,9 @@ int V1724::GetClockCounter(u_int32_t timestamp){
     }
   }
   else{
-    std::stringstream err;
-    err<<"Something odd in your clock counters. t_new: "<<timestamp<<
-    " last time: "<<last_time<<" over 15: "<<seen_over_15<<
-    " under 5: "<<seen_under_5;
-    fLog->Entry(err.str(), MongoLog::Warning);
+    fLog->Entry(MongoLog::Warning,
+      "Something odd in your clock counters. t_new: %i, last_time: %i, over_15: %i, under_5: %i",
+		timestamp, last_time, seen_over_15, seen_under_5);
     // Counter equal to last time, so we're happy and keep the same counter
     return clock_counter;
   }  
@@ -119,10 +117,9 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
   write+=value;
   if(CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg,
 			&write,cvA32_U_DATA,cvD32) != cvSuccess){
-    std::stringstream err;
-    err<<"Failed to write register 0x"<<hex<<reg<<dec<<" to board "<<fBID<<
-      " with value "<<hex<<value<<dec<<" board handle "<<fBoardHandle<<endl;
-    fLog->Entry(err.str(), MongoLog::Warning);
+    fLog->Entry(MongoLog::Warning,
+		"Failed to write register 0x%04x to board %i with value %08x (handle %i)",
+		reg, fBID, value, fBoardHandle);
     return -1;
   }
   // std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;  
@@ -134,11 +131,9 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   int ret = -100;
   if((ret = CAENVME_ReadCycle(fBoardHandle, fBaseAddress+reg, &temp,
 			      cvA32_U_DATA, cvD32)) != cvSuccess){
-    std::stringstream err;
-    std::cout<<"Read returned: "<<ret<<" "<<hex<<temp<<std::endl;
-    err<<"Failed to read register 0x"<<hex<<reg<<dec<<" on board "<<fBID<<
-      ": "<<ret<<endl;
-    fLog->Entry(err.str(), MongoLog::Warning);
+    fLog->Entry(MongoLog::Warning,
+		"Read returned: %i (ret) 0x%08x (val) for reg 0x%04x on board %i",
+		ret, temp, reg, fBID);
     return 0xFFFFFFFF;
   }
   return temp;
@@ -169,10 +164,9 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
       throw;
     };
     if( (ret != cvSuccess) && (ret != cvBusError) ){
-      stringstream err;
-      err<<"Read error in board "<<fBID<<" after "<<count<<" reads: "<<dec<<ret;
-      err<<" and transferred "<<nb<<" bytes this read";
-      fLog->Entry(err.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Error,
+		  "Read error in board %i after %i reads: (%i) and transferred %i bytes this read",
+		  fBID, count, ret, nb);
       u_int32_t data=0;
       WriteRegister(0xEF24, 0xFFFFFFFF);
       data = ReadRegister(0x8104);
@@ -185,10 +179,9 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
     blt_bytes+=nb;
 
     if(blt_bytes>BUFFER_SIZE){
-      stringstream err;
-      err<<"You managed to transfer more data than fits on board."<<
-	"Transferred: "<<blt_bytes<<" bytes, Buffer: "<<BUFFER_SIZE<<" bytes.";
-      fLog->Entry(err.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Error,
+		  "You managed to transfer more data (%i bytes) than fits on the board. Buffer: %i",
+		  blt_bytes, BUFFER_SIZE);
       
       delete[] tempBuffer;
       return 0;
@@ -251,9 +244,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
   // Load up the DAC values
   if(LoadDAC(dac_values, update_dac)!=0){
-    std::stringstream error;
-    error<<"Digitizer "<<fBID<<" failed to load DAC in baseline routine.";
-    fLog->Entry(error.str(), MongoLog::Error);
+    fLog->Entry(MongoLog::Error, "Digitizer %i failed to load DAC in baseline routine", fBID);
     return -2;
   }
 
@@ -271,8 +262,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       break;
     // enable adc
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
-    if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
-      fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
+    if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){      
+      fLog->Entry(MongoLog::Warning, "Timed out waiting for acquisition to start in baselines");
       return -1;
     }
 
@@ -421,9 +412,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
     // Load DAC    
     if(LoadDAC(dac_values, update_dac)!=0){
-      std::stringstream error;
-      error<<"Digitizer "<<fBID<<" failed to load DAC in baseline routine.";
-      fLog->Entry(error.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Error, "Digitizer %i failed to load DAC in baseline routine",
+		  fBID);
       return -2;
     }
     
@@ -432,9 +422,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
   for(unsigned int x=0; x<channel_finished.size(); x++){
     if(channel_finished[x]<2){ // Be a little more lenient in case it's just starting to converge
-      std::stringstream error;
-      error<<"Baseline routine did not finish for channel "<<x<<" (and maybe others)."<<std::endl;
-      fLog->Entry(error.str(), MongoLog::Message);
+      fLog->Entry(MongoLog::Message,
+		  "Baseline routine did not finish for channel %i (and maybe others)", x);
       return -1;
     }
   }
@@ -459,27 +448,22 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     // Give the DAC time to be set if needed
     
     if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
-      stringstream errorstr;
-      errorstr<<"Timed out waiting for channel "<<x<<" in DAC setting";
-      fLog->Entry(errorstr.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Error, "Timed out waiting for channel %i in DAC setting", x);
       return -1;
     }
     
 
     // Now write channel DAC values
     if(WriteRegister((0x1098)+(0x100*x), dac_values[x])!=0){
-      stringstream errorstr;
-      errorstr<<"Failed writing DAC "<<hex<<dac_values[x]<<dec<<" in channel "<<x;
-      fLog->Entry(errorstr.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Error, "Failed writing DAC 0x%04x in channel %i",
+		  dac_values[x], x);
       return -1;
     }
 
     // Give the DAC time to be set if needed
     
     if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
-      stringstream errorstr;
-      errorstr<<"Timed out waiting for channel "<<x<<" after DAC setting";
-      fLog->Entry(errorstr.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Error, "Timed out waiting for channel %i after DAC setting", x);
       return -1;
     }
     

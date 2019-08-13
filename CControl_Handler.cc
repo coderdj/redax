@@ -32,7 +32,8 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   // Pull options for modules
   CrateOptions copts;
   if(fOptions->GetCrateOpt(copts, "V2718") != 0){
-    fLog->Entry("Failed to pull crate options from file. Required fields: s_in, pulser_freq, muon_veto, neutron_veto, led_trigger", MongoLog::Error);
+    fLog->Entry(MongoLog::Error,
+		"Failed to pull crate options from file. Required fields: s_in, pulser_freq, muon_veto, neutron_veto, led_trigger");
     fStatus = DAXHelpers::Idle;
     return -1;
   }
@@ -40,7 +41,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   // Getting the link and crate for V2718
   std::vector<BoardType> bv = fOptions->GetBoards("V2718", fProcname);
   if(bv.size() != 1){
-    fLog->Entry("Require one V2718 to be defined or we can't start the run", MongoLog::Error);
+    fLog->Entry(MongoLog::Entry, "Require one V2718 to be defined or we can't start the run");
     fStatus = DAXHelpers::Idle;
     return -1;
   }
@@ -49,7 +50,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   fV2718 = new V2718(fLog);
   
   if (fV2718->CrateInit(copts, cc_def.link, cc_def.crate)!=0){
-    fLog->Entry("Failed to initialize V2718 crate controller", MongoLog::Error);
+    fLog->Entry(MongoLog::Error, "Failed to initialize V2718 crate controller");
     fStatus = DAXHelpers::Idle;
     return -1;
   }
@@ -60,11 +61,11 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 // Send the start signal from crate controller
 int CControl_Handler::DeviceStart(){
   if(fStatus != DAXHelpers::Armed){
-    fLog->Entry("V2718 attempt to start without arming. Maybe unclean shutdown", MongoLog::Warning);
+    fLog->Entry(MongoLog::Warning, "V2718 attempt to start without arming. Maybe unclean shutdown");
     return 0;
   }
   if(fV2718 == NULL || fV2718->SendStartSignal()!=0){   
-    fLog->Entry("V2718 either failed to start", MongoLog::Error);
+    fLog->Entry(MongoLog::Error, "V2718 either failed to start");
     fStatus = DAXHelpers::Error;
     return -1;
   }
@@ -79,7 +80,7 @@ int CControl_Handler::DeviceStop(){
   // If V2718 here then send stop signal
   if(fV2718 != NULL){
     if(fV2718->SendStopSignal() != 0){
-      fLog->Entry("Failed to stop V2718", MongoLog::Warning);
+      fLog->Entry(MongoLog::Warning, "Failed to stop V2718");
     }
     delete fV2718;
     fV2718 = NULL;

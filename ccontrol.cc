@@ -76,8 +76,8 @@ int main(int argc, char** argv){
 	  run = doc["number"].get_int32();
       }
       catch(const std::exception E){
-        logger->Entry("ccontrol: Received a document from the dispatcher missing [command|number]",
-		      MongoLog::Warning);
+        logger->Entry(MongoLog::Warning,
+		      "ccontrol: Received a document from the dispatcher missing [command|number]");
 	continue;
       }
       
@@ -88,7 +88,7 @@ int main(int argc, char** argv){
 	 mode = doc["mode"].get_utf8().value.to_string();
        }
        catch(const std::exception E){
-	 logger->Entry("ccontrol: Received an arm document with no run mode",MongoLog::Warning);
+	 logger->Entry(MongoLog::Warning, "ccontrol: Received an arm document with no run mode");
        }
                                      
        // Get an override doc from the 'options_override' field if it exists
@@ -98,7 +98,7 @@ int main(int argc, char** argv){
 	 override_json = bsoncxx::to_json(oopts);
        } 
        catch(const std::exception E){
-	 logger->Entry("No override options provided", MongoLog::Debug);
+	 logger->Entry(MongoLog::Debug, "No override options provided");
        }	  
               
        //Here are our options
@@ -108,7 +108,7 @@ int main(int argc, char** argv){
 	 
        // Initialise the V2178, V1495 and DDC10...etc.      
        if(fHandler->DeviceArm(run, options) != 0){
-	 logger->Entry("Failed to initialize devices", MongoLog::Error);
+	 logger->Entry(MongoLog::Error, "Failed to initialize devices");
        }
 
      } // end if "arm" command
@@ -116,12 +116,12 @@ int main(int argc, char** argv){
 
     else if(command == "start"){
        if((fHandler->DeviceStart()) != 0){
-	 logger->Entry("Failed to start devices", MongoLog::Debug);
+	 logger->Entry(MongoLog::Debug, "Failed to start devices");
        }
      } 
      else if(command == "stop"){
        if((fHandler->DeviceStop()) != 0){
-	 logger->Entry("Failed to stop devices", MongoLog::Debug);
+	 logger->Entry(MongoLog::Debug, "Failed to stop devices");
        }
      } 
     } //end for  

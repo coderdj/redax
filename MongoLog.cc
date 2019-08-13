@@ -1,10 +1,22 @@
 #include "MongoLog.hh"
 
-MongoLog::MongoLog(){
+MongoLog::MongoLog(bool LocalFileLogging){
   fLogLevel = 0;
   fHostname = "_host_not_set";
+
+  if(LocalFileLogging){
+    std::cout<<"Configured WITH local file logging. See DAQLog.log"<<std::endl;
+    fOutfile.open("DAQLog.log", std::ofstream::out | std::ofstream::app);
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+    fOutfile<<std::put_time(&tm, "%d-%m-%Y %H-%M-%S")<<
+      " [INIT]: File initialized"<<std::endl;
+  }
+  fLocalFileLogging = LocalFileLogging;
 }
-MongoLog::~MongoLog(){};
+MongoLog::~MongoLog(){
+  fOutfile.close();
+};
 
 int  MongoLog::Initialize(std::string connection_string,
 			  std::string db, std::string collection,
@@ -32,7 +44,19 @@ int  MongoLog::Initialize(std::string connection_string,
   return 0;
 }
 
-int MongoLog::Entry(std::string message, int priority){
+int MongoLog::Entry(int priority, std::string message, ...){
+
+  // Thanks Martin
+  // http://www.martinbroadhurst.com/string-formatting-in-c.html
+  va_list args;
+  va_start (args, message);
+  size_t len = std::vsnprintf(NULL, 0, message.c_str(), args);
+  va_end (args);
+  std::vector<char> vec(len + 1);
+  va_start (args, message);
+  std::vsnprintf(&vec[0], len + 1, message.c_str(), args);
+  va_end (args);
+  message = &vec[0];
 
   if(priority >= fLogLevel){
     try{
@@ -49,6 +73,15 @@ int MongoLog::Entry(std::string message, int priority){
       return -1;
     }
   }
+
+  if(fLocalFileLogging){
+    // ALL priorities get written locally (add some sort of size control later!)
+    auto t = std::time(nullptr);
+    auto tm = *std::localtime(&t);
+    fOutfile<<std::put_time(&tm, "%d-%m-%Y %H-%M-%S")<<" ["<<fPriorities[priority+1]
+	    <<"]: "<<message<<std::endl;
+  }
+  
   return 0;
 }
 

@@ -26,7 +26,7 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
   trydoc = opts_collection.find_one(bsoncxx::builder::stream::document{}<<
 				    "name" << name.c_str() << bsoncxx::builder::stream::finalize);
   if(!trydoc){
-    fLog->Entry("Failed to find your options file in DB", MongoLog::Warning);
+    fLog->Entry(MongoLog::Warning, "Failed to find your options file '%s' in DB", name);
     return -1;
   }
   if(bson_value != NULL)
@@ -42,9 +42,10 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
       auto sd = opts_collection.find_one(bsoncxx::builder::stream::document{} <<
 					 "name" << ele.get_utf8().value.to_string() <<
 					 bsoncxx::builder::stream::finalize);
-      if(sd) success += Override(*sd); // include_json.push_back(bsoncxx::to_json(*sd));
-      else fLog->Entry("Possible improper run config. Check your options includes",
-		       MongoLog::Warning);
+      if(sd)
+	success += Override(*sd); // include_json.push_back(bsoncxx::to_json(*sd));
+      else
+	fLog->Entry(MongoLog::Warning, "Possible improper run config. Check your options includes");
     }
   }catch(...){}; // will catch if there are no includes, for example
 
@@ -52,7 +53,7 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
     success += Override(bsoncxx::from_json(override_opts));
   
   if(success!=0){
-    fLog->Entry("Failed to override options doc with includes and overrides.", MongoLog::Warning);
+    fLog->Entry(MongoLog::Warning, "Failed to override options doc with includes and overrides.");
     return -1;
   }
 
