@@ -49,11 +49,11 @@ int MongoLog::Entry(int priority, std::string message, ...){
   // Thanks Martin
   // http://www.martinbroadhurst.com/string-formatting-in-c.html
   va_list args;
-  va_start (args, message);
+  va_start (args, message); // First pass just gets what the length will be
   size_t len = std::vsnprintf(NULL, 0, message.c_str(), args);
   va_end (args);
-  std::vector<char> vec(len + 1);
-  va_start (args, message);
+  std::vector<char> vec(len + 1); // Declare with proper length
+  va_start (args, message);  // Fill the vector we just made
   std::vsnprintf(&vec[0], len + 1, message.c_str(), args);
   va_end (args);
   message = &vec[0];

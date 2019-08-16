@@ -20,7 +20,9 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
     fBoardHandle = -1;
     return -1;
   }
-
+  fLog->Entry(MongoLog::Message, "Initialized board %i with handle %i (link/crate)(%i/%i)",
+	      bid, fBoardHandle, link, crate);
+  
   // To start we do not know which FW version we're dealing with (for data parsing)
   fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
   if(fFirmwareVersion == -1){
@@ -31,6 +33,8 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
 	cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<endl;
 	return -1;
   }
+  fLog->Entry(MongoLog::Message, "Assuming firmware %i (0: XENON, 1: default)",
+	      fFirmwareVersion);
 
   fLink = link;
   fCrate = crate;
@@ -122,7 +126,9 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
 		reg, fBID, value, fBoardHandle);
     return -1;
   }
-  // std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;  
+  fLog->Entry(MongoLog::Local, "Board %i wrote register 0x%04x with value 0x%04x",
+	      fBID, reg, value);
+  
   return 0;
 }
 
@@ -136,6 +142,8 @@ unsigned int V1724::ReadRegister(unsigned int reg){
 		ret, temp, reg, fBID);
     return 0xFFFFFFFF;
   }
+  fLog->Entry(MongoLog::Local, "Board %i read register 0x%04x as value 0x%04x",
+              fBID, reg, temp);
   return temp;
 }
 
@@ -229,6 +237,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // make a decent guess here.
   u_int32_t starting_value = u_int32_t( (0x3fff-nominal_value)*
 					((0.9*0xffff)/0x3fff) + 3277);
+
   vector<u_int16_t> dac_values(nChannels, starting_value);
   if(end_values[0]!=0 && end_values.size() ==
      (unsigned int)(nChannels)){ // use start values if sent
@@ -239,6 +248,11 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     }
     std::cout<<std::endl;
   }
+  fLog->Entry(MongoLog::Local,
+	      "Found starting values for digi %i BLs: 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x,",
+	      fBID, dac_values[0], dac_values[1], dac_values[2], dac_values[3], dac_values[4],
+	      dac_values[5], dac_values[6], dac_values[7]);
+  
   vector<int> channel_finished(nChannels, 0);
   vector<bool> update_dac(nChannels, true);
 
@@ -253,13 +267,19 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // ****************************
   while(current_iteration < ntries){
 
+    fLog->Entry(MongoLog::Local, "Baseline iteration %i of %i possible for board %i",
+		current_iteration, ntries, fBID);
+
     bool breakout=true;
     for(unsigned int x=0; x<channel_finished.size(); x++){
       if(channel_finished[x]<repeat_this_many)
-	breakout=false;
+	breakout=false;      
     }
-    if(breakout)
+    if(breakout){
+      fLog->Entry(MongoLog::Local,
+		  "Baselines report all channels finished for board %i", fBID);
       break;
+    }
     // enable adc
     WriteRegister(0x8100,0x4);//x24?   // Acq control reg
     if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){      
@@ -292,6 +312,10 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       continue;
     }
 
+    fLog->Entry(MongoLog::Local,
+		"I just got %i bytes data from %i triggers in board %i. Reasonable?",
+		size, triggers_per_iteration, fBID);
+    
     // Now we're going to acquire 'n' triggers
     std::vector<double>baseline_per_channel(nChannels, 0);
     std::vector<double>good_triggers_per_channel(nChannels, 0);
@@ -300,6 +324,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     unsigned int idx = 0;
     while(idx < size/sizeof(u_int32_t)){
       if(buff[idx]>>20==0xA00){ // header
+
 	u_int32_t esize = buff[idx]&0xFFFFFFF;
 	u_int32_t cmask = buff[idx+1]&0xFF;
 	u_int32_t csize = 0;
@@ -307,6 +332,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	if(n_chan > 0)
 	  csize = (esize-4)/n_chan;
 
+	fLog->Entry(MongoLog::Local,
+		    "Board %i found a header with %i size and %i channels",
+		    fBID, esize, csize);
 	idx += 4;
 	// Loop through channels
 	for(unsigned int channel=0; channel<8; channel++){		

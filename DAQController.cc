@@ -78,15 +78,18 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     }
   }
 
+  fLog->Entry(MongoLog::Local, "Sleeping for two seconds");
   // For the sake of sanity and sleeping through the night, do not remove this statement.
   sleep(2); // <-- this one. Leave it here.
   // Seriously. This sleep statement is absolutely vital.
+  fLog->Entry(MongoLog::Local, "That felt great, thanks.");
   
-  // Load registers into digitizers
-  std::cout<<"Loading registers"<<std::endl;
+  // Load registers into digitizers  
   for( auto const& link : fDigitizers )    {
     for(auto digi : link.second){
 
+      fLog->Entry(MongoLog::Local, "Beginning specific init for board %i", digi->bid());
+      
       // Load DAC. n.b.: if you set the DAC value in your ini file you'll overwrite
       // the fancy stuff done here!
       vector<u_int16_t>dac_values(8, 0x0);
@@ -96,7 +99,9 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       int success = 0;
       if(BL_MODE == "fit"){      
 	int nominal_dac = fOptions->GetInt("baseline_value", 16000);
-	std::cout<<"Setting baselines for digi "<<digi->bid()<<std::endl;
+	fLog->Entry(MongoLog::Local,
+		    "You're fitting baselines to digi %i. Starting by getting start values",
+		    digi->bid());
 
 	// Set starting values to most recent run
 	fLog->GetDACValues(digi->bid(), -1, dac_values);
@@ -104,14 +109,15 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	// Try up to five times since sometimes will not converge. If the function
 	// returns -2 it means it crashed hard so don't bother trying again.
 	int tries=0;
-	do{	 
+	do{
+	  fLog->Entry(MongoLog::Local, "Going into DAC routine. Try: %i", tries+1);
 	  success = digi->ConfigureBaselines(dac_values, nominal_dac, 500);
 	  tries++;
 	} while(tries<5 && success==-1);
       }
       else if(BL_MODE == "cached"){
 	int rrun = fOptions->GetInt("baseline_reference_run", -1);
-	std::cout<<"Loading cached baselines for digi "<<digi->bid()<<std::endl;
+	fLog->Entry(MongoLog::Local, "You're loading cached baselines for digi: %i", digi->bid());
 	if(rrun == -1 || fLog->GetDACValues(digi->bid(), rrun, dac_values) != 0){
 	  fLog->Entry(MongoLog::Warning, "Asked for cached baselines but can't find baseline_reference_run. Fallback to fixed");
 	  BL_MODE = "fixed"; // fallback in case no run set
@@ -123,6 +129,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       }
       if(BL_MODE == "fixed"){
 	int BLVal = fOptions->GetInt("baseline_fixed_value", 4000);
+	fLog->Entry(MongoLog::Local, "Loading fixed baselines at value 0x%04x for digi %i",
+		    BLVal, digi->bid());
 	for(unsigned int x=0;x<dac_values.size();x++)
 	  dac_values[x] = BLVal;
       }
@@ -139,28 +147,35 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	fStatus	= DAXHelpers::Idle;
         return -1;
       }
+      
+      fLog->Entry(MongoLog::Local, "Digi %i survived baseline mode. Going into register setting",
+		  digi->bid());
 
-
-      std::cout<<"Writing user registers for digi "<<digi->bid()<<std::endl;
       for(auto regi : fOptions->GetRegisters(digi->bid())){
 	unsigned int reg = fHelper->StringToHex(regi.reg);
 	unsigned int val = fHelper->StringToHex(regi.val);
-	success+=digi->WriteRegister(reg, val);
+	success+=digi->WriteRegister(reg, val);	
       }
-      std::cout<<"User registers finished for digi "<<digi->bid()<<", loading DAC"<<std::endl;
+      fLog->Entry(MongoLog::Local, "User registers finished for digi %i. Loading DAC.",
+                  digi->bid());
+
 
       // Load the baselines you just configured
       vector<bool> update_dac(8, true);
       success += digi->LoadDAC(dac_values, update_dac);
       written_dacs[digi->bid()] = dac_values;
       std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;
-      
+
+      fLog->Entry(MongoLog::Local,
+		  "DAC finished for %i. Assuming not directly followed by an error, that's a wrap.",
+                  digi->bid());
       if(success!=0){
 	//LOG
 	fStatus = DAXHelpers::Idle;
 	fLog->Entry(MongoLog::Warning, "Failed to configure digitizers.");
 	return -1;
       }
+      
     }
   }
 
@@ -171,8 +186,12 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       else
 	digi->WriteRegister(0x8100, 0x0);
     }
-  }  
+  }
+  sleep(1);
   fStatus = DAXHelpers::Armed;
+
+  fLog->Entry(MongoLog::Local, "Arm command finished, returning to main loop");
+
 
   return 0;
 }

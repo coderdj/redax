@@ -6,7 +6,7 @@ import datetime
 timeout = 2
 import socket
 
-client = MongoClient("mongodb://dax:%s@gw:27019/xenonnt"%os.environ["MONGO_PASSWORD"])
+client = MongoClient("mongodb://daq:%s@xenon1t-daq:27020/daq"%os.environ["MONGO_PASSWORD_DAQ"])
 db = client['xenonnt']
 collection = db['system_monitor']
 

@@ -112,13 +112,15 @@ int main(int argc, char** argv){
       
       // Get the command out of the doc
       string command = "";
+      string user = "";
       try{
-	command = (doc)["command"].get_utf8().value.to_string();	
+	command = (doc)["command"].get_utf8().value.to_string();
+	user = (doc)["user"].get_utf8().value.to_string();
       }
       catch (const std::exception &e){
 	//LOG
-	logger->Entry(MongoLog::Warning, "Received malformed commant %s",
-		      bsoncxx::to_json(doc));
+	logger->Entry(MongoLog::Warning, "Received malformed command %s",
+		      bsoncxx::to_json(doc).c_str());
       }
       
       
@@ -145,7 +147,7 @@ int main(int argc, char** argv){
 	  }
 	  
 	  logger->Entry(MongoLog::Message, "Received start command from user %s",
-			(doc)["user"].get_utf8().value.to_string());
+			user.c_str());
 	}
 	else
 	  logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state");
@@ -153,7 +155,7 @@ int main(int argc, char** argv){
       else if(command == "stop"){
 	// "stop" is also a general reset command and can be called any time
 	logger->Entry(MongoLog::Message, "Received stop command from user %s",
-		      (doc)["user"].get_utf8().value.to_string());
+		      user.c_str());
 	if(controller->Stop()!=0)
 	  logger->Entry(MongoLog::Error,
 			"DAQ failed to stop. Will continue clearing program memory.");

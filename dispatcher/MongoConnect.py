@@ -41,6 +41,7 @@ class MongoConnect():
         
         # Translation to human-readable statuses
         self.statuses = ['Idle', 'Arming', 'Armed', 'Running', 'Error', 'Timeout', 'Unknown']
+        self.loglevels = {"DEBUG": 0, "MESSAGE": 1, "WARNING": 2, "ERROR": 3, "FATAL": 4}
 
         # Each collection we actually interact with is stored here
         self.collections = {
@@ -54,7 +55,14 @@ class MongoConnect():
         }
 
         self.outgoing_commands = []
-        
+        self.error_sent = {}
+
+        # How often we should push certain types of errors (seconds)
+        self.error_timeouts = {
+            "ARM_TIMEOUT": 1, # 1=push all
+            "START_TIMEOUT": 1,
+            "STOP_TIMEOUT": 3600/4 # 15 minutes
+        }
         # Timeout (in seconds). How long must a node not report to be considered timing out
         self.timeout = int(config['DEFAULT']['ClientTimeout'])
 
@@ -113,6 +121,9 @@ class MongoConnect():
         # Now compute aggregate status
         self.AggregateStatus()
 
+    def ClearErrorTimeouts(self):
+        self.error_sent = {}
+        
     def UpdateAggregateStatus(self):
         '''
         Put current aggregate status into DB
@@ -344,9 +355,23 @@ class MongoConnect():
         self.outgoing_commands = afterlist
         return
 
-    def LogError(self, reporter, message, priority):
-        print("HERE IS WHERE YOU WOULD LOG AN ERROR")
+    def LogError(self, reporter, message, priority, etype):
 
+        # Note that etype allows you to define timeouts.
+        nowtime = datetime.datetime.utcnow()
+        if (self.error_sent[etype] is not None and self.error_timeouts[etype] is not None
+            and (nowtime-self.error_sent[etype]).total_seconds() <= self.error_timeouts[etype]):
+            print("Could log error, but still in timeout for type %s"%etype)
+            return
+        self.error_sent[etype] = nowtime
+        self.collections['log'].insert({
+            "user": reporter,
+            "message": message,
+            "priority": self.loglevels[priority]
+        })
+        print("Error of type %s logged"%etype)
+        return
+        
     def GetRunStart(self, number):
         doc = self.collections['run'].find_one({"number": number}, {"start": 1})
         if doc is not None:
