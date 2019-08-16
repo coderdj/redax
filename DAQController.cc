@@ -280,8 +280,8 @@ void* DAQController::ReadThreadWrapper(void* data, int link){
 
 void DAQController::ReadData(int link){
   fReadLoop = true;
-  CloseProcessingThreads();
-  OpenProcessingThreads();
+  // CloseProcessingThreads();
+  // OpenProcessingThreads();
   
   // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
   if(fRawDataBuffer != NULL){

@@ -228,8 +228,10 @@ int main(int argc, char** argv){
 	    cout<<"Skipping readout configuration since init failed"<<std::endl;
 	  }
 	  else{
+	    controller->CloseProcessingThreads();
 	    for(unsigned int i=0; i<links.size(); i++){
 	      std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
+	      controller->OpenProcessingThreads(); // open nprocessingthreads per link
 	      std:: thread *readoutThread = new std::thread
 		(
 		 DAQController::ReadThreadWrapper,

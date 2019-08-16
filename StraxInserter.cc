@@ -54,7 +54,6 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
     op /= run_name;
     fOutputPath = op;
     std::experimental::filesystem::create_directory(op);
-    return 0;
   }
   catch(...){
     fLog->Entry(MongoLog::Error, "StraxInserter::Initialize tried to create output directory but failed. Check that you have permission to write here.");
