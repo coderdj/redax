@@ -155,7 +155,7 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   // the other, V1724G, has 512 MS/channel = 1MB/channel
   //unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
   unsigned int BLT_SIZE=524288;
-  unsigned int BUFFER_SIZE = 8388608*2; // 8 MB memory of digi (even allocating more than needed)
+  unsigned int BUFFER_SIZE = 8388608*4; // I do not understand why this has to be so high
   u_int32_t *tempBuffer = new u_int32_t[BUFFER_SIZE];
 
   int count = 0;

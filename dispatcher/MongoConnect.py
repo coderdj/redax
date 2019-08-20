@@ -359,8 +359,9 @@ class MongoConnect():
 
         # Note that etype allows you to define timeouts.
         nowtime = datetime.datetime.utcnow()
-        if (self.error_sent[etype] is not None and self.error_timeouts[etype] is not None
-            and (nowtime-self.error_sent[etype]).total_seconds() <= self.error_timeouts[etype]):
+        if ( (etype in self.error_sent and self.error_sent[etype] is not None) and
+             (etype in self.error_timeouts and self.error_timeouts[etype] is not None) and 
+             (nowtime-self.error_sent[etype]).total_seconds() <= self.error_timeouts[etype]):
             print("Could log error, but still in timeout for type %s"%etype)
             return
         self.error_sent[etype] = nowtime
