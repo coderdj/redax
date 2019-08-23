@@ -38,5 +38,17 @@ while(1):
     
     print(ret_doc)
     collection.insert(ret_doc)
+
+    # We add one specific call for CEPH because gonna put that on main status page
+    if socket.gethostname() == 'reader0':
+        ndoc = {}
+        
+        statvfs = os.statvfs('/live_data')
+        ndoc['host'] = 'ceph'
+        ndoc['ceph_size'] = statvfs.f_frsize * statvfs.f_blocks
+        ndoc['ceph_free'] = statvfs.f_frsize * statvfs.f_bfree
+        ndoc['ceph_available'] = statvfs.f_frsize * statvfs.f_bavail
+        print(ndoc)
+        collection.insert(ndoc)
     
     time.sleep(timeout)
