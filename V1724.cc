@@ -346,7 +346,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 		    fBID, esize, csize);
 	idx += 4;
 	// Loop through channels
-	bool ABORT_MISSION = false;
 	for(unsigned int channel=0; channel<8; channel++){		
 	  if(!((cmask>>channel)&1))
             continue;
@@ -369,8 +368,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	      // The presence of a 0 is clearly a symptom of some odd issue. Seems
 	      // to only happen in the baseline program, so we're just gonna
 	      // hit the old 'abort' button and get out of here
-	      ABORT_MISSION = true;
-	      break;
+	      continue;
 	    }
 	    tbase += buff[idx+i]&0xFFFF;
 	    tbase += (buff[idx+i]>>16)&0xFFFF;
@@ -384,7 +382,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
 	      maxval=(buff[idx+i]>>16)&0xFFFF;
 	  }	  
-	  if(ABORT_MISSION) break; // this should skip to next header
+	  if(idx + csize > size/sizeof (u_int32_t)) break; // this should skip to next header
 	  idx += csize;
 	  // Toss if signal inside
 	  if(abs((int)(maxval)-(int)(minval))>30){
