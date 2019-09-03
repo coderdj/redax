@@ -69,7 +69,7 @@ private:
   bool fErrorBit;
   std::string fCompressor;
   std::map<std::string, std::string*> fFragments;
-  
+  int fBoardFailCount;
 };
 
 #endif

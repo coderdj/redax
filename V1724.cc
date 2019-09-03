@@ -332,6 +332,15 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	if(n_chan > 0)
 	  csize = (esize-4)/n_chan;
 
+	// We should track and log how often this happens. Seems rare but wtf.
+	u_int32_t board_fail = buff[idx+1]&0x4000000;
+	if(board_fail == 1){
+	  fLog->Entry(MongoLog::Local,
+                "Hoppla! Board FAIL bit set for digitizer %i.", fBID);
+	  idx += 4;
+	  continue;
+	}
+
 	fLog->Entry(MongoLog::Local,
 		    "Board %i found a header with %i size and %i channels",
 		    fBID, esize, csize);

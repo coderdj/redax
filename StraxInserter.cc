@@ -17,6 +17,7 @@ StraxInserter::StraxInserter(){
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
+  fBoardFailCount = 0;
 }
 
 StraxInserter::~StraxInserter(){  
@@ -30,6 +31,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
   fCompressor = fOptions->GetString("compressor", "blosc");
   fHostname = hostname;
+  fBoardFailCount = 0;
   std::string run_name = fOptions->GetString("run_identifier", "run");
   
   // To start we do not know which FW version we're dealing with (for data parsing)
@@ -66,8 +68,10 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 }
 
 void StraxInserter::Close(){
+  if(fBoardFailCount != 0){
+    fLog->Entry(MongoLog::Warning, "StraxInserter reports %i board fails this run", fBoardFailCount);
+  }
   fActive = false;
-
 }
 
 
@@ -101,9 +105,11 @@ void StraxInserter::ParseDocuments(data_packet dp){
       
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
-      if(board_fail==1)
+      if(board_fail==1){
+	fBoardFailCount+=1;
 	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
-
+      }
+      
       idx += 4; // Skip the header
 
       for(unsigned int channel=0; channel<8; channel++){
