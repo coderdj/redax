@@ -184,8 +184,10 @@ class DAQController():
             # Maybe someone is either in error or timing out or we're in some weird mixed state
             # I think this can just be an 'else' because if we're not in some state we're happy
             # with we should probably check if a reset is in order.
+            # Note that this will be triggered nearly every run during ARMING so it's not a
+            # big deal
             else:
-                print("Checking timeouts cause don't know what to do")
+                print("Checking timeouts")
                 self.CheckTimeouts('tpc')
                 
         # 2b, 2c. In case the MV and/or NV are UNLINKED and ACTIVE we can treat them

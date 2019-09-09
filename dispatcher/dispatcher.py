@@ -15,7 +15,7 @@ cfile = args.config
 if cfile is None:
     cfile = 'config.ini'
 config.read(cfile)
-
+print("Config arm timeout: %i"%int(config["DEFAULT"]["ArmCommandTimeout"]))
 # Declare database object
 MongoConnector = MongoConnect(config)
 state_codes = ["IDLE", "ARMING", "ARMED", "RUNNING", "ERROR", "TIMEOUT", "UNDECIDED"]
