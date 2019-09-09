@@ -341,9 +341,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  continue;
 	}
 
-	fLog->Entry(MongoLog::Local,
-		    "Board %i found a header with %i size and %i channels",
-		    fBID, esize, csize);
 	idx += 4;
 	// Loop through channels
 	for(unsigned int channel=0; channel<8; channel++){		
@@ -362,7 +359,13 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  if(channel_finished[channel]>=repeat_this_many){
 	    idx+=csize;
 	    continue;
-	  }	  
+	  }
+	  if(idx + csize > size){
+	    fLog->Entry(MongoLog::Local,
+			"Found bad channel size %i in board %i for payload with size %i.",
+			csize, fBID, size);
+	    break;
+	  }
 	  for(unsigned int i=0; i<csize; i++){
 	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0)){
 	      // The presence of a 0 is clearly a symptom of some odd issue. Seems
