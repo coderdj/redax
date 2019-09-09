@@ -180,7 +180,7 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
       data = ReadRegister(0x8104);
       std::cout<<"Board status: "<<hex<<data<<dec<<std::endl;
       delete[] tempBuffer;
-      return 0;
+      return -1;
     }
 
     count++;
@@ -311,6 +311,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       if(buff != NULL) delete[] buff;
       continue;
     }
+    if(size < 0) // There's a read error
+      break;
 
     fLog->Entry(MongoLog::Local,
 		"I just got %i bytes data from %i triggers in board %i. Reasonable?",
