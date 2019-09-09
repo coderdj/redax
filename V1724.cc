@@ -20,7 +20,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
     fBoardHandle = -1;
     return -1;
   }
-  fLog->Entry(MongoLog::Message, "Initialized board %i with handle %i (link/crate)(%i/%i)",
+  fLog->Entry(MongoLog::Debug, "Initialized board %i with handle %i (link/crate)(%i/%i)",
 	      bid, fBoardHandle, link, crate);
   
   // To start we do not know which FW version we're dealing with (for data parsing)
@@ -33,7 +33,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
 	cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<endl;
 	return -1;
   }
-  fLog->Entry(MongoLog::Message, "Assuming firmware %i (0: XENON, 1: default)",
+  fLog->Entry(MongoLog::Debug, "Assuming firmware %i (0: XENON, 1: default)",
 	      fFirmwareVersion);
 
   fLink = link;
