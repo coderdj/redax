@@ -111,7 +111,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	int tries=0;
 	do{
 	  fLog->Entry(MongoLog::Local, "Going into DAC routine. Try: %i", tries+1);
-	  success = digi->ConfigureBaselines(dac_values, nominal_dac, 3);
+	  success = digi->ConfigureBaselines(dac_values, nominal_dac, 1);
 	  tries++;
 	} while(tries<5 && success==-1);
       }
