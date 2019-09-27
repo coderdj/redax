@@ -29,6 +29,7 @@ class MongoConnect():
         # Define DB connectivity. Log is separate to make it easier to split off if needed
         dbn = config['DEFAULT']['ControlDatabaseName']
         rdbn = config['DEFAULT']['RunsDatabaseName']
+        print("Initializing with DB name %s"%dbn)
         self.dax_db = MongoClient(
             config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])[dbn]
         self.log_db = MongoClient(
@@ -40,6 +41,7 @@ class MongoConnect():
         
         # Translation to human-readable statuses
         self.statuses = ['Idle', 'Arming', 'Armed', 'Running', 'Error', 'Timeout', 'Unknown']
+        self.loglevels = {"DEBUG": 0, "MESSAGE": 1, "WARNING": 2, "ERROR": 3, "FATAL": 4}
 
         # Each collection we actually interact with is stored here
         self.collections = {
@@ -53,7 +55,14 @@ class MongoConnect():
         }
 
         self.outgoing_commands = []
-        
+        self.error_sent = {}
+
+        # How often we should push certain types of errors (seconds)
+        self.error_timeouts = {
+            "ARM_TIMEOUT": 1, # 1=push all
+            "START_TIMEOUT": 1,
+            "STOP_TIMEOUT": 3600/4 # 15 minutes
+        }
         # Timeout (in seconds). How long must a node not report to be considered timing out
         self.timeout = int(config['DEFAULT']['ClientTimeout'])
 
@@ -112,6 +121,9 @@ class MongoConnect():
         # Now compute aggregate status
         self.AggregateStatus()
 
+    def ClearErrorTimeouts(self):
+        self.error_sent = {}
+        
     def UpdateAggregateStatus(self):
         '''
         Put current aggregate status into DB
@@ -255,7 +267,7 @@ class MongoConnect():
         '''
         if mode is None:
             return None
-        doc = self.collections["options"].find_one({"name": mode})
+        doc = self.collections["options"].find_one({"name": mode})        
         try:
             newdoc = {**dict(doc)}
             if "includes" in doc.keys():
@@ -265,6 +277,7 @@ class MongoConnect():
             return newdoc
         except Exception as E:
             # LOG ERROR
+            print("Exception in doc pulling")
             print(E)
         return None
 
@@ -273,18 +286,21 @@ class MongoConnect():
         Get the nodes we need from the run mode
         '''
         if mode is None:
+            print("MODE NONE")
             return [], []
         doc = self.GetRunMode(mode)
         if doc is None:
+            print("DOC NONE")
             return [], []
         cc = []
         hostlist = []
+        print(doc['boards'])
         for b in doc['boards']:
             if b['type'] == 'V1724' and b['host'] not in hostlist:
                 hostlist.append(b['host'])
             elif b['type'] == 'V2718':
                 cc.append(b['host'])
-
+        print(hostlist)
         return hostlist, cc
 
     def GetNextRunNumber(self):
@@ -339,9 +355,24 @@ class MongoConnect():
         self.outgoing_commands = afterlist
         return
 
-    def LogError(self):
-        print("HERE IS WHERE YOU WOULD LOG AN ERROR")
+    def LogError(self, reporter, message, priority, etype):
 
+        # Note that etype allows you to define timeouts.
+        nowtime = datetime.datetime.utcnow()
+        if ( (etype in self.error_sent and self.error_sent[etype] is not None) and
+             (etype in self.error_timeouts and self.error_timeouts[etype] is not None) and 
+             (nowtime-self.error_sent[etype]).total_seconds() <= self.error_timeouts[etype]):
+            print("Could log error, but still in timeout for type %s"%etype)
+            return
+        self.error_sent[etype] = nowtime
+        self.collections['log'].insert({
+            "user": reporter,
+            "message": message,
+            "priority": self.loglevels[priority]
+        })
+        print("Error of type %s logged"%etype)
+        return
+        
     def GetRunStart(self, number):
         doc = self.collections['run'].find_one({"number": number}, {"start": 1})
         if doc is not None:

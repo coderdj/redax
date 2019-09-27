@@ -55,7 +55,7 @@ int main(int argc, char** argv){
   mongocxx::collection options_collection = db["options"];
   
   // Logging
-  MongoLog *logger = new MongoLog();
+  MongoLog *logger = new MongoLog(true);
   int ret = logger->Initialize(suri, dbname, "log", hostname,
 			       "dac_values", true);
   if(ret!=0){
@@ -112,14 +112,15 @@ int main(int argc, char** argv){
       
       // Get the command out of the doc
       string command = "";
+      string user = "";
       try{
-	command = (doc)["command"].get_utf8().value.to_string();	
+	command = (doc)["command"].get_utf8().value.to_string();
+	user = (doc)["user"].get_utf8().value.to_string();
       }
       catch (const std::exception &e){
 	//LOG
-	std::stringstream err;
-	err<<"Received malformed command: "<< bsoncxx::to_json(doc);
-	logger->Entry(err.str(), MongoLog::Warning);
+	logger->Entry(MongoLog::Warning, "Received malformed command %s",
+		      bsoncxx::to_json(doc).c_str());
       }
       
       
@@ -145,18 +146,19 @@ int main(int argc, char** argv){
 	    }
 	  }
 	  
-	  logger->Entry("Received start command from user "+
-			(doc)["user"].get_utf8().value.to_string(), MongoLog::Message);
+	  logger->Entry(MongoLog::Message, "Received start command from user %s",
+			user.c_str());
 	}
 	else
-	  logger->Entry("Cannot start DAQ since not in ARMED state", MongoLog::Debug);
+	  logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state");
       }
       else if(command == "stop"){
 	// "stop" is also a general reset command and can be called any time
-	logger->Entry("Received stop command from user "+
-		      (doc)["user"].get_utf8().value.to_string(), MongoLog::Message);
+	logger->Entry(MongoLog::Message, "Received stop command from user %s",
+		      user.c_str());
 	if(controller->Stop()!=0)
-	  logger->Entry("DAQ failed to stop. Will continue clearing program memory.", MongoLog::Error);
+	  logger->Entry(MongoLog::Error,
+			"DAQ failed to stop. Will continue clearing program memory.");
 	
 	current_run_id = "none";
 	if(readoutThreads.size()!=0){
@@ -195,7 +197,7 @@ int main(int argc, char** argv){
 	    override_json = bsoncxx::to_json(oopts);
 	  }
 	  catch(const std::exception &e){
-	    logger->Entry("No override options provided, continue without.", MongoLog::Debug);
+	    logger->Entry(MongoLog::Debug, "No override options provided, continue without.");
 	  }
 	 
 	  bool initialized = false;
@@ -208,25 +210,28 @@ int main(int argc, char** argv){
 	  std::vector<int> links;
 	  std::map<int, std::vector<u_int16_t>> written_dacs;
 	  if(controller->InitializeElectronics(fOptions, links, written_dacs) != 0){
-	    logger->Entry("Failed to initialize electronics", MongoLog::Error);
+	    logger->Entry(MongoLog::Error, "Failed to initialize electronics");
 	    controller->End();
 	  }
 	  else{
 	    logger->UpdateDACDatabase(fOptions->GetString("run_identifier", "default"),
 				      written_dacs);
 	    initialized = true;
-	    logger->Entry("Initialized electronics", MongoLog::Debug);
+	    logger->Entry(MongoLog::Debug, "Initialized electronics");
 	  }
 	  
 	  if(readoutThreads.size()!=0){
-	    logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
+	    logger->Entry(MongoLog::Message,
+			  "Cannot start DAQ while readout thread from previous run active. Please perform a reset");
 	  }
 	  else if(!initialized){
 	    cout<<"Skipping readout configuration since init failed"<<std::endl;
 	  }
 	  else{
+	    controller->CloseProcessingThreads();
 	    for(unsigned int i=0; i<links.size(); i++){
 	      std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
+	      controller->OpenProcessingThreads(); // open nprocessingthreads per link
 	      std:: thread *readoutThread = new std::thread
 		(
 		 DAQController::ReadThreadWrapper,
@@ -237,7 +242,7 @@ int main(int argc, char** argv){
 	  }
 	}	  	
 	else
-	  logger->Entry("Cannot arm DAQ while not 'Idle'", MongoLog::Warning);
+	  logger->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
       }      
     }
     // Insert some information on this readout node back to the monitor DB
@@ -245,9 +250,7 @@ int main(int argc, char** argv){
 
     try{
 
-      // Gonna have to separate this
-      // Need function controller->GetDataPerDigi() that returns map by value and clears prv member
-      // need to put that map into BSON.
+      // Put in status update document
       auto insert_doc = bsoncxx::builder::stream::document{};
       insert_doc << "host" << hostname <<
 	"rate" << controller->GetDataSize()/1e6 <<
@@ -260,18 +263,7 @@ int main(int argc, char** argv){
 	for( auto const& kPair : controller->GetDataPerDigi() )	  
 	  doc << std::to_string(kPair.first) << kPair.second/1e6;
 	} << bsoncxx::builder::stream::close_document;
-	//auto final_doc = insert_doc << bsoncxx::builder::stream::finalize;
 	status.insert_one(insert_doc << bsoncxx::builder::stream::finalize);
-
-	/*status.insert_one(bsoncxx::builder::stream::document{} <<
-			"host" << hostname <<
-			"rate" << controller->GetDataSize()/1e6 <<			
-			"status" << controller->status() <<
-			"buffer_length" << controller->buffer_length()/1e6 <<
-			"run_mode" << controller->run_mode() <<
-			"current_run_id" << current_run_id <<
-			bsoncxx::builder::stream::finalize);
-	*/
     }catch(const std::exception &e){
       std::cout<<"Can't connect to DB to update."<<std::endl;
       std::cout<<e.what()<<std::endl;
