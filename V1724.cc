@@ -6,6 +6,14 @@ V1724::V1724(MongoLog  *log, Options *options){
   fBoardHandle=fLink=fCrate=fBID=-1;
   fBaseAddress=0;
   fLog = log;
+
+  fNsPerSample = 10;
+  fAqCtrlRegister = 0x8100;
+  fAqStatusRegister = 0x8104;
+  fSwTrigRegister = 0x8108;
+  fResetRegister = 0xEF24;
+  fChStatusRegister = 0x1088;
+  fChDACRegister = 0x1098;
 }
 V1724::~V1724(){
   End();
@@ -176,8 +184,8 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
 		  "Read error in board %i after %i reads: (%i) and transferred %i bytes this read",
 		  fBID, count, ret, nb);
       u_int32_t data=0;
-      WriteRegister(0xEF24, 0xFFFFFFFF);
-      data = ReadRegister(0x8104);
+      WriteRegister(fResetRegister, 0xFFFFFFFF);
+      data = ReadRegister(fAqStatusRegister);
       std::cout<<"Board status: "<<hex<<data<<dec<<std::endl;
       delete[] tempBuffer;
       return -1;
@@ -227,7 +235,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // Initial parameters:
   int adjustment_threshold = 5;
   int current_iteration=0;
-  int nChannels = 8;
+  int fNChannels = 8;
   int repeat_this_many=5;
   int triggers_per_iteration = 10;
 
@@ -238,9 +246,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   u_int32_t starting_value = u_int32_t( (0x3fff-nominal_value)*
 					((0.9*0xffff)/0x3fff) + 3277);
 
-  vector<u_int16_t> dac_values(nChannels, starting_value);
+  vector<u_int16_t> dac_values(fNChannels, starting_value);
   if(end_values[0]!=0 && end_values.size() ==
-     (unsigned int)(nChannels)){ // use start values if sent
+     (unsigned int)(fNChannels)){ // use start values if sent
     std::cout<<"Found good start values for digi "<<fBID<<": ";
     for(unsigned int x=0; x<end_values.size(); x++){
       dac_values[x] = end_values[x];
@@ -253,8 +261,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	      fBID, dac_values[0], dac_values[1], dac_values[2], dac_values[3], dac_values[4],
 	      dac_values[5], dac_values[6], dac_values[7]);
   
-  vector<int> channel_finished(nChannels, 0);
-  vector<bool> update_dac(nChannels, true);
+  vector<int> channel_finished(fNChannels, 0);
+  vector<bool> update_dac(fNChannels, true);
 
   // Load up the DAC values
   if(LoadDAC(dac_values, update_dac)!=0){
@@ -281,20 +289,20 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       break;
     }
     // enable adc
-    WriteRegister(0x8100,0x4);//x24?   // Acq control reg
-    if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){      
+    WriteRegister(fAqCtrlRegister,0x4);//x24?   // Acq control reg
+    if(MonitorRegister(fAqStatusRegister, 0x4, 1000, 1000) != true){      
       fLog->Entry(MongoLog::Warning, "Timed out waiting for acquisition to start in baselines");
       return -1;
     }
 
     //write trigger
     for(int ntrig=0; ntrig<triggers_per_iteration; ntrig++){
-      WriteRegister(0x8108,0x1);    // Software trig reg
+      WriteRegister(fSwTrigRegister,0x1);    // Software trig reg
       usleep(1000);                 // Give time for event?
     }
     
     // disable adc
-    WriteRegister(0x8100,0x0);//x24?   // Acq control reg
+    WriteRegister(fAqCtrlRegister,0x0);//x24?   // Acq control reg
     
     // Read data
     u_int32_t *buff = NULL;
@@ -319,8 +327,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 		size, triggers_per_iteration, fBID);
     
     // Now we're going to acquire 'n' triggers
-    std::vector<double>baseline_per_channel(nChannels, 0);
-    std::vector<double>good_triggers_per_channel(nChannels, 0);
+    std::vector<double>baseline_per_channel(fNChannels, 0);
+    std::vector<double>good_triggers_per_channel(fNChannels, 0);
 
     // Parse
     unsigned int idx = 0;
@@ -411,7 +419,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     delete[] buff;
    
     // Get average from total
-    for(int channel=0; channel<nChannels; channel++)
+    for(int channel=0; channel<fNChannels; channel++)
       baseline_per_channel[channel]/=good_triggers_per_channel[channel];
 
     // Compute update to baseline if any
@@ -419,7 +427,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     // adjust up and down accordingly. We will always adjust just a tiny bit
     // less than we think we need to to avoid getting into some overshoot
     // see-saw type loop where we never hit the target.
-    for(int channel=0; channel<nChannels; channel++){
+    for(int channel=0; channel<fNChannels; channel++){
       if(channel_finished[channel]>=repeat_this_many)
 	continue;
       if(good_triggers_per_channel[channel]==0)
@@ -493,14 +501,14 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     
     // Give the DAC time to be set if needed
     
-    if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
+    if(MonitorRegister((fChStatusRegister)+(0x100*x), 0x4, 100, 1000, 0) != true){
       fLog->Entry(MongoLog::Error, "Timed out waiting for channel %i in DAC setting", x);
       return -1;
     }
     
 
     // Now write channel DAC values
-    if(WriteRegister((0x1098)+(0x100*x), dac_values[x])!=0){
+    if(WriteRegister((fChDACRegister)+(0x100*x), dac_values[x])!=0){
       fLog->Entry(MongoLog::Error, "Failed writing DAC 0x%04x in channel %i",
 		  dac_values[x], x);
       return -1;
@@ -508,7 +516,7 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
 
     // Give the DAC time to be set if needed
     
-    if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
+    if(MonitorRegister((fChStatusRegister)+(0x100*x), 0x4, 100, 1000, 0) != true){
       fLog->Entry(MongoLog::Error, "Timed out waiting for channel %i after DAC setting", x);
       return -1;
     }
