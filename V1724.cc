@@ -298,7 +298,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     
     // Read data
     u_int32_t *buff = NULL;
-    u_int32_t size = 0;
+    int size = 0;
     size = ReadMBLT(buff);
     // Check for mal formed data
     if(size>0 && size<=16){
@@ -362,7 +362,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    idx+=csize;
 	    continue;
 	  }
-	  if(idx + csize > size){
+	  if(idx + csize > (u_int32_t)(size)){
 	    fLog->Entry(MongoLog::Local,
 			"Found bad channel size %i in board %i for payload with size %i.",
 			csize, fBID, size);
@@ -392,7 +392,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  // Toss if signal inside
 	  if(abs((int)(maxval)-(int)(minval))>30){
 	    std::cout<<"Signal in baseline, channel "<<channel
-		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
+		     <<" min: "<<minval<<" max: "<<maxval<<" in board "<<
+	      fBID<<std::endl;
 	  }
 	  else{
 	      baseline = (float(tbase) / ((float(bcount))));
