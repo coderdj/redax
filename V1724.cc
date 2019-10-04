@@ -229,7 +229,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   int current_iteration=0;
   int nChannels = 8;
   int repeat_this_many=5;
-  int triggers_per_iteration = 10;
+  int triggers_per_iteration = 1;
 
   
   // Determine starting values. If the flag 'start_provided' is set then the
@@ -355,7 +355,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  unsigned int minval = 0x3fff, maxval=0;
 
 	  if(fFirmwareVersion == 0){
-            csize = (buff[idx] - 2)&0x7FFFFF; // In words (4 bytes). The -2 is cause of header
+            csize = (buff[idx]&0x7FFFFF)-2; // In words (4 bytes). The -2 is cause of header
             idx += 2;
           }
 	  if(channel_finished[channel]>=repeat_this_many){
