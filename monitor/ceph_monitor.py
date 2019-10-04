@@ -35,8 +35,8 @@ def CheckOSDs():
                 if field.isdigit():
                     thisdoc[headers[hi]] = int(field)
                 elif (field[len(field)-1] in ['k', 'M', 'G', 'T'] and
-                      field[:-1].isdigit()):
-                    thisdoc[headers[hi]] = int(int(field[:-1]) *
+                      field[:-1].replace(".", "", 1).isdigit()):
+                    thisdoc[headers[hi]] = float(float(field[:-1]) *
                                             factors[field[len(field)-1]])
                 else:
                     thisdoc[headers[hi]] = field
@@ -67,9 +67,9 @@ def CheckStatus():
         elif res_list[0] == 'pools:':
             ret['pools'] = int(res_list[1])
             ret['pool_pgs'] = int(res_list[3])
-        elif res_list[0] == 'objects:':
-            ret['objects'] = int(float(res_list[1]) * factors[res_list[2]])
-            ret['object_size'] = int(float(res_list[3]) * factors[res_list[4]])
+        #elif res_list[0] == 'objects:':
+        #    ret['objects'] = int(float(res_list[1]) * factors[res_list[2]])
+        #    ret['object_size'] = int(float(res_list[3]) * factors[res_list[4]])
         elif res_list[0] == 'usage':
             ret['used_space'] = int(float(res_list[1])*factors[res_list[2]])
             ret['available_space'] = int(float(res_list[4]) * factors[res_list[5]])
