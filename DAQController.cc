@@ -60,16 +60,6 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	  keys.push_back(d.link);
 	}    
 	fLog->Entry(MongoLog::Debug, "Initialized digitizer %i", d.board);
-
-	// Load initial registers
-	int write_success = 0;
-	write_success += digi->WriteRegister(0xEF24, 0x1);
-	write_success += digi->WriteRegister(0xEF00, 0x30);
-	if(write_success!=0){
-	  fLog->Entry(MongoLog::Error, "Digitizer %i unable to load pre-registers", d.board);
-	  fStatus = DAXHelpers::Idle;
-	  return -1;	  
-	}
     }
     else{
       fLog->Entry(MongoLog::Warning, "Failed to initialize digitizer %i", d.board);
@@ -89,6 +79,15 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     for(auto digi : link.second){
 
       fLog->Entry(MongoLog::Local, "Beginning specific init for board %i", digi->bid());
+      // Load initial registers
+      int write_success = 0;
+      write_success += digi->WriteRegister(0xEF24, 0x1);
+      write_success += digi->WriteRegister(0xEF00, 0x30);
+      if(write_success!=0){
+	fLog->Entry(MongoLog::Error, "Digitizer %i unable to load pre-registers", digi->bid());
+	fStatus = DAXHelpers::Idle;
+	return -1;
+      }
       
       // Load DAC. n.b.: if you set the DAC value in your ini file you'll overwrite
       // the fancy stuff done here!
