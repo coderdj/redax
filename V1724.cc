@@ -354,6 +354,14 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  int bcount = 0;
 	  unsigned int minval = 0x3fff, maxval=0;
 
+	  // Sometimes for some reason idx is bigger than size.
+	  if(idx > (u_int32_t)(size)){
+	    fLog->Entry(MongoLog::Local,
+			"Found bad buffer in board %i with size %i but attempted to access %i.",
+			fBID, size, idx);
+	    break;
+	  }
+	  
 	  if(fFirmwareVersion == 0){
             csize = (buff[idx]&0x7FFFFF)-2; // In words (4 bytes). The -2 is cause of header
             idx += 2;
