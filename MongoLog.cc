@@ -155,7 +155,7 @@ int MongoLog::GetDACValues(int bid, int reference_run,
 	return 0;
       }
     }catch(...){
-      dac_values = std::vector<u_int16_t>(8, 1000);
+      dac_values = std::vector<u_int16_t>(8, 4000);
     }
   }
     
