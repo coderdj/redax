@@ -307,7 +307,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       continue;
     }
     if(size == 0){
-      std::cout<<"No event though board said there would be one"<<std::endl;
+      std::cout<<"No event though board "<<fBID<<
+	" said there would be one"<<std::endl;
       if(buff != NULL) delete[] buff;
       continue;
     }
