@@ -183,9 +183,9 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   for(auto const& link : fDigitizers ) {    
     for(auto digi : link.second){      
       if(fOptions->GetInt("run_start", 0) == 1)
-	digi->WriteRegister(0x8100, 0x5);
+	digi->WriteRegister(0x8100, 0x105);
       else
-	digi->WriteRegister(0x8100, 0x0);
+	digi->WriteRegister(0x8100, 0x100);
     }
   }
   sleep(1);
@@ -209,7 +209,7 @@ int DAQController::Start(){
 	}
 
 	// Send start command
-	digi->WriteRegister(0x8100, 0x4);
+	digi->WriteRegister(0x8100, 0x104);
 
 	// Ensure digitizer is started
 	if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
@@ -230,7 +230,7 @@ int DAQController::Stop(){
   for( auto const& link : fDigitizers ){      
     for(auto digi : link.second){
       
-      digi->WriteRegister(0x8100, 0x0);
+      digi->WriteRegister(0x8100, 0x100);
 
       // Ensure digitizer is stopped 
       if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000, 0x0) != true){
