@@ -6,7 +6,6 @@
 #include "V2718.hh"
 #include <thread>
 
-class V1495;
 class DDC10;
 
 class CControl_Handler{
@@ -23,7 +22,6 @@ public:
 private:
 
   V2718 *fV2718;
-  V1495 *fV1495;
   DDC10 *fDDC10;
 
   int fStatus;

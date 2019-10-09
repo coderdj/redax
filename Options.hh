@@ -39,9 +39,10 @@ struct CrateOptions{
   int muon_veto;
   int led_trigger;
   int s_in;
+  bool has_v1495;
+  uint32_t v1495_vme_address;
+  std::vector<RegisterType> v1495_registers;
 };
-
-
 
 class Options{
 

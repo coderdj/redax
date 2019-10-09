@@ -210,12 +210,28 @@ int Options::GetCrateOpt(CrateOptions &ret, std::string device){
     ret.muon_veto = bson_options["V2718"]["muon_veto"].get_int32().value;
     ret.neutron_veto = bson_options["V2718"]["neutron_veto"].get_int32().value;
     ret.led_trigger = bson_options["V2718"]["led_trigger"].get_int32().value;
+    try{
+      // This only works if there's one v1495 in the system
+      fLog->Entry(MongoLog::Local, "Getting V1495 options");
+      ret.v1495_vme_address = bson_options["V2718"]["V1495_vme_address"].get_int32().value;
+      bsoncxx::array::view regs = bson_options["V2718"]["V1495_registers"].get_array().value;
+      RegisterType rt;
+      for (auto& reg : regs) {
+        rt.reg = reg["reg"].get_utf8().value.to_string();
+        rt.val = reg["val"].get_utf8().value.to_string();
+        ret.v1495_registers.push_back(rt);
+      }
+      ret.has_v1495 = true;
+    }catch(std::exception &E) {
+      // document probably doesn't have V1495 entries
+      ret.has_v1495 = false;
+    }
   }catch(std::exception &E){
     std::cout<<"Exception getting ccontroller opts: "<<std::endl<<E.what()<<std::endl;
     return -1;
   }
   return 0;
-}	
+}
 
 int Options::GetChannel(int bid, int cid){
   std::string boardstring = std::to_string(bid);

@@ -1,6 +1,5 @@
 #include "CControl_Handler.hh"
 #include "DAXHelpers.hh"
-#include "V2718.hh"
 
 
 CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
@@ -9,7 +8,6 @@ CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
   fProcname = procname;
   fCurrentRun = -1;
   fV2718 = NULL;
-  fV1495 = NULL;
   fDDC10 = NULL;
   fStatus = DAXHelpers::Idle;
 }
@@ -18,7 +16,7 @@ CControl_Handler::~CControl_Handler(){
   DeviceStop();
 }
 
-// Initialising various devices namely; V2718 crate controller, V1495, DDC10...
+// Initialising various devices namely; V2718 crate controller, DDC10...
 int CControl_Handler::DeviceArm(int run, Options *opts){
 
   fStatus = DAXHelpers::Arming;
@@ -41,7 +39,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   // Getting the link and crate for V2718
   std::vector<BoardType> bv = fOptions->GetBoards("V2718", fProcname);
   if(bv.size() != 1){
-    fLog->Entry(MongoLog::Entry, "Require one V2718 to be defined or we can't start the run");
+    fLog->Entry(MongoLog::Error, "Require one V2718 to be defined or we can't start the run");
     fStatus = DAXHelpers::Idle;
     return -1;
   }
@@ -49,7 +47,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
     
   fV2718 = new V2718(fLog);
   
-  if (fV2718->CrateInit(copts, cc_def.link, cc_def.crate)!=0){
+  if (fV2718->CrateInit(copts, cc_def.link, cc_def.crate, cc_def.vme_address)!=0){
     fLog->Entry(MongoLog::Error, "Failed to initialize V2718 crate controller");
     fStatus = DAXHelpers::Idle;
     return -1;
@@ -74,7 +72,7 @@ int CControl_Handler::DeviceStart(){
   return 0;
 }
 
-// Stopping the previously started devices; V2718, V1495, DDC10...
+// Stopping the previously started devices; V2718, DDC10...
 int CControl_Handler::DeviceStop(){
 
   // If V2718 here then send stop signal
@@ -87,10 +85,6 @@ int CControl_Handler::DeviceStop(){
   }
 
   /*
-  if(fV1495 != NULL){
-    delete fV1495;
-    fV1495 = NULL;
-  }
   if(fDDC10 != NULL){
     delete fDDC10;
     fDDC10 = NULL;
@@ -101,7 +95,7 @@ int CControl_Handler::DeviceStop(){
 }
 
 
-// Reporting back on the status of V2718, V1495, DDC10 etc...
+// Reporting back on the status of V2718, DDC10 etc...
 bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
  
   // Updating the status doc
@@ -121,7 +115,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
 	     << bsoncxx::builder::stream::close_document;
   }
   
-  // Here you would add the DDC10 and V1495
+  // Here you would add the DDC10
   
   auto after_array = in_array << bsoncxx::builder::stream::close_array;
   return after_array << bsoncxx::builder::stream::finalize;

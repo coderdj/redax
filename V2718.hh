@@ -14,15 +14,13 @@
 
 using namespace std;
 
-
-
 class V2718{
  
 public:
   V2718(MongoLog *log);
   ~V2718();
   
-  int CrateInit(CrateOptions c_opts, int link, int crate);
+  int CrateInit(CrateOptions c_opts, int link, int crate, uint32_t vme_address);
   int SendStartSignal();
   int SendStopSignal(bool end=true); 
   
@@ -34,6 +32,7 @@ private:
   
   int fBoardHandle;
   int fCrate, fLink;
+  uint32_t fVMEAddress;
   
   MongoLog *fLog;
 

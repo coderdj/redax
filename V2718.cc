@@ -12,11 +12,12 @@ V2718::~V2718(){
 }
 
 
-int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
+int V2718::CrateInit(CrateOptions c_opts, int link, int crate, uint32_t vme_address){
         
   fCrate = crate;
   fLink = link;  	
   fCopts = c_opts;
+  fVMEAddress = vme_address;
   
   // Initialising the V2718 module via the specified optical link
   int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
@@ -25,6 +26,22 @@ int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
     return -1;
   }   
   SendStopSignal(false);
+  if (fCopts.has_v1495) {
+    uint32_t addr, val;
+    for (auto& reg_write : fCopts.v1495_registers) {
+      addr = fVMEAddress + fCopts.v1495_vme_address + DAXHelpers::StringToHex(reg_write.reg);
+      val = DAXHelpers::StringToHex(reg_write.val);
+      a = CAENVME_WriteCycle(fCrate, addr, &val, cvA32_U_DATA, cvD32);
+      if (a != cvSuccess) {
+        std::stringstream msg;
+        msg << "Failed to write value 0x" << reg_write.val << " to V1495 address 0x"
+            << reg_write.reg << " (VME addr 0x" << fCopts.v1495_vme_address << ")";
+        fLog->Entry(MongoLog::Error, msg.str());
+        return -2;
+      }
+      usleep(1000);
+    }
+  }
   return 0;
 }
 
