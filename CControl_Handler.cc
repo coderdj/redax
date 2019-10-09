@@ -41,7 +41,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   // Getting the link and crate for V2718
   std::vector<BoardType> bv = fOptions->GetBoards("V2718", fProcname);
   if(bv.size() != 1){
-    fLog->Entry(MongoLog::Entry, "Require one V2718 to be defined or we can't start the run");
+    fLog->Entry(MongoLog::Message, "Require one V2718 to be defined or we can't start the run");
     fStatus = DAXHelpers::Idle;
     return -1;
   }
