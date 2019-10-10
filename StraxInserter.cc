@@ -120,7 +120,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	u_int32_t channel_time = event_time;
 
 	if(fFirmwareVersion == 0){
-	  channel_size = buff[idx] - 2; // In words (4 bytes). The -2 is cause of header
+	  channel_size = (buff[idx]&0x7FFFFF)-2; // In words (4 bytes). The -2 is cause of header
 	  idx++;
 	  channel_time = buff[idx]&0x7FFFFFFF;
 	  idx++;

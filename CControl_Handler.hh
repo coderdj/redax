@@ -4,9 +4,8 @@
 #include "Options.hh"
 #include "MongoLog.hh"
 #include "V2718.hh"
+#include "DDC10.hh"
 #include <thread>
-
-class DDC10;
 
 class CControl_Handler{
   

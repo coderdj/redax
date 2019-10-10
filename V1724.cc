@@ -237,7 +237,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   int current_iteration=0;
   int fNChannels = 8;
   int repeat_this_many=5;
-  int triggers_per_iteration = 10;
+  int triggers_per_iteration = 1;
 
   
   // Determine starting values. If the flag 'start_provided' is set then the
@@ -306,7 +306,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     
     // Read data
     u_int32_t *buff = NULL;
-    u_int32_t size = 0;
+    int size = 0;
     size = ReadMBLT(buff);
     // Check for mal formed data
     if(size>0 && size<=16){
@@ -315,7 +315,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       continue;
     }
     if(size == 0){
-      std::cout<<"No event though board said there would be one"<<std::endl;
+      std::cout<<"No event though board "<<fBID<<
+	" said there would be one"<<std::endl;
       if(buff != NULL) delete[] buff;
       continue;
     }
@@ -362,15 +363,23 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  int bcount = 0;
 	  unsigned int minval = 0x3fff, maxval=0;
 
+	  // Sometimes for some reason idx is bigger than size.
+	  if(idx > (u_int32_t)(size)){
+	    fLog->Entry(MongoLog::Local,
+			"Found bad buffer in board %i with size %i but attempted to access %i.",
+			fBID, size, idx);
+	    break;
+	  }
+	  
 	  if(fFirmwareVersion == 0){
-            csize = buff[idx] - 2; // In words (4 bytes). The -2 is cause of header
+            csize = (buff[idx]&0x7FFFFF)-2; // In words (4 bytes). The -2 is cause of header
             idx += 2;
           }
 	  if(channel_finished[channel]>=repeat_this_many){
 	    idx+=csize;
 	    continue;
 	  }
-	  if(idx + csize > size){
+	  if(idx + csize > (u_int32_t)(size)){
 	    fLog->Entry(MongoLog::Local,
 			"Found bad channel size %i in board %i for payload with size %i.",
 			csize, fBID, size);
@@ -400,7 +409,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	  // Toss if signal inside
 	  if(abs((int)(maxval)-(int)(minval))>30){
 	    std::cout<<"Signal in baseline, channel "<<channel
-		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
+		     <<" min: "<<minval<<" max: "<<maxval<<" in board "<<
+	      fBID<<std::endl;
 	  }
 	  else{
 	      baseline = (float(tbase) / ((float(bcount))));

@@ -60,26 +60,28 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	  keys.push_back(d.link);
 	}    
 	fLog->Entry(MongoLog::Debug, "Initialized digitizer %i", d.board);
-
-	// Load initial registers
+	
 	int write_success = 0;
 	write_success += digi->WriteRegister(0xEF24, 0x1);
 	write_success += digi->WriteRegister(0xEF00, 0x30);
 	if(write_success!=0){
-	  fLog->Entry(MongoLog::Error, "Digitizer %i unable to load pre-registers", d.board);
+	  fLog->Entry(MongoLog::Error,
+		      "Digitizer %i unable to load pre-registers",
+		      digi->bid());
 	  fStatus = DAXHelpers::Idle;
-	  return -1;	  
+	  return -1;
 	}
     }
     else{
       fLog->Entry(MongoLog::Warning, "Failed to initialize digitizer %i", d.board);
       fStatus = DAXHelpers::Idle;
       return -1;
-    }
+    }    
   }
 
   fLog->Entry(MongoLog::Local, "Sleeping for two seconds");
-  // For the sake of sanity and sleeping through the night, do not remove this statement.
+  // For the sake of sanity and sleeping through the night,
+  // do not remove this statement.
   sleep(2); // <-- this one. Leave it here.
   // Seriously. This sleep statement is absolutely vital.
   fLog->Entry(MongoLog::Local, "That felt great, thanks.");
@@ -87,11 +89,10 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   // Load registers into digitizers  
   for( auto const& link : fDigitizers )    {
     for(auto digi : link.second){
-
       fLog->Entry(MongoLog::Local, "Beginning specific init for board %i", digi->bid());
       
-      // Load DAC. n.b.: if you set the DAC value in your ini file you'll overwrite
-      // the fancy stuff done here!
+      // Load DAC. n.b.: if you set the DAC value in your
+      // ini file you'll overwrite the fancy stuff done here!
       vector<u_int16_t>dac_values(8, 0x0);
 
       // Multiple options here
@@ -182,9 +183,9 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   for(auto const& link : fDigitizers ) {    
     for(auto digi : link.second){      
       if(fOptions->GetInt("run_start", 0) == 1)
-	digi->WriteRegister(0x8100, 0x5);
+	digi->WriteRegister(0x8100, 0x105);
       else
-	digi->WriteRegister(0x8100, 0x0);
+	digi->WriteRegister(0x8100, 0x100);
     }
   }
   sleep(1);
@@ -208,7 +209,7 @@ int DAQController::Start(){
 	}
 
 	// Send start command
-	digi->WriteRegister(0x8100, 0x4);
+	digi->WriteRegister(0x8100, 0x104);
 
 	// Ensure digitizer is started
 	if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
@@ -229,7 +230,7 @@ int DAQController::Stop(){
   for( auto const& link : fDigitizers ){      
     for(auto digi : link.second){
       
-      digi->WriteRegister(0x8100, 0x0);
+      digi->WriteRegister(0x8100, 0x100);
 
       // Ensure digitizer is stopped 
       if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000, 0x0) != true){
