@@ -163,14 +163,20 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   // the other, V1724G, has 512 MS/channel = 1MB/channel
   //unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
   unsigned int BLT_SIZE=524288;
-  unsigned int BUFFER_SIZE = 8388608*4; // I do not understand why this has to be so high
-  u_int32_t *tempBuffer = new u_int32_t[BUFFER_SIZE];
+  vector<u_int32_t*> transferred_buffers;
+  
+  // unsigned int BUFFER_SIZE = 8388608*4; // I do not understand why this has to be so high
+  // u_int32_t *tempBuffer = new u_int32_t[BUFFER_SIZE];
 
   int count = 0;
   do{
+
+    // Reserve space for this block transfer
+    u_int32_t* thisBLT = new u_int32_t[BLT_SIZE];
+    
     try{
       ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
-				     ((unsigned char*)tempBuffer)+blt_bytes,
+				     ((unsigned char*)thisBLT),
 				     BLT_SIZE, cvA32_U_MBLT, cvD64, &nb);
     }catch(std::exception E){
       std::cout<<fBoardHandle<<" sucks"<<std::endl;
@@ -183,26 +189,20 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
       fLog->Entry(MongoLog::Error,
 		  "Read error in board %i after %i reads: (%i) and transferred %i bytes this read",
 		  fBID, count, ret, nb);
-      u_int32_t data=0;
-      WriteRegister(fResetRegister, 0xFFFFFFFF);
-      data = ReadRegister(fAqStatusRegister);
-      std::cout<<"Board status: "<<hex<<data<<dec<<std::endl;
-      delete[] tempBuffer;
+
+      // Delete all reserved data and fail
+      delete[] thisBLT;
+      for(unsigned int x=0;x<transferred_buffers.size(); x++)
+	delete[] transferred_buffers[x];
       return -1;
     }
 
     count++;
     blt_bytes+=nb;
+    transferred_buffers.push_back(thisBLT);
 
-    if(blt_bytes>BUFFER_SIZE){
-      fLog->Entry(MongoLog::Error,
-		  "You managed to transfer more data (%i bytes) than fits on the board. Buffer: %i",
-		  blt_bytes, BUFFER_SIZE);
-      
-      delete[] tempBuffer;
-      return 0;
-    }
   }while(ret != cvBusError);
+
 
 
   // Now, unfortunately we need to make one copy of the data here or else our memory
@@ -215,10 +215,15 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   // In tests this does not seem to impact our ability to read out the V1724 at the
   // maximum bandwidth of the link.
   if(blt_bytes>0){
-    buffer = new u_int32_t[blt_bytes/(sizeof(u_int32_t))];
-    std::memcpy(buffer, tempBuffer, blt_bytes);
+    buffer = new u_int32_t[blt_bytes/sizeof(u_int32_t)];
+    for(unsigned int x=0; x<transferred_buffers.size(); x++){
+      u_int32_t size_to_transfer = BLT_SIZE;
+      if(x == transferred_buffers.size()-1) // last element
+	size_to_transfer = blt_bytes - (x*BLT_SIZE);
+      std::memcpy(buffer+((x*BLT_SIZE)/sizeof(u_int32_t)), transferred_buffers[x], size_to_transfer);
+    }
   }
-  delete[] tempBuffer;
+  for(unsigned int x=0;x<transferred_buffers.size(); x++)                                                                                                         delete[] transferred_buffers[x];
   return blt_bytes;
   
 }
