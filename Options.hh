@@ -42,7 +42,7 @@ struct CrateOptions{
   int led_trigger;
   int s_in;
   bool has_v1495;
-  uint32_t v1495_vme_address;
+  std::string v1495_vme_address;
   std::vector<RegisterType> v1495_registers;
 };
 

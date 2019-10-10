@@ -20,7 +20,7 @@ public:
   V2718(MongoLog *log);
   ~V2718();
   
-  int CrateInit(CrateOptions c_opts, int link, int crate, uint32_t vme_address);
+  int CrateInit(CrateOptions c_opts, int link, int crate, std::string vme_address);
   int SendStartSignal();
   int SendStopSignal(bool end=true); 
   

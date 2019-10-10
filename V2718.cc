@@ -12,12 +12,12 @@ V2718::~V2718(){
 }
 
 
-int V2718::CrateInit(CrateOptions c_opts, int link, int crate, uint32_t vme_address){
+int V2718::CrateInit(CrateOptions c_opts, int link, int crate, std::string vme_address){
         
   fCrate = crate;
   fLink = link;  	
   fCopts = c_opts;
-  fVMEAddress = vme_address;
+  fVMEAddress = DAXHelpers::StringToHex(vme_address);
   // Initialising the V2718 module via the specified optical link
   int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
   if(a != cvSuccess){
@@ -28,7 +28,7 @@ int V2718::CrateInit(CrateOptions c_opts, int link, int crate, uint32_t vme_addr
   if (fCopts.has_v1495) {
     uint32_t addr, val;
     for (auto& reg_write : fCopts.v1495_registers) {
-      addr = fVMEAddress + fCopts.v1495_vme_address + DAXHelpers::StringToHex(reg_write.reg);
+      addr = fVMEAddress + DAXHelpers::StringToHex(fCopts.v1495_vme_address) + DAXHelpers::StringToHex(reg_write.reg);
       val = DAXHelpers::StringToHex(reg_write.val);
       a = CAENVME_WriteCycle(fCrate, addr, &val, cvA32_U_DATA, cvD32);
       if (a != cvSuccess) {

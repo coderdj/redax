@@ -215,7 +215,7 @@ int Options::GetCrateOpt(CrateOptions &ret, std::string device){
     try{
       // This only works if there's one v1495 in the system
       fLog->Entry(MongoLog::Local, "Getting V1495 options");
-      ret.v1495_vme_address = bson_options["V2718"]["V1495_vme_address"].get_int32().value;
+      ret.v1495_vme_address = bson_options["V2718"]["V1495_vme_address"].get_utf8().value.to_string();
       bsoncxx::array::view regs = bson_options["V2718"]["V1495_registers"].get_array().value;
       RegisterType rt;
       for (auto& reg : regs) {
