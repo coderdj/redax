@@ -23,8 +23,7 @@ struct BoardType{
   int board;
   std::string type;
   std::string host;
-  std::string vme_address;
-  //unsigned int vme_address;
+  unsigned int vme_address;
 
 };
 

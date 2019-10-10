@@ -174,10 +174,8 @@ std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname
     bt.link = ele["link"].get_int32();
     bt.crate = ele["crate"].get_int32();
     bt.board = ele["board"].get_int32();
-    bt.type = ele["type"].get_utf8().value.to_string();
-    bt.vme_address = ele["vme_address"].get_utf8().value.to_string();
-    //bt.vme_address = ele["vme_address"].get_int32();
-    //bt.vme_address = fHelper->StringToHex(ele["vme_address"].get_utf8().value.to_string());
+    bt.type = ele["type"].get_utf8().value.to_string();    
+    bt.vme_address = fHelper->StringToHex(ele["vme_address"].get_utf8().value.to_string());
     ret.push_back(bt);
   }
   

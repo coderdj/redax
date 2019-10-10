@@ -1,6 +1,6 @@
 #include <iostream>
 #include "DDC10.hh"
-#include </usr/include/tcl8.6/expect.h>
+#include <tcl8.6/expect.h>
 #include <sys/wait.h>
 #include <math.h>
 

@@ -60,13 +60,13 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   fDDC10 = new DDC10();
 
   if(fOptions->GetHEVOpt(hopts, "DDC10") != 0){
-     fLog->Entry("Failed to pull DDC10 options from file", MongoLog::Error);
+    fLog->Entry(MongoLog::Error, "Failed to pull DDC10 options from file");
      fStatus = DAXHelpers::Idle;
      return -1;
   }
   // Initialise the DDC10 based HEV - it doesn't need further "start"/"stop" signals
   if(fDDC10->Initialize(hopts)!=0){
-    fLog->Entry("Failed to initialise DDC10 HEV", MongoLog::Error);
+    fLog->Entry(MongoLog::Error, "Failed to initialise DDC10 HEV");
     fStatus = DAXHelpers::Idle;
     return -1;
   }else{

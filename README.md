@@ -11,6 +11,7 @@ See documentation here: [link](https://coderdj.github.io/redax)
 * Driver for your CAEN PCI card
 * A DAQ hardware setup (docs coming on xenon wiki)
 * A MongoDB deployment you can write to
+* tcl8.6-dev, and tcl-expect-dev
 
 ## Install
 
