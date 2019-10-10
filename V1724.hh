@@ -21,7 +21,7 @@ class V1724{
   ~V1724();
 
   int Init(int link, int crate, int bid, unsigned int address=0);
-  u_int32_t ReadMBLT(u_int32_t *&buffer);
+  int64_t ReadMBLT(u_int32_t *&buffer);
   int WriteRegister(unsigned int reg, unsigned int value);
   int ConfigureBaselines(vector <u_int16_t> &end_values,
 			 int nominal_value=16000,

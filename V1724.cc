@@ -190,9 +190,9 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
+int64_t V1724::ReadMBLT(unsigned int *&buffer){
   // Initialize
-  unsigned int blt_bytes=0;
+  int64_t blt_bytes=0;
   int nb=0,ret=-5;
   // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
   // the other, V1724G, has 512 MS/channel = 1MB/channel
