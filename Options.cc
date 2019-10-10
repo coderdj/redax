@@ -175,7 +175,9 @@ std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname
     bt.crate = ele["crate"].get_int32();
     bt.board = ele["board"].get_int32();
     bt.type = ele["type"].get_utf8().value.to_string();
-    bt.vme_address = fHelper->StringToHex(ele["vme_address"].get_utf8().value.to_string());
+    bt.vme_address = ele["vme_address"].get_utf8().value.to_string();
+    //bt.vme_address = ele["vme_address"].get_int32();
+    //bt.vme_address = fHelper->StringToHex(ele["vme_address"].get_utf8().value.to_string());
     ret.push_back(bt);
   }
   
@@ -227,3 +229,32 @@ int Options::GetChannel(int bid, int cid){
     return -1;
   }
 }
+
+int Options::GetHEVOpt(HEVOptions &ret, std::string device){
+  try{
+    ret.signal_threshold = bson_options["DDC10"]["signal_threshold"].get_int32().value;
+    ret.sign = bson_options["DDC10"]["sign"].get_int32().value;
+    ret.rise_time_cut = bson_options["DDC10"]["rise_time_cut"].get_int32().value;
+    ret.inner_ring_factor = bson_options["DDC10"]["inner_ring_factor"].get_int32().value;
+    ret.outer_ring_factor = bson_options["DDC10"]["outer_ring_factor"].get_int32().value;
+    ret.integration_threshold = bson_options["DDC10"]["integration_threshold"].get_int32().value;
+    ret.parameter_0 = bson_options["DDC10"]["parameter_0"].get_int32().value;
+    ret.parameter_1 = bson_options["DDC10"]["parameter_1"].get_int32().value;
+    ret.parameter_2 = bson_options["DDC10"]["parameter_2"].get_int32().value;
+    ret.parameter_3 = bson_options["DDC10"]["parameter_3"].get_int32().value;
+    ret.window = bson_options["DDC10"]["window"].get_int32().value;
+    ret.prescaling = bson_options["DDC10"]["prescaling"].get_int32().value;
+    ret.component_status = bson_options["DDC10"]["component_status"].get_int32().value;
+    ret.width_cut = bson_options["DDC10"]["width_cut"].get_int32().value;
+    ret.delay = bson_options["DDC10"]["delay"].get_int32().value;
+
+    ret.address = bson_options["DDC10"]["address"].get_utf8().value.to_string();
+    ret.required = bson_options["DDC10"]["required"].get_utf8().value.to_string();
+  }catch(std::exception &E){
+    std::cout<<"Exception getting DDC10 opts: "<<std::endl<<E.what()<<std::endl;
+    return -1;
+  }
+  return 0;
+}
+
+

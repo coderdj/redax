@@ -22,8 +22,10 @@ struct BoardType{
   int crate;
   int board;
   std::string type;
-  std::string device;
-  unsigned int vme_address;
+  std::string host;
+  std::string vme_address;
+  //unsigned int vme_address;
+
 };
 
 struct RegisterType{
@@ -41,7 +43,26 @@ struct CrateOptions{
   int s_in;
 };
 
+struct HEVOptions{
+    int signal_threshold;
+    int sign;
+    int rise_time_cut;
+    int inner_ring_factor;
+    int outer_ring_factor;
+    int integration_threshold;
+    int parameter_0;
+    int parameter_1;
+    int parameter_2;
+    int parameter_3;
+    int window;
+    int prescaling;
+    int component_status;
+    int width_cut;
+    int delay;
+    std::string address;
+    std::string required;
 
+};
 
 class Options{
 
@@ -62,7 +83,7 @@ public:
   std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
   std::vector<RegisterType> GetRegisters(int board=-1);
   int GetCrateOpt(CrateOptions &ret, std::string device="");
-
+  int GetHEVOpt(HEVOptions &ret, std::string device = "");
   int GetChannel(int bid, int cid);
   int GetNestedInt(std::string path, int default_value);
 private:
