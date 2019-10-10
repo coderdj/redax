@@ -183,9 +183,9 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   for(auto const& link : fDigitizers ) {    
     for(auto digi : link.second){      
       if(fOptions->GetInt("run_start", 0) == 1)
-	digi->WriteRegister(0x8100, 0x105);
+	digi->SINStart();
       else
-	digi->WriteRegister(0x8100, 0x100);
+	digi->AcquisitionStop();
     }
   }
   sleep(1);
@@ -203,16 +203,16 @@ int DAQController::Start(){
       for(auto digi : link.second){
 
 	// Ensure digitizer is ready to start
-	if(digi->MonitorRegister(0x8104, 0x100, 1000, 1000)!=true){
+	if(digi->EnsureReady(1000, 1000)!= true){
 	  fLog->Entry(MongoLog::Warning, "Digitizer not ready to start after sw command sent");
 	  return -1;
 	}
 
 	// Send start command
-	digi->WriteRegister(0x8100, 0x104);
+	digi->SoftwareStart();
 
 	// Ensure digitizer is started
-	if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
+	if(digi->EnsureStarted(1000, 1000)!=true){
 	  fLog->Entry(MongoLog::Warning,
 		      "Timed out waiting for acquisition to start after SW start sent");
 	  return -1;
@@ -230,10 +230,11 @@ int DAQController::Stop(){
   for( auto const& link : fDigitizers ){      
     for(auto digi : link.second){
       
-      digi->WriteRegister(0x8100, 0x100);
+      digi->AcquisitionStop();
 
-      // Ensure digitizer is stopped 
-      if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000, 0x0) != true){
+      // Ensure digitizer is stopped
+      if(digi->EnsureStopped(1000, 1000) != true){
+	//if(digi->MonitorRegister(0x8104, 0x4, 1000, 1000, 0x0) != true){
 	fLog->Entry(MongoLog::Warning,
 		    "Timed out waiting for acquisition to stop after SW stop sent");
           return -1;
@@ -281,8 +282,6 @@ void* DAQController::ReadThreadWrapper(void* data, int link){
 
 void DAQController::ReadData(int link){
   fReadLoop = true;
-  // CloseProcessingThreads();
-  // OpenProcessingThreads();
   
   // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
   if(fRawDataBuffer != NULL){
@@ -297,10 +296,7 @@ void DAQController::ReadData(int link){
   
   u_int32_t lastRead = 0; // bytes read in last cycle. make sure we clear digitizers at run stop
   long int readcycler = 0;
-  while(fReadLoop){// || lastRead > 0){
-    //if(fReadLoop==false)
-    //  std::cout<<lastRead<<std::endl;
-    //lastRead = 0;
+  while(fReadLoop){
     
     vector<data_packet> local_buffer;
     for(unsigned int x=0; x<fDigitizers[link].size(); x++){
@@ -308,7 +304,7 @@ void DAQController::ReadData(int link){
       // Every 1k reads check board status
       if(readcycler%10000==0){
 	readcycler=0;
-	u_int32_t data = fDigitizers[link][x]->ReadRegister(0x8104);
+	u_int32_t data = fDigitizers[link][x]->GetAcquisitionStatus();
 	std::cout<<"Board "<<fDigitizers[link][x]->bid()<<" has status "<<hex<<data<<dec<<std::endl;
       }
       data_packet d;
@@ -317,19 +313,6 @@ void DAQController::ReadData(int link){
       d.bid = fDigitizers[link][x]->bid();
       d.size = fDigitizers[link][x]->ReadMBLT(d.buff);
 
-      // Here's the fancy part. We gotta grab the header of the first
-      // event in the buffer and get the clock reset counter from the
-      // board. This gets shipped off with the buffer.
-      u_int32_t idx=0;
-      while(idx < d.size/sizeof(u_int32_t)){
-	if(d.buff[idx]>>20==0xA00){
-	  d.header_time = d.buff[idx+3]&0x7FFFFFFF;
-	  d.clock_counter = fDigitizers[link][x]->GetClockCounter(d.header_time);
-	  break;
-	}
-	idx++;
-      }
-      
       lastRead += d.size;
       
       if(d.size<0){
@@ -339,6 +322,8 @@ void DAQController::ReadData(int link){
 	break;
       }
       if(d.size>0){
+	d.header_time = fDigitizers[link][x]->GetHeaderTime(d.buff, d.size);
+	d.clock_counter = fDigitizers[link][x]->GetClockCounter(d.header_time);
 	fDatasize += d.size;
 	if(fDataPerDigi.find(d.bid) == fDataPerDigi.end())
 	  fDataPerDigi[d.bid] = 0;

@@ -1,5 +1,5 @@
 #include "V1724.hh"
-#include "Options.hh"
+
 
 V1724::V1724(MongoLog  *log, Options *options){
   fOptions = options;
@@ -18,6 +18,30 @@ V1724::V1724(MongoLog  *log, Options *options){
 V1724::~V1724(){
   End();
 }
+
+int V1724::SINStart(){
+  return WriteRegister(fAqCtrlRegister,0x105);
+}
+int V1724::SoftwareStart(){
+  return WriteRegister(fAqCtrlRegister, 0x104);
+}
+int V1724::AcquisitionStop(){
+  return WriteRegister(fAqCtrlRegister, 0x100);
+}
+bool V1724::EnsureReady(int ntries, int tsleep){
+  return MonitorRegister(fAqStatusRegister, 0x100, ntries, tsleep, 0x1);
+}
+bool V1724::EnsureStarted(int ntries, int tsleep){
+  return MonitorRegister(fAqStatusRegister, 0x4, ntries, tsleep, 0x1);
+}
+bool V1724::EnsureStopped(int ntries, int tsleep){
+  return MonitorRegister(fAqStatusRegister, 0x4, 1000, 1000, 0x0);
+}
+u_int32_t V1724::GetAcquisitionStatus(){
+  return ReadRegister(fAqStatusRegister);
+}
+
+
 
 int V1724::Init(int link, int crate, int bid, unsigned int address){
 	  
@@ -56,6 +80,17 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   return 0;
 }
 
+u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
+  u_int32_t idx = 0;
+  std::cout<<"Size is: "<<size<<std::endl;
+  while(idx < size/sizeof(u_int32_t)){
+    if(buff[idx]>>20==0xA00)
+      return buff[idx+3]&0x7FFFFFFF;
+    idx++;
+  }
+  return 0xFFFFFFFF;
+}
+
 int V1724::GetClockCounter(u_int32_t timestamp){
   // The V1724 has a 31-bit on board clock counter that counts 10ns samples.
   // So it will reset every 21 seconds. We need to count the resets or we
@@ -68,7 +103,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
   // see something under 15 but >5
   // Seen over 15, true first time you se something >15 if under 5=false. False first
   // time you see something under 5
-  
+
   // First, is this number greater than the previous?
   if(timestamp > last_time){
 
