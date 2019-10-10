@@ -5,7 +5,6 @@
 #include "V1724.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
-#include "MongoInserter.hh"
 #include "StraxInserter.hh"
 
 struct processingThread{
@@ -53,15 +52,14 @@ public:
   u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;};
   std::map<int, u_int64_t> GetDataPerDigi();
   bool CheckErrors();
-  
+  void OpenProcessingThreads();
+  void CloseProcessingThreads();
+
   
 private:
   void AppendData(vector<data_packet> &d);
   
-  vector <processingThread> fProcessingThreads;
-  void OpenProcessingThreads();
-  void CloseProcessingThreads();
-  
+  std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;
   std::mutex fBufferMutex;
   MongoLog *fLog;

@@ -65,7 +65,7 @@ class DAQController():
         
         I wrote this very verbosely since it's got quite a few different possibilities and
         after rewriting once I am convinced longer, clearer code is better than terse, efficient
-        code for this particular function. Also I'm hardcoding the detector names. Deal with it.
+        code for this particular function. Also I'm hardcoding the detector names. 
         '''
 
         # cache these so other functions can see them
@@ -152,6 +152,7 @@ class DAQController():
                     (latest_status['neutron_veto']['status'] == self.st['RUNNING'] or
                      goal_state['tpc']['link_nv'] == 'false')
             ):
+                print("Checking run turnover TPC")
                 self.CheckRunTurnover('tpc')
 
             # Maybe we're already ARMED and should start a run
@@ -164,6 +165,7 @@ class DAQController():
                     # NV ARMED or UNLINKED
                     (latest_status['neutron_veto']['status'] == self.st['ARMED'] or
                      goal_state['tpc']['link_nv'] == 'false')):
+                print("Starting TPC")
                 self.StartDetector('tpc')
                 
             # Maybe we're IDLE and should arm a run
@@ -176,12 +178,16 @@ class DAQController():
                     # NV IDLE or UNLINKED
                     (latest_status['neutron_veto']['status'] == self.st['IDLE'] or
                      goal_state['tpc']['link_nv'] == 'false')):
+                print("Arming TPC")
                 self.ArmDetector('tpc')
                 
             # Maybe someone is either in error or timing out or we're in some weird mixed state
             # I think this can just be an 'else' because if we're not in some state we're happy
             # with we should probably check if a reset is in order.
+            # Note that this will be triggered nearly every run during ARMING so it's not a
+            # big deal
             else:
+                print("Checking timeouts")
                 self.CheckTimeouts('tpc')
                 
         # 2b, 2c. In case the MV and/or NV are UNLINKED and ACTIVE we can treat them
@@ -215,11 +221,15 @@ class DAQController():
             self.arm_command_sent[detector] is None):
             run_mode = self.goal_state[detector]['mode']
             host_list, cc = self.mongo.GetHostsForMode(run_mode)
+            print("Crate controller: %s"%cc)
             for c in cc:
                 host_list.append(c)
             self.mongo.SendCommand("arm", host_list, self.goal_state[detector]['user'],
                                    detector, self.goal_state[detector]['mode'])
             self.arm_command_sent[detector] = datetime.datetime.utcnow()
+        else:
+            # If an arm command has been sent, have a look if it timed out
+            self.CheckTimeouts(detector)    
         return
 
     def StartDetector(self, detector):
@@ -237,6 +247,8 @@ class DAQController():
             self.mongo.SendCommand("start", cc, self.goal_state[detector]['user'],
                                    detector, self.goal_state[detector]['mode'], 5)
             self.start_command_sent[detector] = datetime.datetime.utcnow()
+        else:
+            self.CheckTimeouts(detector)
         return
 
     def StopDetector(self, detector):
@@ -290,6 +302,11 @@ class DAQController():
              (nowtime - self.start_command_sent[detector]).total_seconds() <= self.start_timeout)):
             # We're in a normal waiting period. Return later if still a problem
             self.error_stop_count[detector] = 0
+            print("CheckTimeouts detected that we are within the configured timeout period for a " +
+                  "command. command_sent structs follow in order arm/start/stop:")
+            print(self.arm_command_sent)
+            print(self.start_command_sent)
+            print(self.stop_command_sent)
             return
 
         # Case 2: we're not timing out at all, send the stop command
@@ -297,7 +314,7 @@ class DAQController():
             sendstop = True
             self.stop_command_sent[detector] = nowtime
             self.error_stop_count[detector] = 0
-        
+            
         # make sure this detector in self.error_stop_count
         if detector not in self.error_stop_count.keys() or self.error_stop_count[detector] is None:
             self.error_stop_count[detector] = 0
@@ -310,12 +327,20 @@ class DAQController():
             self.arm_command_sent[detector] = None
             sendstop = True
             self.stop_command_sent[detector] = nowtime
+            self.mongo.LogError("dispatcher",
+                                "Took more than %i seconds to arm, indicating a possible timeout"%
+                                self.arm_timeout,
+                                "WARNING", "ARM_TIMEOUT")
         # 3b: START timeout
         elif (detector in self.start_command_sent.keys() and self.start_command_sent[detector]!=None and
               (nowtime-self.start_command_sent[detector]).total_seconds() > self.start_timeout):
             self.start_command_sent[detector] = None
             sendstop = True
             self.stop_command_sent[detector] = nowtime
+            self.mongo.LogError("dispatcher",
+                                "Took more than %i seconds to start, indicating a possible timeout"%
+                                self.start_timeout,
+                                self.st["WARNING"], "START_TIMEOUT")
         # 3c: STOP timeout. And this is where the thing can get stuck so we gotta toss an
         # error if it goes on too long
         elif (detector in self.stop_command_sent.keys() and self.stop_command_sent[detector] != None and
@@ -324,7 +349,12 @@ class DAQController():
 
             # If error_stop_count is already at the maximum we throw a ERROR then do nothing
             if self.error_stop_count[detector] >= self.stop_retries and self.error_thrown == False:
-                self.ThrowError()
+                self.mongo.LogError("dispatcher",
+                                    ("Dispatcher control loop detects a timeout that is not solved " +
+                                     "with a STOP command"), 
+                                    'ERROR',
+                                    "STOP_TIMEOUT")
+                sendstop = False
             elif self.error_stop_count[detector] < self.stop_retries:
                 sendstop = True
                 self.error_stop_count[detector] += 1
@@ -340,7 +370,10 @@ class DAQController():
         '''
         Throw a general error that the DAQ is stuck
         '''
-        self.mongo.LogError("dispatcher", "Dispatcher control loop can't get DAQ out of stuck state")
+        self.mongo.LogError("dispatcher",
+                            "Dispatcher control loop can't get DAQ out of stuck state",
+                            'ERROR',
+                            "GENERAL_ERROR")
 
     def CheckRunTurnover(self, detector):
         '''

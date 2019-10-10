@@ -10,16 +10,17 @@
 
 #include <iostream>
 #include "MongoLog.hh"
+#include "Options.hh"
 
 using namespace std;
 
 class V1724{
 
  public:
-  V1724(MongoLog *log);
+  V1724(MongoLog *log, Options *options);
   ~V1724();
 
-  int Init(int link, int crate, int bid, unsigned int address);
+  int Init(int link, int crate, int bid, unsigned int address=0);
   int WriteRegister(unsigned int reg, unsigned int value);
   unsigned int ReadRegister(unsigned int reg);
   u_int32_t ReadMBLT(u_int32_t *&buffer);
@@ -36,11 +37,22 @@ class V1724{
   int LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac);
   bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
                        int sleep, u_int32_t val=1);
+  int fNsPerSample;
 
  private:
+  Options *fOptions;
   int fBoardHandle;
   int fLink, fCrate, fBID;
   unsigned int fBaseAddress;
+  int fFirmwareVersion;
+
+  // Some values for base classes to override
+  int fAqCtrlRegister;
+  int fAqStatusRegister;
+  int fSwTrigRegister;
+  int fResetRegister;
+  int fChStatusRegister;
+  int fChDACRegister;
 
   // Stuff for clock reset tracking
   u_int32_t clock_counter;

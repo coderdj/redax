@@ -21,7 +21,7 @@ int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
   // Initialising the V2718 module via the specified optical link
   int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
   if(a != cvSuccess){
-    fLog->Entry("Failed to init V2718 with CAEN error: " + std::to_string(a), MongoLog::Error);
+    fLog->Entry(MongoLog::Error, "Failed to init V2718 with CAEN error: %i", a);
     return -1;
   }   
   SendStopSignal(false);
@@ -63,7 +63,7 @@ int V2718::SendStartSignal(){
 
   // S-IN and logic signals 
   if(CAENVME_SetOutputRegister(fCrate,data)!=0){
-    fLog->Entry("Couldn't set output register to crate controller", MongoLog::Error);
+    fLog->Entry(MongoLog::Error, "Couldn't set output register to crate controller");
     return -1;
   }
  
@@ -98,16 +98,16 @@ int V2718::SendStartSignal(){
         period = (u_int32_t)((1E9/25) / fCopts.pulser_freq);
       }
       else{
-         std::stringstream error;
-         error<< "Given an invalid LED frequency!";
-         fLog->Entry(error.str(), MongoLog::Error);
+         fLog->Entry(MongoLog::Error, "Given an invalid LED frequency");
+	 return -1;
       }
     // Set pulser    
     int ret = CAENVME_SetPulserConf(fCrate, cvPulserB, period, width, tu, 0,
 	 		  cvManualSW, cvManualSW);
     ret *= CAENVME_StartPulser(fCrate,cvPulserB); 
     if(ret != cvSuccess){
-      fLog->Entry("Failed to activate LED pulser", MongoLog::Warning);
+      fLog->Entry(MongoLog::Warning, "Failed to activate LED pulser");
+      return -1;
     }
   }
   return 0;

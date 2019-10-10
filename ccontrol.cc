@@ -9,6 +9,9 @@ int main(int argc, char** argv){
     std::cout<<"Where MONGO_URI is the URI of the command DB"<<std::endl;
     return -1;
   }
+  std::string dbname = "xenonnt";
+  if(argc >=3)
+    dbname = argv[3];
 
   // Control and status DB connectivity
   // We're going to poll control for commands
@@ -16,7 +19,7 @@ int main(int argc, char** argv){
   std::string mongo_uri = argv[2];
   mongocxx::uri uri(mongo_uri.c_str());
   mongocxx::client client(uri);
-  mongocxx::database db = client["redax"];
+  mongocxx::database db = client[dbname];
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
@@ -32,7 +35,7 @@ int main(int argc, char** argv){
 
   // Logging
   MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(mongo_uri, "xenonnt", "log", hostname, 
+  int ret = logger->Initialize(mongo_uri, dbname, "log", hostname, 
 			       "", true);
   if(ret!=0){
     std::cout<<"Log couldn't be initialized. Exiting."<<std::endl;
@@ -73,8 +76,8 @@ int main(int argc, char** argv){
 	  run = doc["number"].get_int32();
       }
       catch(const std::exception E){
-        logger->Entry("ccontrol: Received a document from the dispatcher missing [command|number]",
-		      MongoLog::Warning);
+        logger->Entry(MongoLog::Warning,
+		      "ccontrol: Received a document from the dispatcher missing [command|number]");
 	continue;
       }
       
@@ -85,7 +88,7 @@ int main(int argc, char** argv){
 	 mode = doc["mode"].get_utf8().value.to_string();
        }
        catch(const std::exception E){
-	 logger->Entry("ccontrol: Received an arm document with no run mode",MongoLog::Warning);
+	 logger->Entry(MongoLog::Warning, "ccontrol: Received an arm document with no run mode");
        }
                                      
        // Get an override doc from the 'options_override' field if it exists
@@ -95,7 +98,7 @@ int main(int argc, char** argv){
 	 override_json = bsoncxx::to_json(oopts);
        } 
        catch(const std::exception E){
-	 logger->Entry("No override options provided", MongoLog::Debug);
+	 logger->Entry(MongoLog::Debug, "No override options provided");
        }	  
               
        //Here are our options
@@ -105,7 +108,7 @@ int main(int argc, char** argv){
 	 
        // Initialise the V2178, V1495 and DDC10...etc.      
        if(fHandler->DeviceArm(run, options) != 0){
-	 logger->Entry("Failed to initialize devices", MongoLog::Error);
+	 logger->Entry(MongoLog::Error, "Failed to initialize devices");
        }
 
      } // end if "arm" command
@@ -113,12 +116,12 @@ int main(int argc, char** argv){
 
     else if(command == "start"){
        if((fHandler->DeviceStart()) != 0){
-	 logger->Entry("Failed to start devices", MongoLog::Debug);
+	 logger->Entry(MongoLog::Debug, "Failed to start devices");
        }
      } 
      else if(command == "stop"){
        if((fHandler->DeviceStop()) != 0){
-	 logger->Entry("Failed to stop devices", MongoLog::Debug);
+	 logger->Entry(MongoLog::Debug, "Failed to stop devices");
        }
      } 
     } //end for  

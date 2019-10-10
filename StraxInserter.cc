@@ -1,3 +1,4 @@
+#include <lz4.h>
 #include "StraxInserter.hh"
 #include "DAQController.hh"
 
@@ -16,6 +17,7 @@ StraxInserter::StraxInserter(){
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
+  fBoardFailCount = 0;
 }
 
 StraxInserter::~StraxInserter(){  
@@ -27,11 +29,21 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fChunkLength = fOptions->GetLongInt("strax_chunk_length", 20e9); // default 20s
   fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
+  fCompressor = fOptions->GetString("compressor", "blosc");
   fHostname = hostname;
+  fBoardFailCount = 0;
   std::string run_name = fOptions->GetString("run_identifier", "run");
   
   // To start we do not know which FW version we're dealing with (for data parsing)
-  fFirmwareVersion = -1;
+  fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
+  if(fFirmwareVersion == -1){
+	cout<<"Firmware version unspecified in options"<<endl;
+	return -1;
+  }
+  if((fFirmwareVersion != 0) && (fFirmwareVersion != 1)){
+	cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<endl;
+	return -1;
+  }
 
   fMissingVerified = 0;
   fDataSource = dataSource;
@@ -44,11 +56,9 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
     op /= run_name;
     fOutputPath = op;
     std::experimental::filesystem::create_directory(op);
-    return 0;
   }
   catch(...){
-    fLog->Entry("StraxInserter::Initialize tried to create output directory but failed."
-		" Check that you have permission to write here.", MongoLog::Error);
+    fLog->Entry(MongoLog::Error, "StraxInserter::Initialize tried to create output directory but failed. Check that you have permission to write here.");
     return -1;
   }
   std::cout<<"Strax output initialized with "<<fChunkLength<<" ns chunks and "<<
@@ -58,8 +68,10 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 }
 
 void StraxInserter::Close(){
+  if(fBoardFailCount != 0){
+    fLog->Entry(MongoLog::Warning, "StraxInserter reports %i board fails this run", fBoardFailCount);
+  }
   fActive = false;
-
 }
 
 
@@ -93,30 +105,22 @@ void StraxInserter::ParseDocuments(data_packet dp){
       
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
-      if(board_fail==1)
+      if(board_fail==1){
+	fBoardFailCount+=1;
 	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
-      
-      // If we don't know which firmware we're using, check now
-      if(fFirmwareVersion == -1){
-	DetermineDataFormat(&(buff[idx]), event_size, channels_in_event);
-	// fFirmwareVersion = 0; //n.b. fix this after the test!
-	if(fFirmwareVersion == 0)
-	  std::cout<<"Detected XENON1T firmware"<<std::endl;
-	else
-	  std::cout<<"Detected stock firmware"<<std::endl;
       }
-
+      
       idx += 4; // Skip the header
 
       for(unsigned int channel=0; channel<8; channel++){
 	if(!((channel_mask>>channel)&1)) // Make sure channel in data
 	  continue;
 
-	u_int32_t channel_size = event_size / channels_in_event;
+	u_int32_t channel_size = (event_size - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
 
 	if(fFirmwareVersion == 0){
-	  channel_size = buff[idx] - 2; // In words (4 bytes). The -2 is cause of header
+	  channel_size = (buff[idx]&0x7FFFFF)-2; // In words (4 bytes). The -2 is cause of header
 	  idx++;
 	  channel_time = buff[idx]&0x7FFFFFFF;
 	  idx++;
@@ -284,7 +288,6 @@ void StraxInserter::ParseDocuments(data_packet dp){
   }
   if(smallest_latest_index_seen != -1)
     WriteOutFiles(smallest_latest_index_seen);
-  //blosc_destroy();
 }
 
 
@@ -315,53 +318,6 @@ int StraxInserter::ReadAndInsertData(){
   return 0;  
 }
 
-void StraxInserter::DetermineDataFormat(u_int32_t *buff, u_int32_t event_size,
-					u_int16_t channels_in_event){
-  /*
-    This function should automatically sense which data format we're dealing with. 
-    It does this by looking at various control words and trying to deduce from their
-    values what this must be. We were unable to think of a 100% deterministic way to 
-    say beyond any doubt which format this is, but we think the combination of circumstance
-    required to fool this series of checks is so unlikely there is no realistic chance
-    of choosing incorrectly.
-    And if we do it will just seg fault, not explode.
-   */
-
-  // Start after header
-  unsigned int idx = 4;
-  
-  for(unsigned int ch=0; ch<channels_in_event; ch++){
-    u_int32_t channel_event_size = buff[idx]&0x7FFFFF; // bit indices 0-22 (23-bit)
-    u_int32_t channel_time_tag = buff[idx+1];
-
-    // Check 1: Would adding channel_event_size to idx go over size of event
-    if(channel_event_size + idx > event_size){
-      fFirmwareVersion = 1; // DEFAULT (no ZLE)
-      return;
-    }
-    
-    // Check 2: Our samples are 14-bit so if bits 14/15 or 30/31 of these words are
-    // non-zero then this must be the DPP_XENON firmware
-    if( (channel_time_tag>>14&1) || (channel_time_tag>>15&1) ||
-	(channel_time_tag>>30&1) || (channel_time_tag>>31&1) ||
-	(channel_event_size>>14&1) || (channel_event_size>>15&1) ||
-	(channel_event_size>>30&1) || (channel_event_size>>31&1) ){
-      fFirmwareVersion = 0;
-      return;
-    }
-
-    idx += channel_event_size;            
-  } // end for
-
-  if(idx == event_size-1)
-    fFirmwareVersion = 0;
-  else
-    fFirmwareVersion = 1;
-  
-  return;      
-}
-
-
 
 void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
@@ -381,12 +337,19 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     size_t uncompressed_size = iter->second->size();
 
     // blosc it
-    //std::cout<<"Blosc-ing input of size "<<uncompressed_size<<" with overhead "<<BLOSC_MAX_OVERHEAD<<
-    //" and fragment id "<<chunk_index<<std::endl;
-    //std::cout<<"Attempted write path: "<<GetFilePath(chunk_index, true)<<std::endl;
-    char *out_buffer = new char[uncompressed_size+BLOSC_MAX_OVERHEAD];
-    int wsize = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size,  &((*iter->second)[0]),
+    char *out_buffer = NULL;
+    int wsize = 0;
+    if(fCompressor == "blosc"){
+      out_buffer = new char[uncompressed_size+BLOSC_MAX_OVERHEAD];
+      wsize = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size,  &((*iter->second)[0]),
 				   out_buffer, uncompressed_size+BLOSC_MAX_OVERHEAD, "lz4", 0, 2);
+    }
+    else{
+      size_t max_compressed_size = LZ4_compressBound(uncompressed_size);
+      out_buffer = new char[max_compressed_size];
+      wsize = LZ4_compress_default(&((*iter->second)[0]), out_buffer, uncompressed_size,
+				   max_compressed_size);
+    }
     // was using BLOSCLZ but it complained
     delete iter->second;
     

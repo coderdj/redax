@@ -15,7 +15,7 @@ cfile = args.config
 if cfile is None:
     cfile = 'config.ini'
 config.read(cfile)
-
+print("Config arm timeout: %i"%int(config["DEFAULT"]["ArmCommandTimeout"]))
 # Declare database object
 MongoConnector = MongoConnect(config)
 state_codes = ["IDLE", "ARMING", "ARMED", "RUNNING", "ERROR", "TIMEOUT", "UNDECIDED"]
@@ -50,5 +50,5 @@ while(1):
             print("Detector %s INACTIVE"%detector)
             continue
         print("Detector %s should be ACTIVE and is %s"%(
-            detector, state_codes[latest_status[detector]['status']]))
+            detector, state_codes[latest_status[detector]['status']]))    
     time.sleep(2)

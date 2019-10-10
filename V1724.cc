@@ -1,27 +1,25 @@
 #include "V1724.hh"
+#include "Options.hh"
 
-V1724::V1724(MongoLog  *log){
+V1724::V1724(MongoLog  *log, Options *options){
+  fOptions = options;
   fBoardHandle=fLink=fCrate=fBID=-1;
   fBaseAddress=0;
   fLog = log;
+
+  fNsPerSample = 10;
+  fAqCtrlRegister = 0x8100;
+  fAqStatusRegister = 0x8104;
+  fSwTrigRegister = 0x8108;
+  fResetRegister = 0xEF24;
+  fChStatusRegister = 0x1088;
+  fChDACRegister = 0x1098;
 }
 V1724::~V1724(){
   End();
 }
 
-int V1724::Init(int link, int crate, int bid, unsigned int address=0){
-
-  /*
-  // I am hoping that minesweeper will no longer be needed
-  // MINESWEEPER
-  stringstream command;
-  command<<"(cd /home/xedaq/minesweeper && echo `./minesweeper -l "<<
-    link<<" -c "<<crate<<"`)";
-  cout<<"Sending command: "<<command.str()<<endl;
-  int retsys = system(command.str().c_str());
-  cout<<"Returned: "<<retsys<<endl;
-  usleep(1000);
-  */
+int V1724::Init(int link, int crate, int bid, unsigned int address){
 	  
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
@@ -30,6 +28,22 @@ int V1724::Init(int link, int crate, int bid, unsigned int address=0){
     fBoardHandle = -1;
     return -1;
   }
+  fLog->Entry(MongoLog::Debug, "Initialized board %i with handle %i (link/crate)(%i/%i)",
+	      bid, fBoardHandle, link, crate);
+  
+  // To start we do not know which FW version we're dealing with (for data parsing)
+  fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
+  if(fFirmwareVersion == -1){
+	cout<<"Firmware version unspecified in options"<<endl;
+	return -1;
+  }
+  if((fFirmwareVersion != 0) && (fFirmwareVersion != 1)){
+	cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<endl;
+	return -1;
+  }
+  fLog->Entry(MongoLog::Debug, "Assuming firmware %i (0: XENON, 1: default)",
+	      fFirmwareVersion);
+
   fLink = link;
   fCrate = crate;
   fBID = bid;
@@ -101,11 +115,9 @@ int V1724::GetClockCounter(u_int32_t timestamp){
     }
   }
   else{
-    std::stringstream err;
-    err<<"Something odd in your clock counters. t_new: "<<timestamp<<
-    " last time: "<<last_time<<" over 15: "<<seen_over_15<<
-    " under 5: "<<seen_under_5;
-    fLog->Entry(err.str(), MongoLog::Warning);
+    fLog->Entry(MongoLog::Warning,
+      "Something odd in your clock counters. t_new: %i, last_time: %i, over_15: %i, under_5: %i",
+		timestamp, last_time, seen_over_15, seen_under_5);
     // Counter equal to last time, so we're happy and keep the same counter
     return clock_counter;
   }  
@@ -117,14 +129,14 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
   write+=value;
   if(CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg,
 			&write,cvA32_U_DATA,cvD32) != cvSuccess){
-    std::stringstream err;
-    err<<"Failed to write register 0x"<<hex<<reg<<dec<<" to board "<<fBID<<
-      " with value "<<hex<<value<<dec<<" board handle "<<fBoardHandle<<endl;
-    fLog->Entry(err.str(), MongoLog::Warning);
+    fLog->Entry(MongoLog::Warning,
+		"Failed to write register 0x%04x to board %i with value %08x (handle %i)",
+		reg, fBID, value, fBoardHandle);
     return -1;
   }
-  // std::cout<<hex<<"Wrote register "<<reg<<" with value "<<value<<" for board "<<dec<<fBID<<std::endl;  
-  usleep(5000); // don't ask
+  fLog->Entry(MongoLog::Local, "Board %i wrote register 0x%04x with value 0x%04x",
+	      fBID, reg, value);
+  
   return 0;
 }
 
@@ -133,14 +145,13 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   int ret = -100;
   if((ret = CAENVME_ReadCycle(fBoardHandle, fBaseAddress+reg, &temp,
 			      cvA32_U_DATA, cvD32)) != cvSuccess){
-    std::stringstream err;
-    std::cout<<"Read returned: "<<ret<<" "<<hex<<temp<<std::endl;
-    err<<"Failed to read register 0x"<<hex<<reg<<dec<<" on board "<<fBID<<
-      ": "<<ret<<endl;
-    fLog->Entry(err.str(), MongoLog::Warning);
+    fLog->Entry(MongoLog::Warning,
+		"Read returned: %i (ret) 0x%08x (val) for reg 0x%04x on board %i",
+		ret, temp, reg, fBID);
     return 0xFFFFFFFF;
   }
-  usleep(5000);
+  fLog->Entry(MongoLog::Local, "Board %i read register 0x%04x as value 0x%04x",
+              fBID, reg, temp);
   return temp;
 }
 
@@ -151,16 +162,16 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
   // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
   // the other, V1724G, has 512 MS/channel = 1MB/channel
   //unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
-  unsigned int BLT_SIZE=16384; //524288;
-  unsigned int BUFFER_SIZE = 8388608; // 8 MB memory of digi (even allocating more than needed)
+  unsigned int BLT_SIZE=524288;
+  unsigned int BUFFER_SIZE = 8388608*4; // I do not understand why this has to be so high
   u_int32_t *tempBuffer = new u_int32_t[BUFFER_SIZE];
 
   int count = 0;
   do{
     try{
-      ret = CAENVME_BLTReadCycle(fBoardHandle, fBaseAddress,
+      ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
 				     ((unsigned char*)tempBuffer)+blt_bytes,
-				     BLT_SIZE, cvA32_U_BLT, cvD32, &nb);
+				     BLT_SIZE, cvA32_U_MBLT, cvD64, &nb);
     }catch(std::exception E){
       std::cout<<fBoardHandle<<" sucks"<<std::endl;
       std::cout<<"BLT_BYTES: "<<blt_bytes<<std::endl;
@@ -169,24 +180,24 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
       throw;
     };
     if( (ret != cvSuccess) && (ret != cvBusError) ){
-      stringstream err;
-      err<<"Read error in board "<<fBID<<" after "<<count<<" reads: "<<dec<<ret;
-      fLog->Entry(err.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Error,
+		  "Read error in board %i after %i reads: (%i) and transferred %i bytes this read",
+		  fBID, count, ret, nb);
       u_int32_t data=0;
-      data = ReadRegister(0x8104);
+      WriteRegister(fResetRegister, 0xFFFFFFFF);
+      data = ReadRegister(fAqStatusRegister);
       std::cout<<"Board status: "<<hex<<data<<dec<<std::endl;
       delete[] tempBuffer;
-      return 0;
+      return -1;
     }
 
     count++;
     blt_bytes+=nb;
 
     if(blt_bytes>BUFFER_SIZE){
-      stringstream err;
-      err<<"You managed to transfer more data than fits on board."<<
-	"Transferred: "<<blt_bytes<<" bytes, Buffer: "<<BUFFER_SIZE<<" bytes.";
-      fLog->Entry(err.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Error,
+		  "You managed to transfer more data (%i bytes) than fits on the board. Buffer: %i",
+		  blt_bytes, BUFFER_SIZE);
       
       delete[] tempBuffer;
       return 0;
@@ -213,27 +224,31 @@ u_int32_t V1724::ReadMBLT(unsigned int *&buffer){
 }
 
 int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
-			     int nominal_value, int ntries){
-  // Adjust DAC offset voltages so that channels are at 'nominal_value' baseline
-  // Contains lots of voodoo magic and snake-oil methods meant to avoid
-  // edge case crashes, which are not understood and seem to come from nowhere
+			      int nominal_value, int ntries){
+  // The point of this function is to set the voltage offset per channel such
+  // that the baseline is at exactly 16000 (or whatever value is set in the
+  // config file). The DAC seems to be a very sensitive thing and there
+  // are some strategically placed sleep statements (placed via trial, error,
+  // and tears) throughout the code. Take care if changing things here.
 
-  // How close do we need to be to call it "OK". If you're using a self-trigger
-  // with dynamic baseline fitting maybe just 5-10 is close enough. If you're using
-  // and absolute threshold you probably want more like 1-2... but then you need
-  // very clean conditions!
+  
+  // Initial parameters:
   int adjustment_threshold = 5;
   int current_iteration=0;
-  int nChannels = 8;
-  int repeat_this_many=5; // how many times it has to hit it before we stop
-  int triggers_per_iteration = 10;
+  int fNChannels = 8;
+  int repeat_this_many=5;
+  int triggers_per_iteration = 1;
+
   
   // Determine starting values. If the flag 'start_provided' is set then the
   // initial argument vector already has our start values. If not then we can
   // make a decent guess here.
-  u_int32_t starting_value = u_int32_t( (0x3fff-nominal_value)*((0.9*0xffff)/0x3fff) + 3277);
-  vector<u_int16_t> dac_values(nChannels, starting_value);
-  if(end_values[0]!=0 && end_values.size() == (unsigned int)(nChannels)){ // use start values if sent
+  u_int32_t starting_value = u_int32_t( (0x3fff-nominal_value)*
+					((0.9*0xffff)/0x3fff) + 3277);
+
+  vector<u_int16_t> dac_values(fNChannels, starting_value);
+  if(end_values[0]!=0 && end_values.size() ==
+     (unsigned int)(fNChannels)){ // use start values if sent
     std::cout<<"Found good start values for digi "<<fBID<<": ";
     for(unsigned int x=0; x<end_values.size(); x++){
       dac_values[x] = end_values[x];
@@ -241,204 +256,205 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     }
     std::cout<<std::endl;
   }
-  vector<int> channel_finished(nChannels, 0);
-  vector<bool> update_dac(nChannels, true);
+  fLog->Entry(MongoLog::Local,
+	      "Found starting values for digi %i BLs: 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x,",
+	      fBID, dac_values[0], dac_values[1], dac_values[2], dac_values[3], dac_values[4],
+	      dac_values[5], dac_values[6], dac_values[7]);
+  
+  vector<int> channel_finished(fNChannels, 0);
+  vector<bool> update_dac(fNChannels, true);
 
+  // Load up the DAC values
+  if(LoadDAC(dac_values, update_dac)!=0){
+    fLog->Entry(MongoLog::Error, "Digitizer %i failed to load DAC in baseline routine", fBID);
+    return -2;
+  }
+
+  // ****************************
+  // Main loop
+  // ****************************
   while(current_iteration < ntries){
 
-    current_iteration++;
+    fLog->Entry(MongoLog::Local, "Baseline iteration %i of %i possible for board %i",
+		current_iteration, ntries, fBID);
 
-    // First check if maybe we're done already
-    bool breakout = true;
-    for(int channel=0; channel<nChannels; channel++){
-      if(channel_finished[channel] >= repeat_this_many)
-	continue;
-      breakout=false;
+    bool breakout=true;
+    for(unsigned int x=0; x<channel_finished.size(); x++){
+      if(channel_finished[x]<repeat_this_many)
+	breakout=false;      
     }
-    if(breakout)
+    if(breakout){
+      fLog->Entry(MongoLog::Local,
+		  "Baselines report all channels finished for board %i", fBID);
       break;
-    
-    // Reset the whole thing because we are super paranoid
-    CAENVME_End(fBoardHandle);
-    int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
-    if(a != cvSuccess){
-      fLog->Entry("Failed to CAEN init in baseline routine", MongoLog::Warning);
+    }
+    // enable adc
+    WriteRegister(fAqCtrlRegister,0x4);//x24?   // Acq control reg
+    if(MonitorRegister(fAqStatusRegister, 0x4, 1000, 1000) != true){      
+      fLog->Entry(MongoLog::Warning, "Timed out waiting for acquisition to start in baselines");
       return -1;
     }
 
-    // Now reload all the registers we need for taking a bit of data
-    int write_success = 0;
-    try{
-      write_success += WriteRegister(0xEF24, 0x1);       // Global reset
-      write_success += WriteRegister(0xEF1C, 0x1);       // BERR
-      write_success += WriteRegister(0xEF00, 0x130);      // Channel memory
-      write_success += WriteRegister(0x811C, 0x110);
-      write_success += WriteRegister(0x81A0, 0x200);
-      write_success += WriteRegister(0x8100, 0x0);
-      write_success += WriteRegister(0x800C, 0xA);
-      write_success += WriteRegister(0x8098, 0x1000);
-      write_success += WriteRegister(0x8000, 0x310);
-      write_success += WriteRegister(0x8080, 0x1310000);
-      write_success += WriteRegister(0x8034, 0x0);
-      write_success += WriteRegister(0x8038, 0x1);
+    //write trigger
+    for(int ntrig=0; ntrig<triggers_per_iteration; ntrig++){
+      WriteRegister(fSwTrigRegister,0x1);    // Software trig reg
+      usleep(1000);                 // Give time for event?
+    }
+    
+    // disable adc
+    WriteRegister(fAqCtrlRegister,0x0);//x24?   // Acq control reg
+    
+    // Read data
+    u_int32_t *buff = NULL;
+    int size = 0;
+    size = ReadMBLT(buff);
+    // Check for mal formed data
+    if(size>0 && size<=16){
+      std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
+      delete[] buff;
+      continue;
+    }
+    if(size == 0){
+      std::cout<<"No event though board "<<fBID<<
+	" said there would be one"<<std::endl;
+      if(buff != NULL) delete[] buff;
+      continue;
+    }
+    if(size < 0) // There's a read error
+      break;
 
-    }
-    catch(const std::exception &e){
-      std::stringstream error;
-      error<<"Digitizer "<<fBID<<" CAEN fault during initial register adjustment in baseline routine";
-      fLog->Entry(error.str(), MongoLog::Error);
-      return -2;
-    }
-    // Slightly more palatable error, at least CAENVMElib is recognizing a failure
-    // and not just seg faulting
-    if(write_success!=0){
-      std::stringstream error;
-      error<<"Digitizer "<<fBID<<" unable to load registers for baselines.";
-      fLog->Entry(error.str(), MongoLog::Error);
-      return -2;
-    }
-
-    // Load up the DAC values
-    if(LoadDAC(dac_values, update_dac)!=0){
-      std::stringstream error;
-      error<<"Digitizer "<<fBID<<" failed to load DAC in baseline routine.";
-      fLog->Entry(error.str(), MongoLog::Error);
-      return -2;
-    }
-
+    fLog->Entry(MongoLog::Local,
+		"I just got %i bytes data from %i triggers in board %i. Reasonable?",
+		size, triggers_per_iteration, fBID);
+    
     // Now we're going to acquire 'n' triggers
-    std::vector<double>baseline_per_channel(nChannels, 0);
-    std::vector<double>good_triggers_per_channel(nChannels, 0);
-    
-    // Make sure we can acquire
-    if(MonitorRegister(0x8104, 0x100, 1000, 1000) != true){
-      u_int32_t dat = ReadRegister(0x8178);
-      fLog->Entry("Timed out waiting for board to be ready in baseline", MongoLog::Warning);
-      std::cout<<"Board ready timeout: register 8174 value is "<<hex<<dat<<dec<<std::endl;
-      return -1;
-    }
+    std::vector<double>baseline_per_channel(fNChannels, 0);
+    std::vector<double>good_triggers_per_channel(fNChannels, 0);
 
-    // Start acquisition
-    WriteRegister(0x8100,0x4);//x24?   // Acq control reg
-    if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
-      fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
-      return -1;
-    }
-    for(int trig=0; trig<triggers_per_iteration; trig++){
+    // Parse
+    unsigned int idx = 0;
+    while(idx < size/sizeof(u_int32_t)){
+      if(buff[idx]>>20==0xA00){ // header
 
-      // Send SW trigger
-      WriteRegister(0x8108,0x1);    // Software trig reg
-      if(MonitorRegister(0x8104, 0x8, 1000, 1000) != true){
-	fLog->Entry("Timed out waiting for event ready in baselines", MongoLog::Warning);
-	return -1;
-      }
-      // Read data
-      u_int32_t *buff = NULL;
-      u_int32_t size = 0;
-      size = ReadMBLT(buff);
-      // Check for mal formed data
-      if(size>0 && size<=16){
-	std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
-	delete[] buff;
-	continue;
-      }
-      if(size == 0){
-	std::cout<<"No event though board said there would be one"<<std::endl;
-	if(buff != NULL) delete[] buff;
-	continue;
-      }
-      
-      // Parse
-      unsigned int idx = 0;
-      while(idx < size/sizeof(u_int32_t)){
-	if(buff[idx]>>20==0xA00){ // header
-	  u_int32_t cmask = buff[idx+1]&0xFF;
+	u_int32_t esize = buff[idx]&0xFFFFFFF;
+	u_int32_t cmask = buff[idx+1]&0xFF;
+	u_int32_t csize = 0;
+	u_int32_t n_chan = __builtin_popcount(cmask);
+	if(n_chan > 0)
+	  csize = (esize-4)/n_chan;
+
+	// We should track and log how often this happens. Seems rare but wtf.
+	u_int32_t board_fail = buff[idx+1]&0x4000000;
+	if(board_fail == 1){
+	  fLog->Entry(MongoLog::Local,
+                "Hoppla! Board FAIL bit set for digitizer %i.", fBID);
 	  idx += 4;
-	  
-	  // Loop through channels
-	  for(unsigned int channel=0; channel<8; channel++){
-	    
-	    float baseline = -1.;
-	    long int tbase = 0;
-	    int bcount = 0;
-	    unsigned int minval = 0x3fff, maxval=0;
-	    
-	    if(!((cmask>>channel)&1))
-	      continue;
-	    u_int32_t csize = buff[idx]&0x7FFFFF;
-	    if(channel_finished[channel]>=repeat_this_many){
-	      idx+=csize;
-	      continue;
-	    }
-	    idx+=2;
-	    
-	    for(unsigned int i=0; i<csize-2; i++){
-	      if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
-		continue;
-	      tbase += buff[idx+i]&0xFFFF;
-	      tbase += (buff[idx+i]>>16)&0xFFFF;
-	      bcount+=2;
-	      if((buff[idx+i]&0xFFFF)<minval)
-		minval = buff[idx+i]&0xFFFF;
-	      if((buff[idx+i]&0xFFFF)>maxval)
-		maxval = buff[idx+i]&0xFFFF;
-	      if(((buff[idx+i]>>16)&0xFFFF)<minval)
-		minval=(buff[idx+i]>>16)&0xFFFF;
-	      if(((buff[idx+i]>>16)&0xFFFF)>maxval)
-		maxval=(buff[idx+i]>>16)&0xFFFF;
-	    }
-	    idx += csize-2;
-	    
-	    // Toss if signal inside
-	    if(abs(maxval-minval>50)){
-	      std::cout<<"Signal in baseline, channel "<<channel
-		       <<" min: "<<minval<<" max: "<<maxval<<std::endl;
-	    }
-	    else
-	      baseline = (float(tbase) / ((float(bcount))));
-	    
-	    // Add to total
-	    baseline_per_channel[channel]+= baseline;
-	    good_triggers_per_channel[channel]+=1.;
-	  } // end for loop through channels
-	  delete[] buff;
-	  break;
+	  continue;
 	}
-	else
-	  idx++;
-      }// end parse data
-      
-    } // end for to acquire 'n' triggers
-    
-    // Deactivate board
-    WriteRegister(0x8100, 0x0);
-    
+
+	idx += 4;
+	// Loop through channels
+	for(unsigned int channel=0; channel<8; channel++){		
+	  if(!((cmask>>channel)&1))
+            continue;
+	  
+	  float baseline = -1.;
+	  long int tbase = 0;
+	  int bcount = 0;
+	  unsigned int minval = 0x3fff, maxval=0;
+
+	  // Sometimes for some reason idx is bigger than size.
+	  if(idx > (u_int32_t)(size)){
+	    fLog->Entry(MongoLog::Local,
+			"Found bad buffer in board %i with size %i but attempted to access %i.",
+			fBID, size, idx);
+	    break;
+	  }
+	  
+	  if(fFirmwareVersion == 0){
+            csize = (buff[idx]&0x7FFFFF)-2; // In words (4 bytes). The -2 is cause of header
+            idx += 2;
+          }
+	  if(channel_finished[channel]>=repeat_this_many){
+	    idx+=csize;
+	    continue;
+	  }
+	  if(idx + csize > (u_int32_t)(size)){
+	    fLog->Entry(MongoLog::Local,
+			"Found bad channel size %i in board %i for payload with size %i.",
+			csize, fBID, size);
+	    break;
+	  }
+	  for(unsigned int i=0; i<csize; i++){
+	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0)){
+	      // The presence of a 0 is clearly a symptom of some odd issue. Seems
+	      // to only happen in the baseline program, so we're just gonna
+	      // hit the old 'abort' button and get out of here
+	      continue;
+	    }
+	    tbase += buff[idx+i]&0xFFFF;
+	    tbase += (buff[idx+i]>>16)&0xFFFF;
+	    bcount+=2;
+	    if((buff[idx+i]&0xFFFF)<minval)
+	      minval = buff[idx+i]&0xFFFF;
+	    if((buff[idx+i]&0xFFFF)>maxval)
+	      maxval = buff[idx+i]&0xFFFF;
+	    if(((buff[idx+i]>>16)&0xFFFF)<minval)
+	      minval=(buff[idx+i]>>16)&0xFFFF;
+	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
+	      maxval=(buff[idx+i]>>16)&0xFFFF;
+	  }	  
+	  if(idx + csize > size/sizeof (u_int32_t)) break; // this should skip to next header
+	  idx += csize;
+	  // Toss if signal inside
+	  if(abs((int)(maxval)-(int)(minval))>30){
+	    std::cout<<"Signal in baseline, channel "<<channel
+		     <<" min: "<<minval<<" max: "<<maxval<<" in board "<<
+	      fBID<<std::endl;
+	  }
+	  else{
+	      baseline = (float(tbase) / ((float(bcount))));
+
+	      // Add to total
+	      baseline_per_channel[channel]+= baseline;
+	      good_triggers_per_channel[channel]+=1.;
+	  }
+	} // end for loop through channels
+	//delete[] buff;
+	//break;
+      }
+      else
+	idx++;
+    }// end parse data  
+    delete[] buff;
+   
     // Get average from total
-    for(int channel=0; channel<nChannels; channel++)
+    for(int channel=0; channel<fNChannels; channel++)
       baseline_per_channel[channel]/=good_triggers_per_channel[channel];
 
-    
     // Compute update to baseline if any
     // Time for the **magic**. We want to see how far we are off from nominal and
     // adjust up and down accordingly. We will always adjust just a tiny bit
     // less than we think we need to to avoid getting into some overshoot
     // see-saw type loop where we never hit the target.
-    for(int channel=0; channel<nChannels; channel++){
+    for(int channel=0; channel<fNChannels; channel++){
       if(channel_finished[channel]>=repeat_this_many)
-	continue;      
-      
-      float absolute_unit = float(0xffff)/float(0x3fff);      
-      int adjustment = .5*int(absolute_unit*((float(baseline_per_channel[channel])-float(nominal_value))));
-      //int adjustment = int(baseline)-int(target_value);
-      //std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
-      //std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
+	continue;
+      if(good_triggers_per_channel[channel]==0)
+	continue;
+
+      float absolute_unit = float(0xffff)/float(0x3fff);
+      int adjustment = .5*int(absolute_unit*((float(baseline_per_channel[channel])-
+					      float(nominal_value))));
+
       if(abs(float(baseline_per_channel[channel])-float(nominal_value)) < adjustment_threshold){
 	channel_finished[channel]++;
-	std::cout<<"Channel "<<channel<<" converging at step "<<channel_finished[channel]<<"/5"<<std::endl;
+	std::cout<<"Channel "<<channel<<" converging at step "<<
+	  channel_finished[channel]<<"/5"<<std::endl;
       }
       else{
 	channel_finished[channel]=0;
-	//update_dac[channel] = true;
+	update_dac[channel] = true;
 	if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel]){
 	  dac_values[channel]=0x0;
 	  std::cout<<"Channel "<<channel<<" DAC to zero"<<std::endl;
@@ -450,287 +466,39 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	else {
 	  std::cout<<"Had channel "<<channel<<" at "<<dac_values[channel];
 	  dac_values[channel]+=(adjustment);
-	  std::cout<<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<baseline_per_channel[channel]<<std::endl;
+	  std::cout<<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<
+	    baseline_per_channel[channel]<<
+	    " ("<<good_triggers_per_channel[channel]<<" iterations)"<<std::endl;
 	}
       }
-    } // End final channel adjustment
-  } // End 'iterations < max iterations'
-  
-  for(unsigned int x=0; x<channel_finished.size(); x++){
-    if(channel_finished[x]<2){ // Be a little more lenient in case it's just starting to converge
-      std::stringstream error;
-      error<<"Baseline routine did not finish for channel "<<x<<" (and maybe others)."<<std::endl;
-      fLog->Entry(error.str(), MongoLog::Error);
-      return -1;
-    }
-  }
-  
-  end_values = dac_values;
-  return 0;
-    
-  
-}
-/*
-int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
-			      int nominal_value, int ntries){
+    } // End final channel adjustment       
+    current_iteration++;
 
-  // Baseline configuration routine. The V1724 has a DAC offset setting that
-  // biases the ADC, allowing you to effectively move the 'zero level' of the
-  // acquisition up or down. But keep in mind this is a bit limited. It's not
-  // designed to correct large offsets O(~volts) (i.e. your detector ground very far
-  // from ADC ground) but rather to move the baseline to the location best
-  // suited to your acquisition (positive, negative, bipolar logic)
-
-  u_int32_t target_value = nominal_value;
-  int adjustment_threshold = 5;
-  
-  // We can adjust a DAC offset register, which is 0xffff in range, is inversely
-  // proportional to the baseline position, and has ~5% overshoot on either end.
-  // So we use this information to get starting values:
-  u_int32_t starting_value = u_int32_t( (0x3fff-target_value)*((0.9*0xffff)/0x3fff)) + 3277;
-  unsigned int nChannels = 8;
-  vector<u_int16_t> dac_values(nChannels, starting_value);
-  if(end_values[0]!=0 && end_values.size() == nChannels){ // use start values if sent
-    std::cout<<"Found good start values for digi "<<fBID<<": ";
-    for(unsigned int x=0; x<end_values.size(); x++){
-      dac_values[x] = end_values[x];
-      std::cout<<dac_values[x]<<" ";
-    }
-    std::cout<<std::endl;
-  }
-  vector<int> channel_finished(nChannels, 0);
-  vector<bool> update_dac(nChannels, true);
-
-  // The CAEN edge-case demons hiding somewhere between the library, PCIe card,
-  // and digitizer demand a FULL RESET of the board...
-  CAENVME_End(fBoardHandle);
-  int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
-  if(a != cvSuccess){
-    fLog->Entry("Failed to init in the baseline routine", MongoLog::Warning);
-    return -1;
-  }
-  
-  // Now we need to load a simple configuration to the board in order to read
-  // some data. try/catch cause CAENVMElib fails poorly (segfault) sometimes
-  // in case the hardware has an issue.
-  int write_success = 0;
-  try{
-    write_success += WriteRegister(0xEF24, 0x1);       // Global reset    
-    write_success += WriteRegister(0xEF1C, 0x1);       // BERR 
-    write_success += WriteRegister(0xEF00, 0x130);      // Channel memory
-    //write_success += WriteRegister(0x8020, 0x1F4);     // Buffer size
-
-    write_success += WriteRegister(0x811C, 0x110);
-    write_success += WriteRegister(0x81A0, 0x200);
-    write_success += WriteRegister(0x8100, 0x0);
-    write_success += WriteRegister(0x800C, 0xA);
-    write_success += WriteRegister(0x8098, 0x1000);
-    write_success += WriteRegister(0x8000, 0x310);
-    write_success += WriteRegister(0x8080, 0x1310000);
-    write_success += WriteRegister(0x8034, 0x0);
-    write_success += WriteRegister(0x8038, 0x1);
-
-  }
-  catch(const std::exception &e){
-    std::stringstream error;
-    error<<"Digitizer "<<fBID<<" CAEN fault during initial register adjustment in baseline routine";
-    fLog->Entry(error.str(), MongoLog::Error);
-    return -2;
-  }
-
-  // Slightly more palatable error, at least CAENVMElib is recognizing a failure
-  // and not just seg faulting
-  if(write_success!=0){
-    std::stringstream error;
-    error<<"Digitizer "<<fBID<<" unable to load registers for baselines.";
-    fLog->Entry(error.str(), MongoLog::Error);
-    return -2;
-  }
-
-  // Now we'll iterate for a while. It should be pretty quick since starting values
-  // should be quite close to true.
-  int currentIteration = 0;
-  int maxIterations = ntries;
-  while(currentIteration < maxIterations){
-    currentIteration++;
-
-    // First check if we're finished and if so get out
-    bool breakout = true;
-    for(unsigned int channel=0; channel<nChannels; channel++){
-      if(channel_finished[channel]>=5)
-        continue;
-      breakout = false;
-    }
-    if(breakout)
-      break;
-
-    // Load DAC for this channel
+    // Load DAC    
     if(LoadDAC(dac_values, update_dac)!=0){
-      std::stringstream error;
-      error<<"Digitizer "<<fBID<<" failed to load DAC in baseline routine.";
-      fLog->Entry(error.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Error, "Digitizer %i failed to load DAC in baseline routine",
+		  fBID);
       return -2;
     }
     
     
-    //WriteRegister(0xEF28, 0x1);       // Software clear any old data
-    //usleep(1000);
+  } // end while(current_iteration < ntries)
 
-    // Make sure we can acquire
-    if(MonitorRegister(0x8104, 0x100, 1000, 1000) != true){
-      u_int32_t dat = ReadRegister(0x8178);
-      fLog->Entry("Timed out waiting for board to be ready in baseline", MongoLog::Warning);
-      std::cout<<"Board ready timeout: register 8174 value is "<<hex<<dat<<dec<<std::endl;
-      return -1;
-    }
-    
-    // Start acquisition
-    WriteRegister(0x8100,0x4);//x24?   // Acq control reg    
-    if(MonitorRegister(0x8104, 0x4, 1000, 1000) != true){
-      fLog->Entry("Timed out waiting for acquisition to start in baselines", MongoLog::Warning);
-      return -1;
-    }
-    
-    // Send SW trigger
-    WriteRegister(0x8108,0x1);    // Software trig reg      
-    if(MonitorRegister(0x8104, 0x8, 1000, 1000) != true){
-      fLog->Entry("Timed out waiting for event ready in baselines", MongoLog::Warning);
-      return -1;
-    }    
-
-    // Mega paranoia. Reg 8104 has already indicated an event is ready. But let's see how
-    // big this event is and print (debug step)
-    u_int32_t event_size_data=0;
-    event_size_data = ReadRegister(0x814C);
-    std::cout<<"(BL) Next event size is gonna be: "<<dec<<event_size_data<<" 32-bit words"<<std::endl;
-    
-    // Read data
-    u_int32_t *buff = NULL;
-    u_int32_t size = 0;
-    size = ReadMBLT(buff);
-
-    // Deactivate board
-    WriteRegister(0x8100, 0x0);
-
-    // Ensure the board is no longer running before continuing
-    if(MonitorRegister(0x8104, 0x4, 1000, 1000, 0x0) != true){
-      fLog->Entry("Timed out waiting for acquisition to stop in baselines",
-		  MongoLog::Warning);
-      return -1;
-    }
-    
-    // Check for mal formed data
-    if(size>0 && size<=16){
-      std::cout<<"Delete undersized buffer ("<<size<<")"<<std::endl;
-      delete[] buff;      
-      continue;
-    }
-    if(size == 0){
-      std::cout<<"No event though board said there would be one"<<std::endl;
-      if(buff != NULL) delete[] buff;
-      continue;
-    }
-        
-    // Parse
-    unsigned int idx = 0;
-    while(idx < size/sizeof(u_int32_t)){
-      if(buff[idx]>>20==0xA00){ // header	  
-	u_int32_t cmask = buff[idx+1]&0xFF;	  
-	idx += 4;
-
-	// Loop through channels
-	for(unsigned int channel=0; channel<8; channel++){
-
-	  int baseline = -1;
-	  long int tbase = 0;
-	  int bcount = 0;
-	  unsigned int minval = 0x3fff, maxval=0;
-	  
-	  if(!((cmask>>channel)&1))
-	    continue;
-	  u_int32_t csize = buff[idx]&0x7FFFFF;
-	  if(channel_finished[channel]>=5){
-	    idx+=csize;
-	    continue;
-	  }
-	  idx+=2;
-	  
-	  for(unsigned int i=0; i<csize-2; i++){
-	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0))
-	      continue;
-	    tbase += buff[idx+i]&0xFFFF;
-	    tbase += (buff[idx+i]>>16)&0xFFFF;
-	    bcount+=2;
-	    if((buff[idx+i]&0xFFFF)<minval)
-	      minval = buff[idx+i]&0xFFFF;
-	    if((buff[idx+i]&0xFFFF)>maxval)
-	      maxval = buff[idx+i]&0xFFFF;
-	    if(((buff[idx+i]>>16)&0xFFFF)<minval)
-	      minval=(buff[idx+i]>>16)&0xFFFF;
-	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
-	      maxval=(buff[idx+i]>>16)&0xFFFF;	  
-	  }
-	  idx += csize-2;
-	  if(abs(maxval-minval>50)){
-	    std::cout<<"Signal in baseline, channel "<<channel
-		     <<" min: "<<minval<<" max: "<<maxval<<std::endl;
-	  }
-	  else
-	    baseline = int(float(tbase) / ((float(bcount))));
-	  
-	  if(baseline>=0){
-
-	    // Time for the **magic**. We want to see how far we are off from nominal and
-	    // adjust up and down accordingly. We will always adjust just a tiny bit
-	    // less than we think we need to to avoid getting into some overshoot
-	    // see-saw type loop where we never hit the target.
-	    float absolute_unit = float(0xffff)/float(0x3fff);
-	    int adjustment = .3*int(absolute_unit*((float(baseline)-float(target_value))));
-	    //int adjustment = int(baseline)-int(target_value);
-	    //std::cout<<dec<<"Adjustment: "<<adjustment<<" with threshold "<<adjustment_threshold<<std::endl;
-	    //std::cout<<"Baseline: "<<baseline<<" DAC tihis channel: "<<dac_values[channel]<<std::endl;
-	    if(abs(adjustment) < adjustment_threshold){
-	      channel_finished[channel]++;
-	      std::cout<<"Channel "<<channel<<" converging at step "<<channel_finished[channel]<<"/5"<<std::endl;
-	    }
-	    else{
-	      channel_finished[channel]=0;
-	      update_dac[channel] = true;
-	      if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel])
-		dac_values[channel]=0x0;
-	      else if(adjustment>0 &&dac_values[channel]+adjustment>0xffff)
-		dac_values[channel]=0xffff;
-	      else {
-		std::cout<<"Had channel "<<channel<<" at "<<dac_values[channel];
-		dac_values[channel]+=(adjustment);
-		std::cout<<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<baseline<<std::endl;
-	      }
-	    }
-	  }
-	} // End for loop through channels
-	delete[] buff;
-	break; // Need to break cause we just deleted buff
-      } // End if found header
-      else
-	idx++;	
-    } // End while through buff
-    
-  }// end iteration loop
-  
   for(unsigned int x=0; x<channel_finished.size(); x++){
     if(channel_finished[x]<2){ // Be a little more lenient in case it's just starting to converge
-      std::stringstream error;
-      error<<"Baseline routine did not finish for channel "<<x<<" (and maybe others)."<<std::endl;
-      fLog->Entry(error.str(), MongoLog::Error);
+      fLog->Entry(MongoLog::Message,
+		  "Baseline routine did not finish for channel %i (and maybe others)", x);
       return -1;
     }
   }
 
-  
   end_values = dac_values;
   return 0;
+  
+  
 }
-*/
+
+
 int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
   // Loads DAC values into registers
   
@@ -742,30 +510,32 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     //update_dac[x]=false;
     
     // Give the DAC time to be set if needed
-    if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
-      stringstream errorstr;
-      errorstr<<"Timed out waiting for channel "<<x<<" in DAC setting";
-      fLog->Entry(errorstr.str(), MongoLog::Error);
+    
+    if(MonitorRegister((fChStatusRegister)+(0x100*x), 0x4, 100, 1000, 0) != true){
+      fLog->Entry(MongoLog::Error, "Timed out waiting for channel %i in DAC setting", x);
       return -1;
     }
+    
 
     // Now write channel DAC values
-    if(WriteRegister((0x1098)+(0x100*x), dac_values[x])!=0){
-      stringstream errorstr;
-      errorstr<<"Failed writing DAC "<<hex<<dac_values[x]<<dec<<" in channel "<<x;
-      fLog->Entry(errorstr.str(), MongoLog::Error);
+    if(WriteRegister((fChDACRegister)+(0x100*x), dac_values[x])!=0){
+      fLog->Entry(MongoLog::Error, "Failed writing DAC 0x%04x in channel %i",
+		  dac_values[x], x);
       return -1;
     }
 
     // Give the DAC time to be set if needed
-    if(MonitorRegister((0x1088)+(0x100*x), 0x4, 100, 1000, 0) != true){
-      stringstream errorstr;
-      errorstr<<"Timed out waiting for channel "<<x<<" after DAC setting";
-      fLog->Entry(errorstr.str(), MongoLog::Error);
+    
+    if(MonitorRegister((fChStatusRegister)+(0x100*x), 0x4, 100, 1000, 0) != true){
+      fLog->Entry(MongoLog::Error, "Timed out waiting for channel %i after DAC setting", x);
       return -1;
     }
+    
 
   }
+  // Sleep a bit because apparently checking the register means nothing and you
+  // gotta wait a little for the actual voltage to be updated
+  usleep(5000);
   return 0;
   
 }

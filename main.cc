@@ -1,47 +1,39 @@
 #include <iostream>
 #include <string>
 #include <iomanip>
+#include <csignal>
 #include "V1724.hh"
 #include "DAQController.hh"
 
-void UpdateDACDatabase(std::string run_identifier,
-		       std::map<int, std::vector<u_int16_t>>dac_values,
-		       mongocxx::collection dac_collection){
-  using namespace bsoncxx::builder::stream;
-  auto search_doc = document{} << "run" <<  run_identifier << finalize;
-  auto update_doc = document{};
-  update_doc<< "$set" << open_document << "run" << run_identifier;
-  for(auto iter : dac_values){
-    update_doc << std::to_string(iter.first) << open_array <<
-      [&](array_context<> arr){
-      for (u_int32_t i = 0; i < iter.second.size(); i++)
-            arr << iter.second[i];
-    } << close_array;
-  }
-  update_doc<<close_document;
-  auto write_doc = update_doc<<finalize;
-  mongocxx::options::update options;
-  options.upsert(true);
-  dac_collection.update_one(search_doc.view(), write_doc.view(), options);
+bool b_run = true;
 
+void SignalHandler(int signum) {
+    std::cout << "Received signal "<<signum<<std::endl;
+    b_run = false;
+    return;
 }
-
 
 int main(int argc, char** argv){
 
   // Need to create a mongocxx instance and it must exist for
   // the entirety of the program. So here seems good.
   mongocxx::instance instance{};
+
+  signal(SIGINT, SignalHandler);
+  signal(SIGTERM, SignalHandler);
    
   std::string current_run_id="none";
   
-  // Accept 2 arguments
+  // Accept at least 2 arguments
   if(argc<3){
     std::cout<<"Welcome to DAX. Run with a unique ID and a valid mongodb URI"<<std::endl;
     std::cout<<"e.g. ./dax ID mongodb://user:pass@host:port/authDB"<<std::endl;
     std::cout<<"...exiting"<<std::endl;
     exit(0);
   }
+  string dbname = "xenonnt";
+  if(argc >= 4)
+    dbname = argv[3];
 
   // We will consider commands addressed to this PC's ID 
   char chostname[HOST_NAME_MAX];
@@ -57,14 +49,14 @@ int main(int argc, char** argv){
   string suri = argv[2];  
   mongocxx::uri uri(suri.c_str());
   mongocxx::client client(uri);
-  mongocxx::database db = client["xenonnt"];
+  mongocxx::database db = client[dbname];
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
   
   // Logging
-  MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(suri, "xenonnt", "log", hostname,
+  MongoLog *logger = new MongoLog(true);
+  int ret = logger->Initialize(suri, dbname, "log", hostname,
 			       "dac_values", true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
@@ -81,7 +73,7 @@ int main(int argc, char** argv){
   
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
-  while(1){
+  while(b_run){
 
     // Try to poll for commands
     bsoncxx::stdx::optional<bsoncxx::document::value> querydoc;
@@ -120,14 +112,15 @@ int main(int argc, char** argv){
       
       // Get the command out of the doc
       string command = "";
+      string user = "";
       try{
-	command = (doc)["command"].get_utf8().value.to_string();	
+	command = (doc)["command"].get_utf8().value.to_string();
+	user = (doc)["user"].get_utf8().value.to_string();
       }
       catch (const std::exception &e){
 	//LOG
-	std::stringstream err;
-	err<<"Received malformed command: "<< bsoncxx::to_json(doc);
-	logger->Entry(err.str(), MongoLog::Warning);
+	logger->Entry(MongoLog::Warning, "Received malformed command %s",
+		      bsoncxx::to_json(doc).c_str());
       }
       
       
@@ -153,18 +146,19 @@ int main(int argc, char** argv){
 	    }
 	  }
 	  
-	  logger->Entry("Received start command from user "+
-			(doc)["user"].get_utf8().value.to_string(), MongoLog::Message);
+	  logger->Entry(MongoLog::Message, "Received start command from user %s",
+			user.c_str());
 	}
 	else
-	  logger->Entry("Cannot start DAQ since not in ARMED state", MongoLog::Debug);
+	  logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state");
       }
       else if(command == "stop"){
 	// "stop" is also a general reset command and can be called any time
-	logger->Entry("Received stop command from user "+
-		      (doc)["user"].get_utf8().value.to_string(), MongoLog::Message);
+	logger->Entry(MongoLog::Message, "Received stop command from user %s",
+		      user.c_str());
 	if(controller->Stop()!=0)
-	  logger->Entry("DAQ failed to stop. Will continue clearing program memory.", MongoLog::Error);
+	  logger->Entry(MongoLog::Error,
+			"DAQ failed to stop. Will continue clearing program memory.");
 	
 	current_run_id = "none";
 	if(readoutThreads.size()!=0){
@@ -203,7 +197,7 @@ int main(int argc, char** argv){
 	    override_json = bsoncxx::to_json(oopts);
 	  }
 	  catch(const std::exception &e){
-	    logger->Entry("No override options provided, continue without.", MongoLog::Debug);
+	    logger->Entry(MongoLog::Debug, "No override options provided, continue without.");
 	  }
 	 
 	  bool initialized = false;
@@ -216,25 +210,28 @@ int main(int argc, char** argv){
 	  std::vector<int> links;
 	  std::map<int, std::vector<u_int16_t>> written_dacs;
 	  if(controller->InitializeElectronics(fOptions, links, written_dacs) != 0){
-	    logger->Entry("Failed to initialize electronics", MongoLog::Error);
+	    logger->Entry(MongoLog::Error, "Failed to initialize electronics");
 	    controller->End();
 	  }
 	  else{
 	    logger->UpdateDACDatabase(fOptions->GetString("run_identifier", "default"),
-			      written_dacs);
+				      written_dacs);
 	    initialized = true;
-	    logger->Entry("Initialized electronics", MongoLog::Debug);
+	    logger->Entry(MongoLog::Debug, "Initialized electronics");
 	  }
 	  
 	  if(readoutThreads.size()!=0){
-	    logger->Entry("Cannot start DAQ while readout thread from previous run active. Please perform a reset", MongoLog::Message);
+	    logger->Entry(MongoLog::Message,
+			  "Cannot start DAQ while readout thread from previous run active. Please perform a reset");
 	  }
 	  else if(!initialized){
 	    cout<<"Skipping readout configuration since init failed"<<std::endl;
 	  }
 	  else{
+	    controller->CloseProcessingThreads();
 	    for(unsigned int i=0; i<links.size(); i++){
 	      std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
+	      controller->OpenProcessingThreads(); // open nprocessingthreads per link
 	      std:: thread *readoutThread = new std::thread
 		(
 		 DAQController::ReadThreadWrapper,
@@ -245,7 +242,7 @@ int main(int argc, char** argv){
 	  }
 	}	  	
 	else
-	  logger->Entry("Cannot arm DAQ while not 'Idle'", MongoLog::Warning);
+	  logger->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
       }      
     }
     // Insert some information on this readout node back to the monitor DB
@@ -253,9 +250,7 @@ int main(int argc, char** argv){
 
     try{
 
-      // Gonna have to separate this
-      // Need function controller->GetDataPerDigi() that returns map by value and clears prv member
-      // need to put that map into BSON.
+      // Put in status update document
       auto insert_doc = bsoncxx::builder::stream::document{};
       insert_doc << "host" << hostname <<
 	"rate" << controller->GetDataSize()/1e6 <<
@@ -268,18 +263,7 @@ int main(int argc, char** argv){
 	for( auto const& kPair : controller->GetDataPerDigi() )	  
 	  doc << std::to_string(kPair.first) << kPair.second/1e6;
 	} << bsoncxx::builder::stream::close_document;
-	//auto final_doc = insert_doc << bsoncxx::builder::stream::finalize;
 	status.insert_one(insert_doc << bsoncxx::builder::stream::finalize);
-
-	/*status.insert_one(bsoncxx::builder::stream::document{} <<
-			"host" << hostname <<
-			"rate" << controller->GetDataSize()/1e6 <<			
-			"status" << controller->status() <<
-			"buffer_length" << controller->buffer_length()/1e6 <<
-			"run_mode" << controller->run_mode() <<
-			"current_run_id" << current_run_id <<
-			bsoncxx::builder::stream::finalize);
-	*/
     }catch(const std::exception &e){
       std::cout<<"Can't connect to DB to update."<<std::endl;
       std::cout<<e.what()<<std::endl;

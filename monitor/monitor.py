@@ -6,8 +6,8 @@ import datetime
 timeout = 2
 import socket
 
-client = MongoClient("mongodb://dax:%s@gw:27019/xenonnt"%os.environ["MONGO_PASSWORD"])
-db = client['xenonnt']
+client = MongoClient("mongodb://daq:%s@xenon1t-daq:27020/daq"%os.environ["MONGO_PASSWORD_DAQ"])
+db = client['daq']
 collection = db['system_monitor']
 
 while(1):
@@ -37,6 +37,5 @@ while(1):
     ret_doc['disk'] = disk
     
     print(ret_doc)
-    collection.insert(ret_doc)
-    
+    collection.insert(ret_doc)    
     time.sleep(timeout)
