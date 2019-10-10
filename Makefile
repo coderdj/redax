@@ -22,7 +22,7 @@ $(CPP_SLAVE) : $(OBJECTS_SLAVE)
 ccontrol: $(SOURCES_CC) $(CPP_CC)
 
 $(CPP_CC) : $(OBJECTS_CC)
-	$(CC) $(OBJECTS_CC) $(CFLAGS) $(LDFLAGS_CC) -o $(CPP_CC) $(LDLIBS)
+	$(CC) $(OBJECTS_CC) $(CFLAGS) $(LDFLAGS_CC) -o $(CPP_CC)
 
 clean:
 	rm $(CPP_SLAVE)
