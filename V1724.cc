@@ -207,7 +207,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   do{
 
     // Reserve space for this block transfer
-    u_int32_t* thisBLT = new u_int32_t[BLT_SIZE];
+    u_int32_t* thisBLT = new u_int32_t[BLT_SIZE/sizeof(u_int32_t)];
     
     try{
       ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
@@ -255,10 +255,12 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
       u_int32_t size_to_transfer = BLT_SIZE;
       if(x == transferred_buffers.size()-1) // last element
 	size_to_transfer = blt_bytes - (x*BLT_SIZE);
-      std::memcpy(buffer+((x*BLT_SIZE)/sizeof(u_int32_t)), transferred_buffers[x], size_to_transfer);
+      std::memcpy(((unsigned char*)buffer)+(x*BLT_SIZE),
+		  transferred_buffers[x], size_to_transfer);
     }
   }
-  for(unsigned int x=0;x<transferred_buffers.size(); x++)                                                                                                         delete[] transferred_buffers[x];
+  for(unsigned int x=0;x<transferred_buffers.size(); x++)
+    delete[] transferred_buffers[x];
   return blt_bytes;
   
 }
