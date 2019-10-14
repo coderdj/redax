@@ -96,7 +96,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
     // Loop through entire buffer until finished
     // 0xFFFFFFFF are used as padding it seems
     
-    if(buff[idx]>>20 == 0xA00){ // Found a header, start parsing
+    if(buff[idx]>>28 == 0xA){ // Found a header, start parsing
       u_int32_t event_size = buff[idx]&0xFFFFFFF; // In bytes
       u_int32_t channel_mask = buff[idx+1]&0xFF; // Channels in event
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
@@ -105,7 +105,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
       
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
-      if(board_fail==1){
+      if(board_fail != 0){
 	fBoardFailCount+=1;
 	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
       }
@@ -209,7 +209,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  char *sampleWidth = reinterpret_cast<char*> (&sw);
 	  fragment.append(sampleWidth, 2);
 	  
-	  u_int64_t time_this_fragment = Time64+((fFragmentLength/2)*10*fragment_index);
+	  u_int64_t time_this_fragment = Time64+((fFragmentLength/2)*sw*fragment_index);
 	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
 	  fragment.append(pulseTime, 8);
 
@@ -217,7 +217,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  char *fragmenttime = reinterpret_cast<char*> (&samples_this_channel);
 	  fragment.append(fragmenttime, 4);
 
-	  u_int32_t tii0 = 0;
+	  u_int32_t tii0 = 0; // pulse area
 	  char *thisoneiszero = reinterpret_cast<char*>(&tii0);
 	  fragment.append(thisoneiszero, 4);
 
@@ -227,7 +227,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  char *fragmentindex = reinterpret_cast<char*> (&fragment_index);
 	  fragment.append(fragmentindex, 2);
 
-	  char *anotherzero = reinterpret_cast<char*> (&tii0);
+	  char *anotherzero = reinterpret_cast<char*> (&tii0); // baseline
 	  fragment.append(anotherzero, 4);
 
 	  u_int8_t rl = 0;

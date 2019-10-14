@@ -82,7 +82,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
 
 u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
   u_int32_t idx = 0;
-  std::cout<<"Size is: "<<size<<std::endl;
+  //std::cout<<"Size is: "<<size<<std::endl;
   while(idx < size/sizeof(u_int32_t)){
     if(buff[idx]>>20==0xA00)
       return buff[idx+3]&0x7FFFFFFF;
@@ -199,6 +199,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   //unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
   unsigned int BLT_SIZE=524288;
   vector<u_int32_t*> transferred_buffers;
+  vector<u_int32_t> transferred_bytes;
   
   // unsigned int BUFFER_SIZE = 8388608*4; // I do not understand why this has to be so high
   // u_int32_t *tempBuffer = new u_int32_t[BUFFER_SIZE];
@@ -235,6 +236,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
     count++;
     blt_bytes+=nb;
     transferred_buffers.push_back(thisBLT);
+    transferred_bytes.push_back(nb);
 
   }while(ret != cvBusError);
 
@@ -251,12 +253,15 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   // maximum bandwidth of the link.
   if(blt_bytes>0){
     buffer = new u_int32_t[blt_bytes/sizeof(u_int32_t)];
+    u_int32_t bytes_copied = 0;
     for(unsigned int x=0; x<transferred_buffers.size(); x++){
-      u_int32_t size_to_transfer = BLT_SIZE;
-      if(x == transferred_buffers.size()-1) // last element
-	size_to_transfer = blt_bytes - (x*BLT_SIZE);
-      std::memcpy(((unsigned char*)buffer)+(x*BLT_SIZE),
+      //u_int32_t size_to_transfer = BLT_SIZE;
+      u_int32_t size_to_transfer = transferred_bytes[x];
+      //if(x == transferred_buffers.size()-1) // last element
+	//size_to_transfer = blt_bytes - (x*BLT_SIZE);
+      std::memcpy(((unsigned char*)buffer)+bytes_copied,
 		  transferred_buffers[x], size_to_transfer);
+      bytes_copied += transferred_bytes[x];
     }
   }
   for(unsigned int x=0;x<transferred_buffers.size(); x++)
