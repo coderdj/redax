@@ -335,6 +335,7 @@ void DAQController::ReadData(int link){
       AppendData(local_buffer);
     local_buffer.clear();
     readcycler++;
+    usleep(1);
   }
 
 }
