@@ -131,7 +131,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  idx += fFmt["channel_header_size"];
 
 	  // V1724 only. 1730 has a **26-day** clock counter. 
-	  if(fFmt["channel_header_size"] > 2){
+	  if(fFmt["channel_header_size"] <= 2){
 	    // OK. Here's the logic for the clock reset, and I realize this is the
 	    // second place in the code where such weird logic is needed but that's it
 	    // First, on the first instance of a channel we gotta check if
