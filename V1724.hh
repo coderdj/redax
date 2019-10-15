@@ -46,13 +46,12 @@ class V1724{
   u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
   
   int fNsPerSample;
-
+  std::map<std::string, int> DataFormatDefinition;
  private:
 
   bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
 		       int sleep, u_int32_t val=1);
   unsigned int ReadRegister(unsigned int reg);
-  
   Options *fOptions;
   int fBoardHandle;
   int fLink, fCrate, fBID;

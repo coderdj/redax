@@ -340,6 +340,7 @@ void DAQController::ReadData(int link){
 
 }
 
+
 std::map<int, u_int64_t> DAQController::GetDataPerDigi(){
   // Return a map of data transferred per digitizer since last update
   // and clear the private map
@@ -347,6 +348,13 @@ std::map<int, u_int64_t> DAQController::GetDataPerDigi(){
   for(auto const &kPair : fDataPerDigi)
     fDataPerDigi[kPair.first] = 0;
   return retmap;
+}
+
+std::map<std::string, int> DAQController::GetDataFormat(){
+  for( auto const& link : fDigitizers )    
+    for(auto digi : link.second)
+      return digi->DataFormatDefinition;
+  return std::map<std::string, int>();
 }
 
 void DAQController::AppendData(vector<data_packet> &d){
@@ -388,7 +396,6 @@ int DAQController::GetData(std::vector <data_packet> *&retVec){
   
 
 void* DAQController::ProcessingThreadWrapper(void* data){
-  //MongoInserter *mi = static_cast<MongoInserter*>(data);
   StraxInserter *mi = static_cast<StraxInserter*>(data);
   mi->ReadAndInsertData();
   return data;

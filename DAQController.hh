@@ -26,10 +26,6 @@ public:
   int InitializeElectronics(Options *options, std::vector<int> &keys,
 			    std::map<int, std::vector<u_int16_t>>&written_dacs);
 
-  // Get data (return new buffer and size)
-  //double data_rate(){
-  //  return 0;
-  //};
   int status(){
     return fStatus;
   };
@@ -55,6 +51,7 @@ public:
   void OpenProcessingThreads();
   void CloseProcessingThreads();
 
+  std::map<std::string, int> GetDataFormat();
   
 private:
   void AppendData(vector<data_packet> &d);

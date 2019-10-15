@@ -70,6 +70,7 @@ private:
   std::string fCompressor;
   std::map<std::string, std::string*> fFragments;
   int fBoardFailCount;
+  std::map<std::string, int>fFmt;
 };
 
 #endif

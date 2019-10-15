@@ -18,6 +18,7 @@ StraxInserter::StraxInserter(){
   fOutputPath = "";
   fChunkNameLength = 6;
   fBoardFailCount = 0;
+
 }
 
 StraxInserter::~StraxInserter(){  
@@ -29,7 +30,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fChunkLength = fOptions->GetLongInt("strax_chunk_length", 20e9); // default 20s
   fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
-  fCompressor = fOptions->GetString("compressor", "blosc");
+  fCompressor = fOptions->GetString("compressor", "lz4");
   fHostname = hostname;
   fBoardFailCount = 0;
   std::string run_name = fOptions->GetString("run_identifier", "run");
@@ -47,6 +48,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 
   fMissingVerified = 0;
   fDataSource = dataSource;
+  fFmt = dataSource->GetDataFormat();
   fLog = log;
   fErrorBit = false;
 
@@ -79,13 +81,12 @@ void StraxInserter::ParseDocuments(data_packet dp){
   
   // Take a buffer and break it up into one document per channel
   int fragments_inserted = 0;
+  unsigned int max_channels = 16; // hardcoded to accomodate V1730
   
   // Unpack the things from the data packet
-  vector<u_int32_t> clock_counters;
-  for(int i=0; i<8; i++)
-    clock_counters.push_back(dp.clock_counter);
-  vector<u_int32_t> last_times_seen = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF,
-				       0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
+  vector<u_int32_t> clock_counters(max_channels, dp.clock_counter);
+  vector<u_int32_t> last_times_seen(max_channels, 0xFFFFFFFF);
+  
   u_int32_t size = dp.size;
   u_int32_t *buff = dp.buff;
   int smallest_latest_index_seen = -1;
@@ -93,15 +94,16 @@ void StraxInserter::ParseDocuments(data_packet dp){
   u_int32_t idx = 0;
   while(idx < size/sizeof(u_int32_t) &&
 	buff[idx] != 0xFFFFFFFF){
-    // Loop through entire buffer until finished
-    // 0xFFFFFFFF are used as padding it seems
     
-    if(buff[idx]>>28 == 0xA){ // Found a header, start parsing
-      u_int32_t event_size = buff[idx]&0xFFFFFFF; // In bytes
-      u_int32_t channel_mask = buff[idx+1]&0xFF; // Channels in event
+    if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
+
+      // Get data from main header
+      u_int32_t event_size = buff[idx]&0xFFFFFFF; 
+      u_int32_t channel_mask = buff[idx+1]&0xFF;
+      // Exercise for the reader: if you're modifying for V1730 add in the rest of the bits here!
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
-      u_int32_t board_fail  = buff[idx+1]&0x4000000; //Board failed. Never saw this set.
-      u_int32_t event_time = buff[idx+3]&0x7FFFFFFF;
+      u_int32_t board_fail  = buff[idx+1]&0x4000000;
+      u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
       
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
@@ -110,56 +112,60 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
       }
       
-      idx += 4; // Skip the header
+      idx += 4; // skip header
 
-      for(unsigned int channel=0; channel<8; channel++){
-	if(!((channel_mask>>channel)&1)) // Make sure channel in data
+      for(unsigned int channel=0; channel<max_channels; channel++){
+	if(!((channel_mask>>channel)&1))
 	  continue;
 
+	// These defaults are valid for 'default' firmware where all channels same size
 	u_int32_t channel_size = (event_size - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
 
-	if(fFirmwareVersion == 0){
-	  channel_size = (buff[idx]&0x7FFFFF)-2; // In words (4 bytes). The -2 is cause of header
-	  idx++;
-	  channel_time = buff[idx]&0x7FFFFFFF;
-	  idx++;
+	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
+	if(fFmt["channel_header_size"] > 0){
+	  channel_size = (buff[idx]&0x7FFFFF)-fFmt["channel_header_size"];
+	  channel_time = buff[idx+1]&0xFFFFFFFF;
+	  // Another exercise for reader to add the msb for the V1730
+	  
+	  idx += fFmt["channel_header_size"];
+
+	  // V1724 only. 1730 has a **26-day** clock counter. 
+	  if(fFmt["channel_header_size"] > 2){
+	    // OK. Here's the logic for the clock reset, and I realize this is the
+	    // second place in the code where such weird logic is needed but that's it
+	    // First, on the first instance of a channel we gotta check if
+	    // the channel clock rolled over BEFORE this clock and adjust the counter
+	    
+	    if(channel_time > 15e8 && dp.header_time<5e8 &&
+	       last_times_seen[channel] == 0xFFFFFFFF && clock_counters[channel]!=0){
+	      clock_counters[channel]--;
+	    }
+	    // Now check the opposite
+	    else if(channel_time <5e8 && dp.header_time > 15e8 &&
+		    last_times_seen[channel] == 0xFFFFFFFF){
+	      clock_counters[channel]++;
+	    }
+	    
+	    // Now check if this time < last time (indicates rollover)
+	    if(channel_time < last_times_seen[channel] &&
+	       last_times_seen[channel]!=0xFFFFFFFF)
+	      clock_counters[channel]++;
+	    
+	    last_times_seen[channel] = channel_time;
+	  }
 	}
 
-	// OK. Here's the logic for the clock reset, and I realize this is the
-	// second place in the code where such weird logic is needed but that's it
-	// First, on the first instance of a channel we gotta check if
-	// the channel clock rolled over BEFORE this clock and adjust the counter
-	if(channel_time > 15e8 && dp.header_time<5e8 &&
-	   last_times_seen[channel] == 0xFFFFFFFF && clock_counters[channel]!=0){
-	  clock_counters[channel]--;
-	}
-	// Now check the opposite
-	else if(channel_time <5e8 && dp.header_time > 15e8 &&
-		last_times_seen[channel] == 0xFFFFFFFF){
-	  clock_counters[channel]++;
-	}
-
-	// Now check if this time < last time (indicates rollover)
-	if(channel_time < last_times_seen[channel] &&
-	   last_times_seen[channel]!=0xFFFFFFFF)
-	  clock_counters[channel]++;
-
-	last_times_seen[channel] = channel_time;
-	
+	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
+	// 48 bits this line would be different
 	int iBitShift = 31;
-	int64_t Time64 = 10*(((unsigned long)clock_counters[channel] <<
-			      iBitShift) + channel_time); // in ns
+	int64_t Time64 = fFmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
+					      iBitShift) + channel_time); // in ns
 
 	// Get the CHUNK and decide if this event also goes into a PRE/POST file
 	u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
 	u_int64_t chunk_id = u_int64_t(Time64/fFullChunkLength);
-	if(chunk_id > 10000){
-	  std::cout<<"Chunk ID: "<<chunk_id<<" from time: "<<Time64<<" and length: "<<
-	    fFullChunkLength<<" with channel time: "<<channel_time<<" and reset counter: "<<
-	    clock_counters[channel]<<std::endl;
-	  throw(std::runtime_error("Exception in clock times"));
-	}
+	
 	// Check if this is the smallest_latest_index_seen
 	if(smallest_latest_index_seen == -1 || int(chunk_id) < smallest_latest_index_seen)
 	  smallest_latest_index_seen = chunk_id;
@@ -167,8 +173,6 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	bool nextpre=false;//, prevpost=false;
 	if(((chunk_id+1)*fFullChunkLength)-Time64 < fChunkOverlap)
 	  nextpre=true;
-	//if(Time64-(fFullChunkLength*chunk_id) < fChunkOverlap && chunk_id!=0)
-	//  prevpost=true;
 
 	// We're now at the first sample of the channel's waveform. This
 	// will be beautiful. First we reinterpret the channel as 16
@@ -181,7 +185,6 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	u_int16_t fragment_index = 0;
 	
 	while(index_in_sample < samples_in_channel){
-	  //char *fragment = new char[fFragmentLength + fStraxHeaderSize];
 	  std::string fragment;
 	  
 	  // How long is this fragment?
@@ -205,7 +208,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  char *channelLoc = reinterpret_cast<char*> (&cl);
 	  fragment.append(channelLoc, 2);
 
-	  u_int16_t sw = 10;
+	  u_int16_t sw = fFmt["ns_per_sample"];
 	  char *sampleWidth = reinterpret_cast<char*> (&sw);
 	  fragment.append(sampleWidth, 2);
 	  

@@ -14,6 +14,20 @@ V1724::V1724(MongoLog  *log, Options *options){
   fResetRegister = 0xEF24;
   fChStatusRegister = 0x1088;
   fChDACRegister = 0x1098;
+
+  DataFormatDefinition = {
+    {"channel_mask_msb_idx", NULL},
+    {"channel_mask_msb_mask", NULL},
+    {"channel_header_size", 2},
+    {"ns_per_sample", 10},
+    {"ns_per_clk", 10},
+    // Channel indices are given relative to start of channel
+    // i.e. the channel size is at index '0'
+    {"channel_time_msb_idx", NULL},
+    {"channel_time_msb_mask", NULL},
+    
+  };
+  
 }
 V1724::~V1724(){
   End();
@@ -40,7 +54,6 @@ bool V1724::EnsureStopped(int ntries, int tsleep){
 u_int32_t V1724::GetAcquisitionStatus(){
   return ReadRegister(fAqStatusRegister);
 }
-
 
 
 int V1724::Init(int link, int crate, int bid, unsigned int address){
