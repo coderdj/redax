@@ -23,6 +23,7 @@ class V1724{
   int Init(int link, int crate, int bid, unsigned int address=0);
   int64_t ReadMBLT(u_int32_t *&buffer);
   int WriteRegister(unsigned int reg, unsigned int value);
+  unsigned int ReadRegister(unsigned int reg);
   int ConfigureBaselines(vector <u_int16_t> &end_values,
 			 int nominal_value=16000,
 			 int ntries=100);
@@ -51,7 +52,6 @@ class V1724{
 
   bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
 		       int sleep, u_int32_t val=1);
-  unsigned int ReadRegister(unsigned int reg);
   Options *fOptions;
   int fBoardHandle;
   int fLink, fCrate, fBID;
