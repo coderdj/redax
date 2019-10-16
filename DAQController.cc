@@ -306,6 +306,9 @@ void DAQController::ReadData(int link){
 	readcycler=0;
 	u_int32_t data = fDigitizers[link][x]->GetAcquisitionStatus();
 	std::cout<<"Board "<<fDigitizers[link][x]->bid()<<" has status "<<hex<<data<<dec<<std::endl;
+	data = fDigitizers[link][x]->ReadRegister(0x8100);
+	data = fDigitizers[link][x]->ReadRegister(0x8178);
+	data = fDigitizers[link][x]->ReadRegister(0xEF04);
       }
       data_packet d;
       d.buff=NULL;
