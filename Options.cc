@@ -168,7 +168,7 @@ std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname
   
   for(bsoncxx::array::element ele : subarr){
     std::string btype = ele["type"].get_utf8().value.to_string();
-    if(std::count(types.begin(), types.end(), btype))
+    if(!std::count(types.begin(), types.end(), btype))
       continue;
     try{
       if(ele["host"].get_utf8().value.to_string() != hostname)
