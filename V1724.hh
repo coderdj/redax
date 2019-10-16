@@ -48,7 +48,17 @@ class V1724{
   
   int fNsPerSample;
   std::map<std::string, int> DataFormatDefinition;
- private:
+
+protected:
+  // Some values for base classes to override 
+  int fAqCtrlRegister;
+  int fAqStatusRegister;
+  int fSwTrigRegister;
+  int fResetRegister;
+  int fChStatusRegister;
+  int fChDACRegister;
+
+private:
 
   bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
 		       int sleep, u_int32_t val=1);
@@ -56,15 +66,6 @@ class V1724{
   int fBoardHandle;
   int fLink, fCrate, fBID;
   unsigned int fBaseAddress;
-  int fFirmwareVersion;
-
-  // Some values for base classes to override
-  int fAqCtrlRegister;
-  int fAqStatusRegister;
-  int fSwTrigRegister;
-  int fResetRegister;
-  int fChStatusRegister;
-  int fChDACRegister;
 
   // Stuff for clock reset tracking
   u_int32_t clock_counter;

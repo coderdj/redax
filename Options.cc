@@ -159,9 +159,16 @@ std::string Options::GetString(std::string path, std::string default_value){
 std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname){
   std::vector<BoardType> ret;
   bsoncxx::array::view subarr = bson_options["boards"].get_array().value;
+
+  std::vector <std::string> types;
+  if(type == "V17XX")
+    types = {"V1724", "V1730", "V1724_MV"};
+  else
+    types.push_back(type);
   
   for(bsoncxx::array::element ele : subarr){
-    if(type != "" && type != ele["type"].get_utf8().value.to_string())
+    std::string btype = ele["type"].get_utf8().value.to_string();
+    if(std::count(types.begin(), types.end(), btype))
       continue;
     try{
       if(ele["host"].get_utf8().value.to_string() != hostname)

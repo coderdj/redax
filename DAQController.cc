@@ -49,10 +49,18 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   
   // Initialize digitizers
   fStatus = DAXHelpers::Arming;
-  for(auto d : fOptions->GetBoards("V1724", fHostname)){
+  for(auto d : fOptions->GetBoards("V17XX", fHostname)){
     fLog->Entry(MongoLog::Local, "Arming new digitizer %i", d.board);    
 
-    V1724 *digi = new V1724(fLog, fOptions);
+    V1724 *digi;
+    if(d.type == "V1724_MV")
+      digi = new V1724_MV(fLog, fOptions);
+    // else if(d.type == "V1730")
+    // digi = new V1730(fLog, fOptions);
+    else
+      digi = new V1724(fLog, fOptions);
+
+    
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){      
 	fDigitizers[d.link].push_back(digi);
 	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){	  

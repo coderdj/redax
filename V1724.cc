@@ -66,20 +66,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
     return -1;
   }
   fLog->Entry(MongoLog::Debug, "Initialized board %i with handle %i (link/crate)(%i/%i)",
-	      bid, fBoardHandle, link, crate);
-  
-  // To start we do not know which FW version we're dealing with (for data parsing)
-  fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
-  if(fFirmwareVersion == -1){
-	cout<<"Firmware version unspecified in options"<<endl;
-	return -1;
-  }
-  if((fFirmwareVersion != 0) && (fFirmwareVersion != 1)){
-	cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<endl;
-	return -1;
-  }
-  fLog->Entry(MongoLog::Debug, "Assuming firmware %i (0: XENON, 1: default)",
-	      fFirmwareVersion);
+	      bid, fBoardHandle, link, crate);  
 
   fLink = link;
   fCrate = crate;
@@ -431,9 +418,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 	    break;
 	  }
 	  
-	  if(fFirmwareVersion == 0){
-            csize = (buff[idx]&0x7FFFFF)-2; // In words (4 bytes). The -2 is cause of header
-            idx += 2;
+	  if(DataFormatDefinition["channel_header_size"] > 0){
+            csize = (buff[idx]&0x7FFFFF)-DataFormatDefinition["channel_header_size"];         
+	    idx += DataFormatDefinition["channel_header_size"];
           }
 	  if(channel_finished[channel]>=repeat_this_many){
 	    idx+=csize;

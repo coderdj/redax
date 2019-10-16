@@ -2,7 +2,7 @@
 #define _DAQCONTROLLER_HH_
 
 #include <thread>
-#include "V1724.hh"
+#include "V1724_MV.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
 #include "StraxInserter.hh"
