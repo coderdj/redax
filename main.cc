@@ -82,7 +82,7 @@ int main(int argc, char** argv){
 
       // Sort oldest to newest
       auto order = bsoncxx::builder::stream::document{} <<
-	"_id" << -1 <<bsoncxx::builder::stream::finalize;
+	"_id" << 1 <<bsoncxx::builder::stream::finalize;
       auto opts = mongocxx::options::find{};
       opts.sort(order.view());
       

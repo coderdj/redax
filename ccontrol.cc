@@ -51,7 +51,7 @@ int main(int argc, char** argv){
   while(1){
 
     auto order = bsoncxx::builder::stream::document{} <<
-      "_id" << -1 <<bsoncxx::builder::stream::finalize;
+      "_id" << 1 <<bsoncxx::builder::stream::finalize;
     auto opts = mongocxx::options::find{};
     opts.sort(order.view());
     mongocxx::cursor cursor = control.find
