@@ -67,7 +67,7 @@ public:
   const static int Fatal   = 4;  // Program gonna die
   const static int Local   = -1; // Write to local (file) log only
 
-  int Entry(int priority, std::string message, ...);
+  int Entry(int priority,std::string message, ...);
 
 
   int GetDACValues(int bid, int reference_run,

@@ -18,7 +18,7 @@ class V1724{
 
  public:
   V1724(MongoLog *log, Options *options);
-  ~V1724();
+  virtual ~V1724();
 
   int Init(int link, int crate, int bid, unsigned int address=0);
   int64_t ReadMBLT(u_int32_t *&buffer);
