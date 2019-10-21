@@ -14,7 +14,8 @@ V1724::V1724(MongoLog  *log, Options *options){
   fResetRegister = 0xEF24;
   fChStatusRegister = 0x1088;
   fChDACRegister = 0x1098;
-
+  fNChannels = 8;
+  
   DataFormatDefinition = {
     {"channel_mask_msb_idx", NULL},
     {"channel_mask_msb_mask", NULL},
@@ -282,7 +283,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // Initial parameters:
   int adjustment_threshold = 5;
   int current_iteration=0;
-  int fNChannels = 8;
   int repeat_this_many=5;
   int triggers_per_iteration = 1;
 
@@ -294,15 +294,9 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 					((0.9*0xffff)/0x3fff) + 3277);
 
   vector<u_int16_t> dac_values(fNChannels, starting_value);
-  if(end_values[0]!=0 && end_values.size() ==
-     (unsigned int)(fNChannels)){ // use start values if sent
-    std::cout<<"Found good start values for digi "<<fBID<<": ";
-    for(unsigned int x=0; x<end_values.size(); x++){
-      dac_values[x] = end_values[x];
-      std::cout<<dac_values[x]<<" ";
-    }
-    std::cout<<std::endl;
-  }
+  if(end_values[0]!=0 && end_values.size() >= (unsigned int)(fNChannels))
+    std::copy(end_values.begin(), end_values.begin() + fNChannels, dac_values.begin());
+  
   fLog->Entry(MongoLog::Local,
 	      "Found starting values for digi %i BLs: 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x,",
 	      fBID, dac_values[0], dac_values[1], dac_values[2], dac_values[3], dac_values[4],
@@ -401,7 +395,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
 	idx += 4;
 	// Loop through channels
-	for(unsigned int channel=0; channel<8; channel++){		
+	for(unsigned int channel=0; channel<fNChannels; channel++){		
 	  if(!((cmask>>channel)&1))
             continue;
 	  
@@ -476,7 +470,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     delete[] buff;
    
     // Get average from total
-    for(int channel=0; channel<fNChannels; channel++)
+    for(unsigned int channel=0; channel<fNChannels; channel++)
       baseline_per_channel[channel]/=good_triggers_per_channel[channel];
 
     // Compute update to baseline if any
@@ -484,7 +478,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     // adjust up and down accordingly. We will always adjust just a tiny bit
     // less than we think we need to to avoid getting into some overshoot
     // see-saw type loop where we never hit the target.
-    for(int channel=0; channel<fNChannels; channel++){
+    for(unsigned int channel=0; channel<fNChannels; channel++){
       if(channel_finished[channel]>=repeat_this_many)
 	continue;
       if(good_triggers_per_channel[channel]==0)
@@ -550,7 +544,7 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
   // Loads DAC values into registers
   
   for(unsigned int x=0; x<dac_values.size(); x++){
-    if(x>7 || update_dac[x]==false) // oops
+    if(x>fNChannels || update_dac[x]==false) // oops
       continue;
 
     // We updated, or at least tried to update

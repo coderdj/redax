@@ -77,174 +77,182 @@ int main(int argc, char** argv){
 
     // Try to poll for commands
     bsoncxx::stdx::optional<bsoncxx::document::value> querydoc;
+
     try{
-      //   mongocxx::cursor cursor = control.find 
-      querydoc = control.find_one
+
+      // Sort oldest to newest
+      auto order = bsoncxx::builder::stream::document{} <<
+	"_id" << -1 <<bsoncxx::builder::stream::finalize;
+      auto opts = mongocxx::options::find{};
+      opts.sort(order.view());
+      
+      mongocxx::cursor cursor = control.find 
 	(
 	 bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged" <<
 	 bsoncxx::builder::stream::open_document << "$ne" << hostname <<       
 	 bsoncxx::builder::stream::close_document << 
-	 bsoncxx::builder::stream::finalize
+	 bsoncxx::builder::stream::finalize, opts
 	 );
-    }catch(const std::exception &e){
-      std::cout<<e.what()<<std::endl;
-      std::cout<<"Can't connect to DB so will continue what I'm doing"<<std::endl;
-    }
-    
-    
-    //for(auto doc : cursor) {
-    if(querydoc){
-      auto doc = querydoc->view();
-      std::cout<<"Found a doc with command "<<
-	doc["command"].get_utf8().value.to_string()<<std::endl;
-      // Very first thing: acknowledge we've seen the command. If the command
-      // fails then we still acknowledge it because we tried
-      control.update_one
-	(
-	 bsoncxx::builder::stream::document{} << "_id" << (doc)["_id"].get_oid() <<
-	 bsoncxx::builder::stream::finalize,
-	 bsoncxx::builder::stream::document{} << "$push" <<
-	 bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
-	 bsoncxx::builder::stream::close_document <<
-	 bsoncxx::builder::stream::finalize
-	 );
-      std::cout<<"Updated doc"<<std::endl;
-      
-      // Get the command out of the doc
-      string command = "";
-      string user = "";
-      try{
-	command = (doc)["command"].get_utf8().value.to_string();
-	user = (doc)["user"].get_utf8().value.to_string();
-      }
-      catch (const std::exception &e){
-	//LOG
-	logger->Entry(MongoLog::Warning, "Received malformed command %s",
-		      bsoncxx::to_json(doc).c_str());
-      }
       
       
-      // Process commands
-      if(command == "start"){
+      for(auto doc : cursor) {
 	
-	if(controller->status() == 2) {
-
-	  if(controller->Start()!=0){	   
-	    continue;
-	  }
+	std::cout<<"Found a doc with command "<<
+	  doc["command"].get_utf8().value.to_string()<<std::endl;
+	// Very first thing: acknowledge we've seen the command. If the command
+	// fails then we still acknowledge it because we tried
+	control.update_one
+	  (
+	   bsoncxx::builder::stream::document{} << "_id" << (doc)["_id"].get_oid() <<
+	   bsoncxx::builder::stream::finalize,
+	   bsoncxx::builder::stream::document{} << "$push" <<
+	   bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
+	   bsoncxx::builder::stream::close_document <<
+	   bsoncxx::builder::stream::finalize
+	   );
+	std::cout<<"Updated doc"<<std::endl;
+	
+	// Get the command out of the doc
+	string command = "";
+	string user = "";
+	try{
+	  command = (doc)["command"].get_utf8().value.to_string();
+	  user = (doc)["user"].get_utf8().value.to_string();
+	}
+	catch (const std::exception &e){
+	  //LOG
+	  logger->Entry(MongoLog::Warning, "Received malformed command %s",
+			bsoncxx::to_json(doc).c_str());
+	}
+	
+	
+	// Process commands
+	if(command == "start"){
 	  
-	  // Nested tried cause of nice C++ typing
-	  try{
-	    current_run_id = (doc)["run_identifier"].get_utf8().value.to_string();	    
-	  }
-	  catch(const std::exception &e){
+	  if(controller->status() == 2) {
+	    
+	    if(controller->Start()!=0){	   
+	      continue;
+	    }
+	    
+	    // Nested tried cause of nice C++ typing
 	    try{
-	      current_run_id = std::to_string((doc)["run_identifier"].get_int32());
+	      current_run_id = (doc)["run_identifier"].get_utf8().value.to_string();	    
 	    }
 	    catch(const std::exception &e){
-	      current_run_id = "na";
+	      try{
+		current_run_id = std::to_string((doc)["run_identifier"].get_int32());
+	      }
+	      catch(const std::exception &e){
+		current_run_id = "na";
+	      }
 	    }
+	    
+	    logger->Entry(MongoLog::Message, "Received start command from user %s",
+			  user.c_str());
 	  }
-	  
-	  logger->Entry(MongoLog::Message, "Received start command from user %s",
+	  else
+	    logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state");
+	}
+	else if(command == "stop"){
+	  // "stop" is also a general reset command and can be called any time
+	  logger->Entry(MongoLog::Message, "Received stop command from user %s",
 			user.c_str());
-	}
-	else
-	  logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state");
-      }
-      else if(command == "stop"){
-	// "stop" is also a general reset command and can be called any time
-	logger->Entry(MongoLog::Message, "Received stop command from user %s",
-		      user.c_str());
-	if(controller->Stop()!=0)
-	  logger->Entry(MongoLog::Error,
-			"DAQ failed to stop. Will continue clearing program memory.");
-	
-	current_run_id = "none";
-	if(readoutThreads.size()!=0){
-	  for(auto t : readoutThreads){
-	    t->join();
-	    delete t;
-	  }
-	  readoutThreads.clear();	
-	}
-	controller->End();
-      }
-      else if(command == "arm"){	
-
-	// Can only arm if we're in the idle, arming, or armed state
-	if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
-
-	  // Join readout threads if they still are out there
-	  controller->Stop();
-	  if(readoutThreads.size() !=0){
+	  if(controller->Stop()!=0)
+	    logger->Entry(MongoLog::Error,
+			  "DAQ failed to stop. Will continue clearing program memory.");
+	  
+	  current_run_id = "none";
+	  if(readoutThreads.size()!=0){
 	    for(auto t : readoutThreads){
-	      std::cout<<"Joining orphaned readout thread"<<std::endl;
 	      t->join();
 	      delete t;
 	    }
-	    readoutThreads.clear();
+	    readoutThreads.clear();	
 	  }
+	  controller->End();
+	}
+	else if(command == "arm"){	
 	  
-	  // Clear up any previously failed things
-	  if(controller->status() != 0)
-	    controller->End();
-	  
-	  // Get an override doc from the 'options_override' field if it exists
-	  std::string override_json = "";
-	  try{
-	    bsoncxx::document::view oopts = (doc)["options_override"].get_document().view();
-	    override_json = bsoncxx::to_json(oopts);
-	  }
-	  catch(const std::exception &e){
-	    logger->Entry(MongoLog::Debug, "No override options provided, continue without.");
-	  }
-	 
-	  bool initialized = false;
+	  // Can only arm if we're in the idle, arming, or armed state
+	  if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
 
-	  // Mongocxx types confusing so passing json strings around
-	  if(fOptions != NULL)
-	    delete fOptions;
-	  fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
-				 options_collection, override_json);
-	  std::vector<int> links;
-	  std::map<int, std::vector<u_int16_t>> written_dacs;
-	  if(controller->InitializeElectronics(fOptions, links, written_dacs) != 0){
-	    logger->Entry(MongoLog::Error, "Failed to initialize electronics");
-	    controller->End();
-	  }
+	    // Join readout threads if they still are out there
+	    controller->Stop();
+	    if(readoutThreads.size() !=0){
+	      for(auto t : readoutThreads){
+		std::cout<<"Joining orphaned readout thread"<<std::endl;
+		t->join();
+		delete t;
+	      }
+	      readoutThreads.clear();
+	    }
+	    
+	    // Clear up any previously failed things
+	    if(controller->status() != 0)
+	      controller->End();
+	    
+	    // Get an override doc from the 'options_override' field if it exists
+	    std::string override_json = "";
+	    try{
+	      bsoncxx::document::view oopts = (doc)["options_override"].get_document().view();
+	      override_json = bsoncxx::to_json(oopts);
+	    }
+	    catch(const std::exception &e){
+	      logger->Entry(MongoLog::Debug, "No override options provided, continue without.");
+	    }
+	    
+	    bool initialized = false;
+	    
+	    // Mongocxx types confusing so passing json strings around
+	    if(fOptions != NULL)
+	      delete fOptions;
+	    fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
+				   options_collection, override_json);
+	    std::vector<int> links;
+	    std::map<int, std::vector<u_int16_t>> written_dacs;
+	    if(controller->InitializeElectronics(fOptions, links, written_dacs) != 0){
+	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
+	      controller->End();
+	    }
 	  else{
 	    logger->UpdateDACDatabase(fOptions->GetString("run_identifier", "default"),
 				      written_dacs);
 	    initialized = true;
 	    logger->Entry(MongoLog::Debug, "Initialized electronics");
 	  }
-	  
-	  if(readoutThreads.size()!=0){
-	    logger->Entry(MongoLog::Message,
-			  "Cannot start DAQ while readout thread from previous run active. Please perform a reset");
-	  }
-	  else if(!initialized){
-	    cout<<"Skipping readout configuration since init failed"<<std::endl;
-	  }
-	  else{
-	    controller->CloseProcessingThreads();
-	    for(unsigned int i=0; i<links.size(); i++){
-	      std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
-	      controller->OpenProcessingThreads(); // open nprocessingthreads per link
-	      std:: thread *readoutThread = new std::thread
-		(
-		 DAQController::ReadThreadWrapper,
-		 (static_cast<void*>(controller)), links[i]
-		 );
-	      readoutThreads.push_back(readoutThread);
+	    
+	    if(readoutThreads.size()!=0){
+	      logger->Entry(MongoLog::Message,
+			    "Cannot start DAQ while readout thread from previous run active. Please perform a reset");
 	    }
-	  }
-	}	  	
-	else
-	  logger->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
-      }      
+	    else if(!initialized){
+	      cout<<"Skipping readout configuration since init failed"<<std::endl;
+	    }
+	    else{
+	      controller->CloseProcessingThreads();
+	      for(unsigned int i=0; i<links.size(); i++){
+		std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
+		controller->OpenProcessingThreads(); // open nprocessingthreads per link
+		std:: thread *readoutThread = new std::thread
+		  (
+		   DAQController::ReadThreadWrapper,
+		   (static_cast<void*>(controller)), links[i]
+		   );
+		readoutThreads.push_back(readoutThread);
+	      }
+	    }
+	  }	  	
+	  else
+	    logger->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
+	}      
+      }
     }
+    catch(const std::exception &e){
+      std::cout<<e.what()<<std::endl;
+      std::cout<<"Can't connect to DB so will continue what I'm doing"<<std::endl;
+    }
+
     // Insert some information on this readout node back to the monitor DB
     controller->CheckErrors();
 

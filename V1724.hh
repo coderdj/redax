@@ -64,8 +64,8 @@ private:
 		       int sleep, u_int32_t val=1);
   Options *fOptions;
   int fBoardHandle;
-  int fLink, fCrate, fBID;
-  unsigned int fBaseAddress;
+  int fLink, fCrate, fBID;  
+  unsigned int fBaseAddress, fNChannels;  
 
   // Stuff for clock reset tracking
   u_int32_t clock_counter;
