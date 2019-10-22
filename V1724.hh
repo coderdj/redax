@@ -57,6 +57,7 @@ protected:
   int fResetRegister;
   int fChStatusRegister;
   int fChDACRegister;
+  int fNChannels;
 
 private:
 

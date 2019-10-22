@@ -1,4 +1,5 @@
 #include "V1724.hh"
+#include <numeric>
 
 
 V1724::V1724(MongoLog  *log, Options *options){
@@ -16,15 +17,15 @@ V1724::V1724(MongoLog  *log, Options *options){
   fChDACRegister = 0x1098;
 
   DataFormatDefinition = {
-    {"channel_mask_msb_idx", NULL},
-    {"channel_mask_msb_mask", NULL},
+    {"channel_mask_msb_idx", -1},
+    {"channel_mask_msb_mask", -1},
     {"channel_header_words", 2},
     {"ns_per_sample", 10},
     {"ns_per_clk", 10},
     // Channel indices are given relative to start of channel
     // i.e. the channel size is at index '0'
-    {"channel_time_msb_idx", NULL},
-    {"channel_time_msb_mask", NULL},
+    {"channel_time_msb_idx", -1},
+    {"channel_time_msb_mask", -1},
     
   };
   
@@ -386,7 +387,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
 	u_int32_t words_in_event = buff[idx]&0xFFFFFFF;
 	u_int32_t cmask = buff[idx+1]&0xFF;
-        if (DataFormatDefinition["channel_mask_msb_idx"] != NULL) {
+        if (DataFormatDefinition["channel_mask_msb_idx"] != -1) {
           // fill in the v1730 stuff here
         }
 	u_int32_t channel_words = 0;
