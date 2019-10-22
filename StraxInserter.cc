@@ -346,7 +346,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 
     size_t uncompressed_size = iter->second->size();
 
-    // blosc it
+    // Compress it
     char *out_buffer = NULL;
     int wsize = 0;
     if(fCompressor == "blosc"){
@@ -355,12 +355,15 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 				   out_buffer, uncompressed_size+BLOSC_MAX_OVERHEAD, "lz4", 0, 2);
     }
     else{
+      // Note: the current package repo version for Ubuntu 18.04 (Oct 2019) is 1.7.1, which is
+      // so old it is not tracked on the lz4 github. The API for frame compression has changed
+      // just slightly in the meantime. So if you update and it breaks you'll have to tune at least
+      // the LZ4F_preferences_t object to the new format.
       size_t max_compressed_size = LZ4F_compressFrameBound(uncompressed_size, &kPrefs);
       out_buffer = new char[max_compressed_size];
       wsize = LZ4F_compressFrame(&((*iter->second)[0]), max_compressed_size,
 				 out_buffer, uncompressed_size, &kPrefs);
-    }
-    // was using BLOSCLZ but it complained
+    }    
     delete iter->second;
     
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
