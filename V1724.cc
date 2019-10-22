@@ -451,8 +451,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
           max_end = std::min(max_it + bins_around_max + 1, end_it);
           // use some fancy c++ algorithms because why not
           // double-cast because ratios
-          double counts_total = std::reduce(beg_it, end_it);
-          double counts_around_max = std::reduce(max_start, max_end);
+          double counts_total = std::accumulate(beg_it, end_it, 0.);
+          double counts_around_max = std::accumulate(max_start, max_end, 0.);
           if (counts_around_max/counts_total < fraction_around_max) {
             std::cout << "Only " << (int)counts_around_max << " counts out of "
                 << (int)counts_total << " on board " << fBID << " ch " << channel
