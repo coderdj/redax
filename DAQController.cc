@@ -137,11 +137,10 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	BL_MODE = "fixed";
       }
       if(BL_MODE == "fixed"){
-	int BLVal = fOptions->GetInt("baseline_fixed_value", 4000);
+	int BLVal = fOptions->GetInt("baseline_fixed_value", 5300);
 	fLog->Entry(MongoLog::Local, "Loading fixed baselines at value 0x%04x for digi %i",
 		    BLVal, digi->bid());
-	for(unsigned int x=0;x<dac_values.size();x++)
-	  dac_values[x] = BLVal;
+    dac_values.assign(dac_values.size(), BLVal);
       }
 	
       //int success = 0;

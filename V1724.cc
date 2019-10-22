@@ -7,7 +7,7 @@ V1724::V1724(MongoLog  *log, Options *options){
   fBaseAddress=0;
   fLog = log;
 
-  fNsPerSample = 10;
+  fNChannels = 8;
   fAqCtrlRegister = 0x8100;
   fAqStatusRegister = 0x8104;
   fSwTrigRegister = 0x8108;
@@ -18,7 +18,7 @@ V1724::V1724(MongoLog  *log, Options *options){
   DataFormatDefinition = {
     {"channel_mask_msb_idx", NULL},
     {"channel_mask_msb_mask", NULL},
-    {"channel_header_size", 2},
+    {"channel_header_words", 2},
     {"ns_per_sample", 10},
     {"ns_per_clk", 10},
     // Channel indices are given relative to start of channel
@@ -84,7 +84,7 @@ u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
   u_int32_t idx = 0;
   //std::cout<<"Size is: "<<size<<std::endl;
   while(idx < size/sizeof(u_int32_t)){
-    if(buff[idx]>>20==0xA00)
+    if(buff[idx]>>28==0xA)
       return buff[idx+3]&0x7FFFFFFF;
     idx++;
   }
@@ -200,9 +200,6 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   unsigned int BLT_SIZE=524288;
   vector<u_int32_t*> transferred_buffers;
   vector<u_int32_t> transferred_bytes;
-  
-  // unsigned int BUFFER_SIZE = 8388608*4; // I do not understand why this has to be so high
-  // u_int32_t *tempBuffer = new u_int32_t[BUFFER_SIZE];
 
   int count = 0;
   do{
@@ -255,12 +252,8 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
     buffer = new u_int32_t[blt_bytes/sizeof(u_int32_t)];
     u_int32_t bytes_copied = 0;
     for(unsigned int x=0; x<transferred_buffers.size(); x++){
-      //u_int32_t size_to_transfer = BLT_SIZE;
-      u_int32_t size_to_transfer = transferred_bytes[x];
-      //if(x == transferred_buffers.size()-1) // last element
-	//size_to_transfer = blt_bytes - (x*BLT_SIZE);
       std::memcpy(((unsigned char*)buffer)+bytes_copied,
-		  transferred_buffers[x], size_to_transfer);
+		  transferred_buffers[x], transferred_bytes[x]);
       bytes_copied += transferred_bytes[x];
     }
   }
@@ -278,36 +271,43 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // are some strategically placed sleep statements (placed via trial, error,
   // and tears) throughout the code. Take care if changing things here.
 
-  
+
   // Initial parameters:
   int adjustment_threshold = 5;
   int current_iteration=0;
-  int fNChannels = 8;
   int repeat_this_many=5;
   int triggers_per_iteration = 1;
+  int rebin_factor_log = 2;  //log base 2.
+  int nbins = 1 << (14 - rebin_factor_log);
+  // take all counts within this many bins of the max
+  int bins_around_max = 3;
+  // the counts in these bins must be this fraction of total counts
+  double fraction_around_max = 0.8;
 
-  
+  std::vector<u_int32_t> hist(nbins);
+  // some iterators to handle looping through the histogram
+  auto beg_it = hist.begin();
+  auto max_it = beg_it;
+  auto end_it = hist.end();
+  // iterators for the region around the max
+  auto max_start = max_it;
+  // +1 for exclusive endpoint
+  auto max_end = max_it;
+
   // Determine starting values. If the flag 'start_provided' is set then the
   // initial argument vector already has our start values. If not then we can
   // make a decent guess here.
-  u_int32_t starting_value = u_int32_t( (0x3fff-nominal_value)*
-					((0.9*0xffff)/0x3fff) + 3277);
+  u_int32_t starting_value = (0x43f8 - nominal_value)*(0xffff)/(0x3fff)*0.95;
 
   vector<u_int16_t> dac_values(fNChannels, starting_value);
-  if(end_values[0]!=0 && end_values.size() ==
-     (unsigned int)(fNChannels)){ // use start values if sent
-    std::cout<<"Found good start values for digi "<<fBID<<": ";
-    for(unsigned int x=0; x<end_values.size(); x++){
-      dac_values[x] = end_values[x];
-      std::cout<<dac_values[x]<<" ";
-    }
-    std::cout<<std::endl;
+  if(end_values[0]!=0){ // use start values if sent
+    dac_values = end_values;
   }
-  fLog->Entry(MongoLog::Local,
-	      "Found starting values for digi %i BLs: 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x, 0x%04x,",
-	      fBID, dac_values[0], dac_values[1], dac_values[2], dac_values[3], dac_values[4],
-	      dac_values[5], dac_values[6], dac_values[7]);
-  
+  std::stringstream msg;
+  msg << "Found starting values for digi " << fBID << " BLs:" << std::hex;
+  for (auto& v : dac_values) msg << " 0x" << v << ",";
+  fLog->Entry(MongoLog::Local, msg.str());
+
   vector<int> channel_finished(fNChannels, 0);
   vector<bool> update_dac(fNChannels, true);
 
@@ -328,7 +328,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     bool breakout=true;
     for(unsigned int x=0; x<channel_finished.size(); x++){
       if(channel_finished[x]<repeat_this_many)
-	breakout=false;      
+	breakout=false;
     }
     if(breakout){
       fLog->Entry(MongoLog::Local,
@@ -336,21 +336,22 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       break;
     }
     // enable adc
-    WriteRegister(fAqCtrlRegister,0x4);//x24?   // Acq control reg
-    if(MonitorRegister(fAqStatusRegister, 0x4, 1000, 1000) != true){      
+    WriteRegister(fAqCtrlRegister,0x4);//x24?
+    if(MonitorRegister(fAqStatusRegister, 0x4, 1000, 1000) != true){
       fLog->Entry(MongoLog::Warning, "Timed out waiting for acquisition to start in baselines");
       return -1;
     }
-
+    usleep(1000);
     //write trigger
     for(int ntrig=0; ntrig<triggers_per_iteration; ntrig++){
-      WriteRegister(fSwTrigRegister,0x1);    // Software trig reg
+      WriteRegister(fSwTrigRegister,0x1);
       usleep(1000);                 // Give time for event?
     }
-    
+
     // disable adc
-    WriteRegister(fAqCtrlRegister,0x0);//x24?   // Acq control reg
-    
+    WriteRegister(fAqCtrlRegister,0x0);//x24?
+    usleep(1000);
+
     // Read data
     u_int32_t *buff = NULL;
     int size = 0;
@@ -373,7 +374,7 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     fLog->Entry(MongoLog::Local,
 		"I just got %i bytes data from %i triggers in board %i. Reasonable?",
 		size, triggers_per_iteration, fBID);
-    
+
     // Now we're going to acquire 'n' triggers
     std::vector<double>baseline_per_channel(fNChannels, 0);
     std::vector<double>good_triggers_per_channel(fNChannels, 0);
@@ -381,18 +382,20 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
     // Parse
     unsigned int idx = 0;
     while(idx < size/sizeof(u_int32_t)){
-      if(buff[idx]>>20==0xA00){ // header
+      if(buff[idx]>>28==0xA){ // header
 
-	u_int32_t esize = buff[idx]&0xFFFFFFF;
+	u_int32_t words_in_event = buff[idx]&0xFFFFFFF;
 	u_int32_t cmask = buff[idx+1]&0xFF;
-	u_int32_t csize = 0;
+        if (DataFormatDefinition["channel_mask_msb_idx"] != NULL) {
+          // fill in the v1730 stuff here
+        }
+	u_int32_t channel_words = 0;
 	u_int32_t n_chan = __builtin_popcount(cmask);
 	if(n_chan > 0)
-	  csize = (esize-4)/n_chan;
+	  channel_words = (words_in_event-4)/n_chan - DataFormatDefinition["channel_header_words"];
 
 	// We should track and log how often this happens. Seems rare but wtf.
-	u_int32_t board_fail = buff[idx+1]&0x4000000;
-	if(board_fail == 1){
+	if(buff[idx+1]&0x4000000){
 	  fLog->Entry(MongoLog::Local,
                 "Hoppla! Board FAIL bit set for digitizer %i.", fBID);
 	  idx += 4;
@@ -401,80 +404,76 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
 	idx += 4;
 	// Loop through channels
-	for(unsigned int channel=0; channel<8; channel++){		
+	for(unsigned int channel=0; channel<fNChannels; channel++){
 	  if(!((cmask>>channel)&1))
             continue;
-	  
 	  float baseline = -1.;
-	  long int tbase = 0;
-	  int bcount = 0;
-	  unsigned int minval = 0x3fff, maxval=0;
 
 	  // Sometimes for some reason idx is bigger than size.
 	  if(idx > (u_int32_t)(size)){
 	    fLog->Entry(MongoLog::Local,
-			"Found bad buffer in board %i with size %i but attempted to access %i.",
-			fBID, size, idx);
+		"Found bad buffer in board %i with size %i but attempted to access %i.",
+		fBID, size, idx);
 	    break;
 	  }
-	  
-	  if(DataFormatDefinition["channel_header_size"] > 0){
-            csize = (buff[idx]&0x7FFFFF)-DataFormatDefinition["channel_header_size"];         
-	    idx += DataFormatDefinition["channel_header_size"];
-          }
+
+	  idx += DataFormatDefinition["channel_header_words"];
 	  if(channel_finished[channel]>=repeat_this_many){
-	    idx+=csize;
+	    idx+=channel_words;
 	    continue;
 	  }
-	  if(idx + csize > (u_int32_t)(size)){
+	  if(idx + channel_words > (u_int32_t)(size)){
 	    fLog->Entry(MongoLog::Local,
 			"Found bad channel size %i in board %i for payload with size %i.",
-			csize, fBID, size);
+			channel_words, fBID, size);
 	    break;
 	  }
-	  for(unsigned int i=0; i<csize; i++){
-	    if(((buff[idx+i]&0xFFFF)==0) || (((buff[idx+i]>>16)&0xFFFF)==0)){
+	  hist.assign(hist.size(), 0);
+	  for(unsigned int w=0; w<channel_words; w++){
+            u_int16_t val0 = buff[idx+w]&0xFFFF, val1 = (buff[idx+w]>>16)&0xFFFF;
+	    if((val0==0) || (val1==0)){
 	      // The presence of a 0 is clearly a symptom of some odd issue. Seems
 	      // to only happen in the baseline program, so we're just gonna
 	      // hit the old 'abort' button and get out of here
 	      continue;
 	    }
-	    tbase += buff[idx+i]&0xFFFF;
-	    tbase += (buff[idx+i]>>16)&0xFFFF;
-	    bcount+=2;
-	    if((buff[idx+i]&0xFFFF)<minval)
-	      minval = buff[idx+i]&0xFFFF;
-	    if((buff[idx+i]&0xFFFF)>maxval)
-	      maxval = buff[idx+i]&0xFFFF;
-	    if(((buff[idx+i]>>16)&0xFFFF)<minval)
-	      minval=(buff[idx+i]>>16)&0xFFFF;
-	    if(((buff[idx+i]>>16)&0xFFFF)>maxval)
-	      maxval=(buff[idx+i]>>16)&0xFFFF;
-	  }	  
-	  if(idx + csize > size/sizeof (u_int32_t)) break; // this should skip to next header
-	  idx += csize;
-	  // Toss if signal inside
-	  if(abs((int)(maxval)-(int)(minval))>30){
-	    std::cout<<"Signal in baseline, channel "<<channel
-		     <<" min: "<<minval<<" max: "<<maxval<<" in board "<<
-	      fBID<<std::endl;
+            hist[val0>>rebin_factor_log]++;
+            hist[val1>>rebin_factor_log]++;
 	  }
-	  else{
-	      baseline = (float(tbase) / ((float(bcount))));
+	  if(idx + channel_words > size/sizeof (u_int32_t)) break; // this should skip to next header
+	  idx += channel_words;
+          for (auto it = beg_it; it < end_it; it++)
+            if (*it > *max_it) max_it = it;
 
-	      // Add to total
-	      baseline_per_channel[channel]+= baseline;
-	      good_triggers_per_channel[channel]+=1.;
-	  }
+          max_start = std::max(max_it - bins_around_max, beg_it);
+          // +1 for exclusive endpoint
+          max_end = std::min(max_it + bins_around_max + 1, end_it);
+          // use some fancy c++ algorithms because why not
+          // double-cast because ratios
+          double counts_total = std::reduce(beg_it, end_it);
+          double counts_around_max = std::reduce(max_start, max_end);
+          if (counts_around_max/counts_total < fraction_around_max) {
+            std::cout << "Only " << (int)counts_around_max << " counts out of "
+                << (int)counts_total << " on board " << fBID << " ch " << channel
+                << " are near the max\n";
+            continue;
+          }
+          baseline = 0;
+          // calculate the weighted average for the baseline
+          for (auto it = max_start; it < max_end; it++)
+            baseline += ((it - beg_it)<<rebin_factor_log)*(*it);
+          baseline /= counts_around_max;
+
+	  // Add to total
+	  baseline_per_channel[channel]+= baseline;
+	  good_triggers_per_channel[channel]+=1.;
 	} // end for loop through channels
-	//delete[] buff;
-	//break;
-      }
+      } // end if header
       else
 	idx++;
-    }// end parse data  
+    }// end parse data
     delete[] buff;
-   
+
     // Get average from total
     for(int channel=0; channel<fNChannels; channel++)
       baseline_per_channel[channel]/=good_triggers_per_channel[channel];
@@ -490,45 +489,43 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
       if(good_triggers_per_channel[channel]==0)
 	continue;
 
-      float absolute_unit = float(0xffff)/float(0x3fff);
-      int adjustment = .5*int(absolute_unit*((float(baseline_per_channel[channel])-
-					      float(nominal_value))));
-
-      if(abs(float(baseline_per_channel[channel])-float(nominal_value)) < adjustment_threshold){
+      //float absolute_unit = float(0xffff)/float(0x3fff);
+      float fudge_factor = 0.8;
+      //int adjustment = .5*int(absolute_unit*((float(baseline_per_channel[channel])-
+	//				      float(nominal_value))));
+      float off_by = nominal_value - baseline_per_channel[channel];
+      if(abs(off_by) < adjustment_threshold){
 	channel_finished[channel]++;
 	std::cout<<"Channel "<<channel<<" converging at step "<<
 	  channel_finished[channel]<<"/5"<<std::endl;
       }
       else{
+        int adjustment = (0xffff)/(0x3fff)*off_by*fudge_factor;
 	channel_finished[channel]=0;
 	update_dac[channel] = true;
-	if(adjustment<0 && (u_int32_t(abs(adjustment)))>dac_values[channel]){
-	  dac_values[channel]=0x0;
-	  std::cout<<"Channel "<<channel<<" DAC to zero"<<std::endl;
-	}
-	else if(adjustment>0 &&dac_values[channel]+adjustment>0xffff){
-	  dac_values[channel]=0xffff;
-	  std::cout<<"Channel "<<channel<<" DAC to 0xffff"<<std::endl;
-	}
-	else {
-	  std::cout<<"Had channel "<<channel<<" at "<<dac_values[channel];
-	  dac_values[channel]+=(adjustment);
-	  std::cout<<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<
+        // 0xf3c is about the linear limit, let's stay away from it
+        dac_values[channel] = std::clamp(dac_values[channel]+adjustment, 0x1000, 0xffff);
+        if ((dac_values[channel] == 0x1000) || (dac_values[channel] == 0xffff)) {
+          std::cout<<"Channel "<<channel<<" DAC clamped to "<<dac_values[channel]<< '\n';
+        }
+        else {
+	  std::cout<<"Had channel "<<channel<<" at "<<dac_values[channel]-adjustment
+	    <<" but now it's at "<<dac_values[channel]<<" (adjustment) BL: "<<
 	    baseline_per_channel[channel]<<
 	    " ("<<good_triggers_per_channel[channel]<<" iterations)"<<std::endl;
 	}
       }
-    } // End final channel adjustment       
+    } // End final channel adjustment
     current_iteration++;
-
-    // Load DAC    
+    usleep(5000);
+    // Load DAC
     if(LoadDAC(dac_values, update_dac)!=0){
       fLog->Entry(MongoLog::Error, "Digitizer %i failed to load DAC in baseline routine",
 		  fBID);
       return -2;
     }
-    
-    
+
+
   } // end while(current_iteration < ntries)
 
   for(unsigned int x=0; x<channel_finished.size(); x++){
@@ -541,28 +538,23 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
 
   end_values = dac_values;
   return 0;
-  
-  
 }
 
 
 int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
   // Loads DAC values into registers
-  
+
   for(unsigned int x=0; x<dac_values.size(); x++){
-    if(x>7 || update_dac[x]==false) // oops
+    if(x>fNChannels || update_dac[x]==false) // oops
       continue;
 
-    // We updated, or at least tried to update
-    //update_dac[x]=false;
-    
     // Give the DAC time to be set if needed
-    
+    usleep(1000);
+
     if(MonitorRegister((fChStatusRegister)+(0x100*x), 0x4, 100, 1000, 0) != true){
       fLog->Entry(MongoLog::Error, "Timed out waiting for channel %i in DAC setting", x);
       return -1;
     }
-    
 
     // Now write channel DAC values
     if(WriteRegister((fChDACRegister)+(0x100*x), dac_values[x])!=0){
@@ -572,13 +564,12 @@ int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
     }
 
     // Give the DAC time to be set if needed
-    
+    usleep(1000);
+
     if(MonitorRegister((fChStatusRegister)+(0x100*x), 0x4, 100, 1000, 0) != true){
       fLog->Entry(MongoLog::Error, "Timed out waiting for channel %i after DAC setting", x);
       return -1;
     }
-    
-
   }
   // Sleep a bit because apparently checking the register means nothing and you
   // gotta wait a little for the actual voltage to be updated

@@ -98,7 +98,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
 
       // Get data from main header
-      u_int32_t event_size = buff[idx]&0xFFFFFFF; 
+      u_int32_t words_in_event = buff[idx]&0xFFFFFFF; 
       u_int32_t channel_mask = buff[idx+1]&0xFF;
       // Exercise for the reader: if you're modifying for V1730 add in the rest of the bits here!
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
@@ -119,19 +119,19 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  continue;
 
 	// These defaults are valid for 'default' firmware where all channels same size
-	u_int32_t channel_size = (event_size - 4) / channels_in_event;
+	u_int32_t channel_words = (words_in_event - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
-	if(fFmt["channel_header_size"] > 0){
-	  channel_size = (buff[idx]&0x7FFFFF)-fFmt["channel_header_size"];
+	if(fFmt["channel_header_words"] > 0){
+	  channel_words = (buff[idx]&0x7FFFFF)-fFmt["channel_header_words"];
 	  channel_time = buff[idx+1]&0xFFFFFFFF;
 	  // Another exercise for reader to add the msb for the V1730
 	  
-	  idx += fFmt["channel_header_size"];
+	  idx += fFmt["channel_header_words"];
 
 	  // V1724 only. 1730 has a **26-day** clock counter. 
-	  if(fFmt["channel_header_size"] <= 2){
+	  if(fFmt["channel_header_words"] <= 2){
 	    // OK. Here's the logic for the clock reset, and I realize this is the
 	    // second place in the code where such weird logic is needed but that's it
 	    // First, on the first instance of a channel we gotta check if
@@ -179,7 +179,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// bit because we want to allow also odd numbers of samples
 	// as FragmentLength
 	u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff);
-	u_int32_t samples_in_channel = (channel_size)*2;
+	u_int32_t samples_in_channel = (channel_words)*2;
 	u_int32_t index_in_sample = 0;
 	u_int32_t offset = idx*2;
 	u_int16_t fragment_index = 0;
@@ -283,7 +283,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  index_in_sample = max_sample;	  
 	}
 	// Go to next channel
-	idx+=channel_size;
+	idx+=channel_words;
       }
     }
     else
