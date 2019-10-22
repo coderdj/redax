@@ -361,8 +361,8 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
       // the LZ4F_preferences_t object to the new format.
       size_t max_compressed_size = LZ4F_compressFrameBound(uncompressed_size, &kPrefs);
       out_buffer = new char[max_compressed_size];
-      wsize = LZ4F_compressFrame(&((*iter->second)[0]), max_compressed_size,
-				 out_buffer, uncompressed_size, &kPrefs);
+      wsize = LZ4F_compressFrame(out_buffer, max_compressed_size,
+				 &((*iter->second)[0]), uncompressed_size, &kPrefs);
     }    
     delete iter->second;
     
