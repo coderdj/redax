@@ -63,6 +63,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){      
 	fDigitizers[d.link].push_back(digi);
+	fDataPerDigi[digi->bid()] = 0;
+
 	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){	  
 	  fLog->Entry(MongoLog::Local, "Defining a new optical link at %i", d.link);
 	  keys.push_back(d.link);
@@ -336,8 +338,6 @@ void DAQController::ReadData(int link){
 	d.header_time = fDigitizers[link][x]->GetHeaderTime(d.buff, d.size);
 	d.clock_counter = fDigitizers[link][x]->GetClockCounter(d.header_time);
 	fDatasize += d.size;
-	if(fDataPerDigi.find(d.bid) == fDataPerDigi.end())
-	  fDataPerDigi[d.bid] = 0;
 	fDataPerDigi[d.bid] += d.size;
 	local_buffer.push_back(d);
       }
@@ -355,9 +355,11 @@ void DAQController::ReadData(int link){
 std::map<int, u_int64_t> DAQController::GetDataPerDigi(){
   // Return a map of data transferred per digitizer since last update
   // and clear the private map
-  std::map retmap = fDataPerDigi;
-  for(auto const &kPair : fDataPerDigi)
+  std::map <int, u_int64_t>retmap;
+  for(auto const &kPair : fDataPerDigi){
+    retmap[kPair.first] = (u_int64_t)(fDataPerDigi[kPair.first]);
     fDataPerDigi[kPair.first] = 0;
+  }
   return retmap;
 }
 
