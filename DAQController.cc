@@ -63,6 +63,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){      
 	fDigitizers[d.link].push_back(digi);
+	fDataPerDigi[digi->bid()] = 0;
+
 	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){	  
 	  fLog->Entry(MongoLog::Local, "Defining a new optical link at %i", d.link);
 	  keys.push_back(d.link);
@@ -101,7 +103,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       
       // Load DAC. n.b.: if you set the DAC value in your
       // ini file you'll overwrite the fancy stuff done here!
-      vector<u_int16_t>dac_values(8, 0x0);
+      vector<u_int16_t>dac_values(16, 0x0);
 
       // Multiple options here
       std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
@@ -169,7 +171,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 
 
       // Load the baselines you just configured
-      vector<bool> update_dac(8, true);
+      vector<bool> update_dac(16, true);
       success += digi->LoadDAC(dac_values, update_dac);
       written_dacs[digi->bid()] = dac_values;
       std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;
@@ -335,8 +337,6 @@ void DAQController::ReadData(int link){
 	d.header_time = fDigitizers[link][x]->GetHeaderTime(d.buff, d.size);
 	d.clock_counter = fDigitizers[link][x]->GetClockCounter(d.header_time);
 	fDatasize += d.size;
-	if(fDataPerDigi.find(d.bid) == fDataPerDigi.end())
-	  fDataPerDigi[d.bid] = 0;
 	fDataPerDigi[d.bid] += d.size;
 	local_buffer.push_back(d);
       }
@@ -354,9 +354,11 @@ void DAQController::ReadData(int link){
 std::map<int, u_int64_t> DAQController::GetDataPerDigi(){
   // Return a map of data transferred per digitizer since last update
   // and clear the private map
-  std::map retmap = fDataPerDigi;
-  for(auto const &kPair : fDataPerDigi)
+  std::map <int, u_int64_t>retmap;
+  for(auto const &kPair : fDataPerDigi){
+    retmap[kPair.first] = (u_int64_t)(fDataPerDigi[kPair.first]);
     fDataPerDigi[kPair.first] = 0;
+  }
   return retmap;
 }
 

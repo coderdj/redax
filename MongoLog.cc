@@ -134,7 +134,7 @@ int MongoLog::GetDACValues(int bid, int reference_run,
 	return 0;
       }
     }catch(...){
-      dac_values = std::vector<u_int16_t>(8, 1000);
+      dac_values = std::vector<u_int16_t>(16, 1000);
     }
   }
   else{ // either it's this driver or C++ but this is way harder than it should be
@@ -158,7 +158,7 @@ int MongoLog::GetDACValues(int bid, int reference_run,
 	return 0;
       }
     }catch(...){
-      dac_values = std::vector<u_int16_t>(8, 4000);
+      dac_values = std::vector<u_int16_t>(16, 4000);
     }
   }
     

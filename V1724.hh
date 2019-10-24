@@ -18,7 +18,7 @@ class V1724{
 
  public:
   V1724(MongoLog *log, Options *options);
-  ~V1724();
+  virtual ~V1724();
 
   int Init(int link, int crate, int bid, unsigned int address=0);
   int64_t ReadMBLT(u_int32_t *&buffer);
@@ -65,8 +65,8 @@ private:
 		       int sleep, u_int32_t val=1);
   Options *fOptions;
   int fBoardHandle;
-  int fLink, fCrate, fBID;
-  unsigned int fBaseAddress;
+  int fLink, fCrate, fBID;  
+  unsigned int fBaseAddress, fNChannels;  
 
   // Stuff for clock reset tracking
   u_int32_t clock_counter;

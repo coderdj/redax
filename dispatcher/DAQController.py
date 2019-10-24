@@ -340,7 +340,7 @@ class DAQController():
             self.mongo.LogError("dispatcher",
                                 "Took more than %i seconds to start, indicating a possible timeout"%
                                 self.start_timeout,
-                                self.st["WARNING"], "START_TIMEOUT")
+                                "WARNING", "START_TIMEOUT")
         # 3c: STOP timeout. And this is where the thing can get stuck so we gotta toss an
         # error if it goes on too long
         elif (detector in self.stop_command_sent.keys() and self.stop_command_sent[detector] != None and

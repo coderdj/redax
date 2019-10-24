@@ -19,7 +19,8 @@ V1724::V1724(MongoLog  *log, Options *options){
   fResetRegister = 0xEF24;
   fChStatusRegister = 0x1088;
   fChDACRegister = 0x1098;
-
+  fNChannels = 8;
+  
   DataFormatDefinition = {
     {"channel_mask_msb_idx", -1},
     {"channel_mask_msb_mask", -1},
@@ -276,6 +277,11 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // are some strategically placed sleep statements (placed via trial, error,
   // and tears) throughout the code. Take care if changing things here.
 
+  // Initial parameters:
+  int adjustment_threshold = 5;
+  int current_iteration=0;
+  int repeat_this_many=5;
+  int triggers_per_iteration = 1;
 
   // Initial parameters:
   int adjustment_threshold = 5; // baseline units
@@ -426,11 +432,12 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
         // basic chi-squared minimization
 	D = E = 0;
         for (int i = 0; i < 3; i++) {
-	  D += DAC_calibration[i]*bl_per_channel[ch][i];
+	        D += DAC_calibration[i]*bl_per_channel[ch][i];
           E += bl_per_channel[ch][i];
+
 	}
-        calibration_slope[ch] = (C*D-E*F)/(B*C-F*F);
-	calibration_intercept[ch] = (B*E-D*F)/(B*C-F*F);
+    calibration_slope[ch] = (C*D-E*F)/(B*C-F*F);
+	  calibration_intercept[ch] = (B*E-D*F)/(B*C-F*F);
         fLog->Entry(MongoLog::Debug, "Board %i channel %i baseline calibration: %.3f/%.1f",
 	  fBID, ch, calibration_slope[ch], calibration_intercept[ch]);
 

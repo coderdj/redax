@@ -9,7 +9,7 @@ OBJECTS_SLAVE = $(SOURCES_SLAVE: .cc=.o)
 CPP_SLAVE = main
 EXEC_SLAVE = main
 
-SOURCES_CC = $(shell echo !(main|Strax*|DAQController|*Inserter|V1724)+(.cc))
+SOURCES_CC = $(shell echo !(main|Strax*|DAQController|*Inserter|V1724*)+(.cc))
 OBJECTS_CC = $(SOURCES_CC: .cc=.o)
 CPP_CC = ccontrol
 

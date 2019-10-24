@@ -49,11 +49,17 @@ int main(int argc, char** argv){
   CControl_Handler *fHandler = new CControl_Handler(logger, hostname);  
 
   while(1){
+
+    auto order = bsoncxx::builder::stream::document{} <<
+      "_id" << 1 <<bsoncxx::builder::stream::finalize;
+    auto opts = mongocxx::options::find{};
+    opts.sort(order.view());
     mongocxx::cursor cursor = control.find
       (
        bsoncxx::builder::stream::document{}<< "host" << hostname <<"acknowledged" <<
        bsoncxx::builder::stream::open_document << "$ne" << hostname <<
-       bsoncxx::builder::stream::close_document << bsoncxx::builder::stream::finalize
+       bsoncxx::builder::stream::close_document << bsoncxx::builder::stream::finalize,
+       opts
        );
     
     for (auto doc : cursor) {

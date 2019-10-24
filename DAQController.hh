@@ -2,6 +2,7 @@
 #define _DAQCONTROLLER_HH_
 
 #include <thread>
+#include <atomic>
 #include "V1724_MV.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
@@ -72,7 +73,7 @@ private:
   // For reporting to frontend
   u_int64_t fBufferLength;
   u_int64_t fDatasize;
-  std::map<int, u_int64_t> fDataPerDigi;
+  std::map<int, std::atomic_ulong> fDataPerDigi;
   
   
 };

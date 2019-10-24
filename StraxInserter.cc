@@ -1,4 +1,4 @@
-#include <lz4.h>
+#include <lz4frame.h>
 #include "StraxInserter.hh"
 #include "DAQController.hh"
 
@@ -321,6 +321,13 @@ int StraxInserter::ReadAndInsertData(){
   return 0;  
 }
 
+// Can tune here as needed, these are defaults from the LZ4 examples
+static const LZ4F_preferences_t kPrefs = {
+  { LZ4F_max256KB, LZ4F_blockLinked, LZ4F_noContentChecksum, LZ4F_frame, 0, { 0, 0 } },
+    0,   /* compression level; 0 == default */
+    0,   /* autoflush */
+    { 0, 0, 0 },  /* reserved, must be set to 0 */
+};
 
 void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
@@ -339,7 +346,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 
     size_t uncompressed_size = iter->second->size();
 
-    // blosc it
+    // Compress it
     char *out_buffer = NULL;
     int wsize = 0;
     if(fCompressor == "blosc"){
@@ -348,12 +355,15 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 				   out_buffer, uncompressed_size+BLOSC_MAX_OVERHEAD, "lz4", 0, 2);
     }
     else{
-      size_t max_compressed_size = LZ4_compressBound(uncompressed_size);
+      // Note: the current package repo version for Ubuntu 18.04 (Oct 2019) is 1.7.1, which is
+      // so old it is not tracked on the lz4 github. The API for frame compression has changed
+      // just slightly in the meantime. So if you update and it breaks you'll have to tune at least
+      // the LZ4F_preferences_t object to the new format.
+      size_t max_compressed_size = LZ4F_compressFrameBound(uncompressed_size, &kPrefs);
       out_buffer = new char[max_compressed_size];
-      wsize = LZ4_compress_default(&((*iter->second)[0]), out_buffer, uncompressed_size,
-				   max_compressed_size);
-    }
-    // was using BLOSCLZ but it complained
+      wsize = LZ4F_compressFrame(out_buffer, max_compressed_size,
+				 &((*iter->second)[0]), uncompressed_size, &kPrefs);
+    }    
     delete iter->second;
     
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);

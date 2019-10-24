@@ -179,10 +179,12 @@ class MongoConnect():
                 elif 'run_mode' in doc.keys() and doc['run_mode'] != mode:
                     mode = 'undefined'
                 
-                    
                 # If we haven't set the status yet we automatically set it here
                 if status == None:
-                    status = doc['status']
+                    try:
+                        status = doc['status']
+                    except:
+                        status = 6
 
                 # Otherwise we only really care if the status for this node is different
                 elif status != doc['status']:
@@ -199,9 +201,10 @@ class MongoConnect():
                         continue
 
                 # Now check if this guy is timing out
-                gentime = doc['_id'].generation_time.timestamp()
-                if (whattimeisit - gentime) > self.timeout:
-                    status = 5
+                if "_id" in doc.keys():
+                    gentime = doc['_id'].generation_time.timestamp()
+                    if (whattimeisit - gentime) > self.timeout:
+                        status = 5
 
             # If we have a crate controller check on it too
             for controller in self.latest_status[detector]['controller'].keys():
@@ -209,7 +212,7 @@ class MongoConnect():
                 # Copy above. I guess it would be possible to have no readers
                 if status == None:
                     status = doc['status']
-                elif status != doc['status']:
+                elif status in doc.keys() and status != doc['status']:
                     if status == 4 or doc['status'] == 4:
                         status = 4
                         continue
@@ -218,9 +221,12 @@ class MongoConnect():
                     else:
                         status = 6
                         continue
-                gentime = doc['_id'].generation_time.timestamp()
-                if (whattimeisit-gentime) > self.timeout:
-                    status = 5
+                elif "status" not in doc.keys():
+                    status = 6
+                if "_id" in doc.keys():
+                    gentime = doc['_id'].generation_time.timestamp()
+                    if (whattimeisit-gentime) > self.timeout:
+                        status = 5
 
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
