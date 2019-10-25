@@ -110,7 +110,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     this_thread::sleep_for(100ms);
   }
 
-  for (i = 0; i < init_threads.size() i++) {
+  for (i = 0; i < init_threads.size(); i++) {
     init_threads[i]->join();
     delete init_threads[i];
     written_dacs.merge(dacs[i]);

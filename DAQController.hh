@@ -56,6 +56,7 @@ public:
   
 private:
   void AppendData(vector<data_packet> &d);
+  void LinkInit(vector<V1724*>& digis, map<int, vector<u_int16_t>>& dacs, atomic_int& ret);
   
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;
