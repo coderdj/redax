@@ -78,8 +78,10 @@ int MongoLog::Entry(int priority, std::string message, ...){
     // ALL priorities get written locally (add some sort of size control later!)
     auto t = std::time(nullptr);
     auto tm = *std::localtime(&t);
+    fMutex.lock();
     fOutfile<<std::put_time(&tm, "%d-%m-%Y %H-%M-%S")<<" ["<<fPriorities[priority+1]
 	    <<"]: "<<message<<std::endl;
+    fMutex.unlock();
   }
   
   return 0;
