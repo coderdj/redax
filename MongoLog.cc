@@ -65,7 +65,7 @@ int MongoLog::Entry(int priority, std::string message, ...){
 				  "message" << message <<
 				  "priority" << priority <<
 				  bsoncxx::builder::stream::finalize);
-      std::cout<<"("<<priority<<"): "<<message<<std::endl;
+      //std::cout<<"("<<priority<<"): "<<message<<std::endl;
     }
     catch(const std::exception &e){
       std::cout<<"Failed to insert log message "<<message<<" ("<<
@@ -74,15 +74,17 @@ int MongoLog::Entry(int priority, std::string message, ...){
     }
   }
 
+  auto t = std::time(nullptr);
+  auto tm = *std::localtime(&t);
   if(fLocalFileLogging){
     // ALL priorities get written locally (add some sort of size control later!)
-    auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
     fMutex.lock();
-    fOutfile<<std::put_time(&tm, "%d-%m-%Y %H-%M-%S")<<" ["<<fPriorities[priority+1]
+    fOutfile<<std::put_time(&tm, "%Y-%m-%d %H-%M-%S")<<" ["<<fPriorities[priority+1]
 	    <<"]: "<<message<<std::endl;
     fMutex.unlock();
   }
+  std::cout<<std::put_time(&tm, "%Y-%m-%d %H-%M-%S")<<" ["<<fPriorities[priority+1]
+	    <<"]: "<<message<<std::endl;
   
   return 0;
 }
