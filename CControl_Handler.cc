@@ -30,7 +30,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 // ----------------------------------------------
   // Pull options for V2718
   CrateOptions copts;
-  if(fOptions->GetCrateOpt(copts, "V2718") != 0){
+  if(fOptions->GetCrateOpt(copts) != 0){
     fLog->Entry(MongoLog::Error,
 		"Failed to pull crate options from file. Required fields: s_in, pulser_freq, muon_veto, neutron_veto, led_trigger");
     fStatus = DAXHelpers::Idle;
@@ -58,7 +58,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   // Getting options for DDC10 HEV module
   HEVOptions hopts;
 
-  if(fOptions->GetHEVOpt(hopts, "DDC10") == 0){
+  if(fOptions->GetHEVOpt(hopts) == 0){
 
     fDDC10 = new DDC10();
     if(fDDC10->Initialize(hopts)!=0){

@@ -81,8 +81,8 @@ public:
 
   std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
   std::vector<RegisterType> GetRegisters(int board=-1);
-  int GetCrateOpt(CrateOptions &ret, std::string device="");
-  int GetHEVOpt(HEVOptions &ret, std::string device = "");
+  int GetCrateOpt(CrateOptions &ret);
+  int GetHEVOpt(HEVOptions &ret);
   int GetChannel(int bid, int cid);
   int GetNestedInt(std::string path, int default_value);
 private:

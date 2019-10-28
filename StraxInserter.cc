@@ -199,7 +199,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  
 
 	  // Cast everything to char so we can put it in our buffer.
-	  u_int16_t cl = u_int16_t(fOptions->GetChannel(dp.bid, channel));
+	  int16_t cl = int16_t(fOptions->GetChannel(dp.bid, channel));
 
 	  // Failing to discern which channel we're getting data from seems serious enough to throw
 	  if(cl==-1)

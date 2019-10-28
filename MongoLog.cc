@@ -16,7 +16,7 @@ MongoLog::MongoLog(bool LocalFileLogging){
 }
 MongoLog::~MongoLog(){
   fOutfile.close();
-};
+}
 
 int  MongoLog::Initialize(std::string connection_string,
 			  std::string db, std::string collection,
