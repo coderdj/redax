@@ -278,12 +278,6 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   // and tears) throughout the code. Take care if changing things here.
 
   // Initial parameters:
-  int adjustment_threshold = 5;
-  int current_iteration=0;
-  int repeat_this_many=5;
-  int triggers_per_iteration = 1;
-
-  // Initial parameters:
   int adjustment_threshold = 5; // baseline units
   int repeat_this_many=3;
   int rebin_factor_log = 1;  //log base 2.
@@ -293,8 +287,8 @@ int V1724::ConfigureBaselines(vector <u_int16_t> &end_values,
   int bins_around_max = 3;
   // the counts in these bins must be this fraction of total counts
   double fraction_around_max = 0.8, counts_around_max(0), counts_total(0), baseline(0);
-  u_int32_t words_in_event(0), channel_mask(0), words_per_channel(0);
-  int idx(0), channels_in_event(0);
+  u_int32_t words_in_event(0), channel_mask(0), words_per_channel(0), idx(0);
+  int channels_in_event(0);
 
   vector<int> hist(nbins);
   // some iterators to handle looping through the histogram

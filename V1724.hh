@@ -66,7 +66,7 @@ private:
   Options *fOptions;
   int fBoardHandle;
   int fLink, fCrate, fBID;  
-  unsigned int fBaseAddress, fNChannels;  
+  unsigned int fBaseAddress;
 
   // Stuff for clock reset tracking
   u_int32_t clock_counter;
