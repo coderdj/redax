@@ -74,12 +74,15 @@ int MongoLog::Entry(int priority, std::string message, ...){
     }
   }
 
+  auto t = std::time(nullptr);
+  auto tm = *std::localtime(&t);
+  std::stringstream to_print;
+  to_print<<std::put_time(&tm, "%d-%m-%Y %H-%M-%S")<<" ["<<fPriorities[priority+1]
+	    <<"]: "<<message<<std::endl;
+  std::cout << to_print.str();
   if(fLocalFileLogging){
     // ALL priorities get written locally (add some sort of size control later!)
-    auto t = std::time(nullptr);
-    auto tm = *std::localtime(&t);
-    fOutfile<<std::put_time(&tm, "%d-%m-%Y %H-%M-%S")<<" ["<<fPriorities[priority+1]
-	    <<"]: "<<message<<std::endl;
+    fOutfile<<to_print.str();
   }
   
   return 0;
