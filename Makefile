@@ -26,7 +26,7 @@ $(EXEC_SLAVE) : $(OBJECTS_SLAVE)
 ccontrol: $(EXEC_CC)
 
 $(EXEC_CC) : $(OBJECTS_CC)
-	$(CC) $(OBJECTS_CC) $(CFLAGS) $(LDFLAGS_CC) -o $(CPP_CC)
+	$(CC) $(OBJECTS_CC) $(CFLAGS) $(LDFLAGS_CC) -o $(EXEC_CC)
 
 %.d : %.cc
 	@set -e; rm -f $@; \
