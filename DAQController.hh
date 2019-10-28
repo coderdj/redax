@@ -10,7 +10,6 @@
 
 struct processingThread{
   std::thread *pthread;
-  //MongoInserter *inserter;
   StraxInserter *inserter;
 };
 
@@ -56,19 +55,19 @@ public:
   
 private:
   void AppendData(vector<data_packet> &d);
+  void InitLink(vector<V1724*>&, map<int, vector<u_int16_t>>&, int&);
   
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;
   std::mutex fBufferMutex;
-  MongoLog *fLog;
   
   bool fReadLoop;
-  Options *fOptions;
-  DAXHelpers *fHelper;
   std::vector<data_packet> *fRawDataBuffer;
   int fStatus;
   int fNProcessingThreads;
   string fHostname;
+  MongoLog *fLog;
+  Options *fOptions;
   
   // For reporting to frontend
   u_int64_t fBufferLength;

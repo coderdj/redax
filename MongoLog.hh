@@ -9,6 +9,7 @@
 #include <iomanip>
 #include <cstdarg>
 #include <cstring>
+#include <mutex>
 
 #include <mongocxx/client.hpp>
 #include <mongocxx/uri.hpp>
@@ -84,6 +85,7 @@ private:
   std::string fHostname;
   int fLogLevel;
   bool fLocalFileLogging;
+  std::mutex fMutex;
 };
 
 #endif
