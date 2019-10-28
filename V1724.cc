@@ -50,7 +50,7 @@ bool V1724::EnsureStarted(int ntries, int tsleep){
   return MonitorRegister(fAqStatusRegister, 0x4, ntries, tsleep, 0x1);
 }
 bool V1724::EnsureStopped(int ntries, int tsleep){
-  return MonitorRegister(fAqStatusRegister, 0x4, 1000, 1000, 0x0);
+  return MonitorRegister(fAqStatusRegister, 0x4, ntries, tsleep, 0x0);
 }
 u_int32_t V1724::GetAcquisitionStatus(){
   return ReadRegister(fAqStatusRegister);

@@ -3,13 +3,12 @@
 Options::Options(MongoLog *log, std::string options_name, mongocxx::collection opts_collection,
 		 std::string override_opts){
   bson_value = NULL;
+  fLog = log;
   if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
-  fHelper = new DAXHelpers();
 }
 
 Options::~Options(){
-  delete fHelper;
   if(bson_value != NULL)
     delete bson_value;
 }
@@ -182,7 +181,7 @@ std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname
     bt.crate = ele["crate"].get_int32();
     bt.board = ele["board"].get_int32();
     bt.type = ele["type"].get_utf8().value.to_string();    
-    bt.vme_address = fHelper->StringToHex(ele["vme_address"].get_utf8().value.to_string());
+    bt.vme_address = DAXHelpers::StringToHex(ele["vme_address"].get_utf8().value.to_string());
     ret.push_back(bt);
   }
   
@@ -208,7 +207,7 @@ std::vector<RegisterType> Options::GetRegisters(int board){
 }
 
 
-int Options::GetCrateOpt(CrateOptions &ret, std::string device){
+int Options::GetCrateOpt(CrateOptions &ret){
   // I think we can just hack the above getters to allow dot notation
   // for a more robust solution to access subdocuments
   try{
@@ -235,7 +234,7 @@ int Options::GetChannel(int bid, int cid){
   }
 }
 
-int Options::GetHEVOpt(HEVOptions &ret, std::string device){
+int Options::GetHEVOpt(HEVOptions &ret){
   try{
     ret.signal_threshold = bson_options["DDC10"]["signal_threshold"].get_int32().value;
     ret.sign = bson_options["DDC10"]["sign"].get_int32().value;
