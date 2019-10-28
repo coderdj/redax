@@ -79,6 +79,7 @@ public:
 private:
   std::string FormatTime(struct tm* date);
   int Today(struct tm* date);
+  int RotateLogFile();
   std::vector<std::string> fPriorities{"LOCAL", "DEBUG", "MESSAGE",
       "WARNING", "ERROR", "FATAL"};
   std::ofstream fOutfile; 

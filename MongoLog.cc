@@ -1,4 +1,6 @@
 #include "MongoLog.hh"
+#include <sstream>
+#include <experimental/filesystem>
 
 MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays){
   fLogLevel = 0;
@@ -17,40 +19,45 @@ MongoLog::~MongoLog(){
 }
 
 std::string MongoLog::FormatTime(struct tm* date) {
-    return std::string(std::put_time(date, "%F %T"));
+  std::stringstream s;
+  s <<std::put_time(date, "%F %T");
+  return s.str();
 }
 
 int MongoLog::Today(struct tm* date) {
-    return std::stoi(std::put_time(date, "%Y%m%d"));
+  return (date->tm_year+1900)*10000 + (date->tm_mon+1)*100 + (date->tm_mday);
 }
 
 int MongoLog::RotateLogFile() {
-    if (fOutfile.is_open()) fOutfile.close();
-    auto t = std::time(0);
-    auto today = *std::gmtime(&t);
-    std::string fn = std::put_time(&today, fLogFileNameFormat.c_str());
-    fOutfile.open(fn, std::ofstream::out | std::ofstream::app);
-    if (!fOutfile.is_open()) {
-        std::cout << "Could not rotate logfile!\n";
-        return -1;
+  if (fOutfile.is_open()) fOutfile.close();
+  auto t = std::time(0);
+  auto today = *std::gmtime(&t);
+  std::stringstream fn;
+  fn << std::put_time(&today, fLogFileNameFormat.c_str());
+  fOutfile.open(fn.str(), std::ofstream::out | std::ofstream::app);
+  if (!fOutfile.is_open()) {
+    std::cout << "Could not rotate logfile!\n";
+    return -1;
+  }
+  fOutfile << FormatTime(&today) << " [INIT]: logfile initialized\n";
+  fToday = Today(&today);
+  std::array<int, 12> days_per_month = {31,28,31,30,31,30,31,31,30,31,30,31};
+  if (today.tm_year%4 == 0) days_per_month[1] += 1; // the edge-case is SEP
+  struct tm last_week = today;
+  last_week.tm_mday -= fDeleteAfterDays;
+  if (last_week.tm_mday <= 0) { // new month
+    last_week.tm_mon--;
+    if (last_week.tm_mon < 0) { // new year
+      last_week.tm_year--;
+      last_week.tm_mon = 11;
     }
-    fOutfile << FormatTime(&today) << " [INIT]: logfile initialized\n";
-    fToday = Today(&today);
-    std::array<int, 12> days_per_month = {31,28,31,30,31,30,31,31,30,31,30,31};
-    if (tm.tm_year%4 == 0) days_per_month[1] += 1; // the edge-case is SEP
-    struct tm last_week = today;
-    last_week.tm_mday -= fDeleteAfterDays;
-    if (last_week.tm_mday <= 0) { // new month
-        last_week.tm_mon--;
-        if (last_week.tm_mon < 0) { // new year
-            last_week.tm_year--;
-            last_week.tm_mon = 11;
-        }
-        last_week.tm_mday += days_per_month[last_week.tm_mon]; // off by one error???
-    }
-    std::string last_weeks_log = std::put_time(&last_week, fLogFileNameFormat.c_str());
-    std::filesystem::path p = last_weeks_log;
-    if (std::filesystem::exists(last_weeks_log)) std::filesystem::remove(last_weeks_log);
+    last_week.tm_mday += days_per_month[last_week.tm_mon]; // off by one error???
+  }
+  std::stringstream s;
+  s << std::put_time(&last_week, fLogFileNameFormat.c_str());
+  std::experimental::filesystem::path p = s.str();
+  if (std::experimental::filesystem::exists(p)) std::experimental::filesystem::remove(p);
+  return 0;
 }
 
 int  MongoLog::Initialize(std::string connection_string,
@@ -112,7 +119,7 @@ int MongoLog::Entry(int priority, std::string message, ...){
   auto t = std::time(nullptr);
   auto tm = *std::gmtime(&t);
   std::stringstream msg;
-  msg<<std::FormatTime(&tm)<<" ["<<fPriorities[priority+1]
+  msg<<FormatTime(&tm)<<" ["<<fPriorities[priority+1]
 	    <<"]: "<<message<<std::endl;
   std::cout << msg.str();
   if(fLocalFileLogging){
