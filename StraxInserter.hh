@@ -22,7 +22,7 @@ class DAQController;
 
 struct data_packet{
   u_int32_t *buff;
-  u_int32_t size;
+  int32_t size;
   u_int32_t clock_counter;
   u_int32_t header_time;
   int bid;

@@ -51,12 +51,13 @@ class V1724{
 
 protected:
   // Some values for base classes to override 
-  int fAqCtrlRegister;
-  int fAqStatusRegister;
-  int fSwTrigRegister;
-  int fResetRegister;
-  int fChStatusRegister;
-  int fChDACRegister;
+  unsigned int fAqCtrlRegister;
+  unsigned int fAqStatusRegister;
+  unsigned int fSwTrigRegister;
+  unsigned int fResetRegister;
+  unsigned int fChStatusRegister;
+  unsigned int fChDACRegister;
+  unsigned int fNChannels;
 
 private:
 

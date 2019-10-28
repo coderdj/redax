@@ -1,7 +1,7 @@
 #include "V2718.hh"
 
 V2718::V2718(MongoLog *log){
-  
+  fLog = log;
   fBoardHandle=fLink=fCrate=-1; 
   fCopts.s_in = fCopts.neutron_veto = fCopts.muon_veto = -1;
   fCopts.led_trigger = fCopts.pulser_freq = -1;

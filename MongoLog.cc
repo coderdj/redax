@@ -16,7 +16,7 @@ MongoLog::MongoLog(bool LocalFileLogging){
 }
 MongoLog::~MongoLog(){
   fOutfile.close();
-};
+}
 
 int  MongoLog::Initialize(std::string connection_string,
 			  std::string db, std::string collection,
@@ -76,15 +76,16 @@ int MongoLog::Entry(int priority, std::string message, ...){
 
   auto t = std::time(nullptr);
   auto tm = *std::localtime(&t);
+  std::stringstream to_print;
+  to_print<<std::put_time(&tm, "%Y-%m-%d %H-%M-%S")<<" ["<<fPriorities[priority+1]
+	    <<"]: "<<message<<std::endl;
+  std::cout << to_print.str();
   if(fLocalFileLogging){
     // ALL priorities get written locally (add some sort of size control later!)
     fMutex.lock();
-    fOutfile<<std::put_time(&tm, "%Y-%m-%d %H-%M-%S")<<" ["<<fPriorities[priority+1]
-	    <<"]: "<<message<<std::endl;
+    fOutfile<<to_print.str();
     fMutex.unlock();
   }
-  std::cout<<std::put_time(&tm, "%Y-%m-%d %H-%M-%S")<<" ["<<fPriorities[priority+1]
-	    <<"]: "<<message<<std::endl;
   
   return 0;
 }

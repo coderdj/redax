@@ -106,6 +106,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     init_threads.push_back(new thread(&DAQController::InitLink, this,
 	  std::ref(link.second), std::ref(written_dacs), std::ref(rets[i])));
     i++;
+
   }
   for (i = 0; i < init_threads.size(); i++) {
     init_threads[i]->join();

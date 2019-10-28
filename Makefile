@@ -1,31 +1,50 @@
-SHELL   = /bin/bash -O extglob -c
-CC      = g++
-CFLAGS  = -Wall -g -DLINUX -fPIC -std=c++17 -pthread $(shell pkg-config --cflags libmongocxx)
+SHELL	= /bin/bash -O extglob -c
+CC	= g++
+CXX	= g++
+CFLAGS	= -Wall -Wextra -pedantic -pedantic-errors -g -DLINUX -std=c++17 -pthread $(shell pkg-config --cflags libmongocxx)
+CPPFLAGS := $(CFLAGS)
 LDFLAGS = -lCAENVME -lstdc++fs -llz4 -lblosc $(shell pkg-config --libs libmongocxx) $(shell pkg-config --libs libbsoncxx)
 LDFLAGS_CC = ${LDFLAGS} -lexpect -ltcl8.6
-SOURCES_SLAVE = $(shell echo !(ccontrol|CControl*|V2718|DDC10)+(.cc))
 
-OBJECTS_SLAVE = $(SOURCES_SLAVE: .cc=.o)
-CPP_SLAVE = main
+SOURCES_SLAVE = DAQController.cc main.cc Options.cc MongoLog.cc \
+    StraxInserter.cc V1724.cc V1724_MV.cc
+OBJECTS_SLAVE = $(SOURCES_SLAVE:%.cc=%.o)
+DEPS_SLAVE = $(OBJECTS_SLAVE:%.o=%.d)
 EXEC_SLAVE = main
 
-SOURCES_CC = $(shell echo !(main|Strax*|DAQController|*Inserter|V1724*)+(.cc))
-OBJECTS_CC = $(SOURCES_CC: .cc=.o)
-CPP_CC = ccontrol
+SOURCES_CC = ccontrol.cc Options.cc V2718.cc \
+    CControl_Handler.cc DDC10.cc MongoLog.cc
+OBJECTS_CC = $(SOURCES_CC:%.cc=%.o)
+DEPS_CC = $(OBJECTS_CC:%.o=%.d)
+EXEC_CC = ccontrol
 
-all: $(SOURCES_SLAVE) $(CPP_SLAVE)
+all: $(EXEC_SLAVE)
 
-$(CPP_SLAVE) : $(OBJECTS_SLAVE)
+$(EXEC_SLAVE) : $(OBJECTS_SLAVE)
 	$(CC) $(OBJECTS_SLAVE) $(CFLAGS) $(LDFLAGS) -o $(EXEC_SLAVE)
 
+ccontrol: $(EXEC_CC)
 
-ccontrol: $(SOURCES_CC) $(CPP_CC)
+$(EXEC_CC) : $(OBJECTS_CC)
+	$(CC) $(OBJECTS_CC) $(CFLAGS) $(LDFLAGS_CC) -o $(EXEC_CC)
 
-$(CPP_CC) : $(OBJECTS_CC)
-	$(CC) $(OBJECTS_CC) $(CFLAGS) $(LDFLAGS_CC) -o $(CPP_CC)
+%.d : %.cc
+	@set -e; rm -f $@; \
+	$(CC) -MM $(CFLAGS) $< > $@.$$$$; \
+	sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' < $@.$$$$ > $@; \
+	rm -f $@.$$$$
+
+%.o : %.cc %.d
+	$(CC) $(CFLAGS) -o $@ -c $<
+
+include $(SOURCES_SLAVE:.cc=.d)
+include $(SOURCES_CC:.cc=.d)
+
+.PHONY: clean
 
 clean:
-	rm $(CPP_SLAVE)
-	rm $(CPP_CC)
+	rm -f *.o *.d
+	rm -f $(EXEC_SLAVE)
+	rm -f $(EXEC_CC)
 
 
