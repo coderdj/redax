@@ -32,8 +32,10 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
     fLog->Entry(MongoLog::Warning, "Failed to find your options file '%s' in DB", name);
     return -1;
   }
-  if(bson_value != NULL)
+  if(bson_value != NULL) {
     delete bson_value;
+    bson_value = NULL;
+  }
   bson_value = new bsoncxx::document::value((*trydoc).view());
   bson_options = bson_value->view();
   

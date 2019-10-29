@@ -114,8 +114,10 @@ int main(int argc, char** argv){
        }	  
               
        //Here are our options
-       if(options != NULL)
+       if(options != NULL) {
 	 delete options;
+	 options = NULL;
+       }
        options = new Options(logger, mode, options_collection, override_json);
 	 
        // Initialise the V2178, V1495 and DDC10...etc.      

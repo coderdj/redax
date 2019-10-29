@@ -209,8 +209,10 @@ int main(int argc, char** argv){
 	    bool initialized = false;
 	    
 	    // Mongocxx types confusing so passing json strings around
-	    if(fOptions != NULL)
+	    if(fOptions != NULL) {
 	      delete fOptions;
+	      fOptions = NULL;
+	    }
 	    fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
 				   options_collection, override_json);
 	    std::vector<int> links;
