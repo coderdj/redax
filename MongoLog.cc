@@ -56,7 +56,13 @@ int MongoLog::RotateLogFile() {
   std::stringstream s;
   s << std::put_time(&last_week, fLogFileNameFormat.c_str());
   std::experimental::filesystem::path p = s.str();
-  if (std::experimental::filesystem::exists(p)) std::experimental::filesystem::remove(p);
+  if (std::experimental::filesystem::exists(p)) {
+    fOutfile << FormatTime(&today) << " [INIT]: Deleting " << p << '\n';
+    std::experimental::filesystem::remove(p);
+  }
+  else {
+    fOutfile << FormatTime(&today) << " [INIT]: No older logfile to delete :(\n";
+  }
   return 0;
 }
 
