@@ -1,4 +1,6 @@
 #include "Options.hh"
+#include "DAXHelpers.hh"
+#include "MongoLog.hh"
 
 Options::Options(MongoLog *log, std::string options_name, mongocxx::collection opts_collection,
 		 std::string override_opts){
@@ -9,8 +11,10 @@ Options::Options(MongoLog *log, std::string options_name, mongocxx::collection o
 }
 
 Options::~Options(){
-  if(bson_value != NULL)
+  if(bson_value != NULL) {
     delete bson_value;
+    bson_value = NULL;
+  }
 }
 
 std::string Options::ExportToString(){

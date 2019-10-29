@@ -1,6 +1,12 @@
-#include <lz4frame.h>
 #include "StraxInserter.hh"
+#include <lz4frame.h>
 #include "DAQController.hh"
+#include "MongoLog.hh"
+#include "Options.hh"
+#include <blosc.h>
+#include <thread>
+#include <cstring>
+#include <cstdarg>
 
 StraxInserter::StraxInserter(){
   fOptions = NULL;
@@ -38,11 +44,11 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   // To start we do not know which FW version we're dealing with (for data parsing)
   fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
   if(fFirmwareVersion == -1){
-	cout<<"Firmware version unspecified in options"<<endl;
+	std::cout<<"Firmware version unspecified in options"<<std::endl;
 	return -1;
   }
   if((fFirmwareVersion != 0) && (fFirmwareVersion != 1)){
-	cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<endl;
+	std::cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<std::endl;
 	return -1;
   }
 
@@ -84,8 +90,8 @@ void StraxInserter::ParseDocuments(data_packet dp){
   unsigned int max_channels = 16; // hardcoded to accomodate V1730
   
   // Unpack the things from the data packet
-  vector<u_int32_t> clock_counters(max_channels, dp.clock_counter);
-  vector<u_int32_t> last_times_seen(max_channels, 0xFFFFFFFF);
+  std::vector<u_int32_t> clock_counters(max_channels, dp.clock_counter);
+  std::vector<u_int32_t> last_times_seen(max_channels, 0xFFFFFFFF);
   
   u_int32_t size = dp.size;
   u_int32_t *buff = dp.buff;
@@ -239,7 +245,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  
 	  // Copy the raw buffer	  
 	  if(samples_this_channel>fFragmentLength/2){
-	    cout<<samples_this_channel<<"!"<<std::endl;
+	    std::cout<<samples_this_channel<<"!"<<std::endl;
 	    exit(-1);
 	  }
 

@@ -2,23 +2,18 @@
 #define _STRAXINSERTER_HH_
 
 #include <cstdlib>
-#include <cstdarg>
-#include <cstring>
-#include <assert.h>
-#include <blosc.h>
-#include <thread>
-//#include "MongoInserter.hh"
+#include <cstdint>
+#include <string>
 
 //for debugging
 //#include <sys/types.h>
 #include <map>
 #include <mutex>
-#include <blosc.h>
 #include <experimental/filesystem>
-#include "Options.hh"
-#include "MongoLog.hh"
 
 class DAQController;
+class Options;
+class MongoLog;
 
 struct data_packet{
   u_int32_t *buff;

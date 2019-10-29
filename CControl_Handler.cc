@@ -1,5 +1,11 @@
 #include "CControl_Handler.hh"
 #include "DAXHelpers.hh"
+#include "Options.hh"
+#include "MongoLog.hh"
+#include "V2718.hh"
+#include "DDC10.hh"
+//#include "V1495.hh"
+#include <vector>
 
 CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
   fOptions = NULL;

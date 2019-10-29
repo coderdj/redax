@@ -1,5 +1,13 @@
 #include "DAQController.hh"
 #include <functional>
+#include "V1724.hh"
+#include "V1724_MV.hh"
+//#include "V1730.hh"
+#include "DAXHelpers.hh"
+#include "Options.hh"
+#include "StraxInserter.hh"
+#include "MongoLog.hh"
+#include <unistd.h>
 
 // Status:
 // 0-idle
@@ -96,14 +104,14 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   fLog->Entry(MongoLog::Local, "That felt great, thanks.");
 
   unsigned i = 0;
-  vector<thread*> init_threads;
+  std::vector<std::thread*> init_threads;
   init_threads.reserve(fDigitizers.size());
-  vector<int> rets;
+  std::vector<int> rets;
   rets.reserve(fDigitizers.size());
   // Parallel digitizer programming to speed baselining
   for( auto& link : fDigitizers ) {
     rets.push_back(1);
-    init_threads.push_back(new thread(&DAQController::InitLink, this,
+    init_threads.push_back(new std::thread(&DAQController::InitLink, this,
 	  std::ref(link.second), std::ref(written_dacs), std::ref(rets[i])));
     i++;
 
@@ -236,17 +244,14 @@ void DAQController::ReadData(int link){
   long int readcycler = 0;
   while(fReadLoop){
     
-    vector<data_packet> local_buffer;
+    std::vector<data_packet> local_buffer;
     for(unsigned int x=0; x<fDigitizers[link].size(); x++){
 
       // Every 1k reads check board status
       if(readcycler%10000==0){
 	readcycler=0;
 	u_int32_t data = fDigitizers[link][x]->GetAcquisitionStatus();
-	std::cout<<"Board "<<fDigitizers[link][x]->bid()<<" has status "<<hex<<data<<dec<<std::endl;
-	data = fDigitizers[link][x]->ReadRegister(0x8100);
-	data = fDigitizers[link][x]->ReadRegister(0x8178);
-	data = fDigitizers[link][x]->ReadRegister(0xEF04);
+	std::cout<<"Board "<<fDigitizers[link][x]->bid()<<" has status "<<std::hex<<data<<std::dec<<std::endl;
       }
       data_packet d;
       d.buff=NULL;
@@ -298,7 +303,7 @@ std::map<std::string, int> DAQController::GetDataFormat(){
   return std::map<std::string, int>();
 }
 
-void DAQController::AppendData(vector<data_packet> &d){
+void DAQController::AppendData(std::vector<data_packet> &d){
   // Blocks!
   fBufferMutex.lock();
   if(fRawDataBuffer==NULL)
@@ -385,13 +390,13 @@ void DAQController::CloseProcessingThreads(){
   fProcessingThreads.clear();
 }
 
-void DAQController::InitLink(vector<V1724*>& digis, map<int, vector<u_int16_t>>& dacs, int& ret) {
+void DAQController::InitLink(std::vector<V1724*>& digis, std::map<int, std::vector<u_int16_t>>& dacs, int& ret) {
   for(auto digi : digis){
     fLog->Entry(MongoLog::Local, "Beginning specific init for board %i", digi->bid());
       
     // Load DAC. n.b.: if you set the DAC value in your
     // ini file you'll overwrite the fancy stuff done here!
-    vector<u_int16_t>dac_values(16, 0x0);
+    std::vector<u_int16_t>dac_values(16, 0x0);
 
     // Multiple options here
     std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
@@ -461,7 +466,7 @@ void DAQController::InitLink(vector<V1724*>& digis, map<int, vector<u_int16_t>>&
                   digi->bid());
 
       // Load the baselines you just configured
-      vector<bool> update_dac(16, true);
+      std::vector<bool> update_dac(16, true);
       success += digi->LoadDAC(dac_values, update_dac);
       dacs[digi->bid()] = dac_values;
       std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;

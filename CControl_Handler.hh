@@ -1,13 +1,15 @@
 #ifndef _CCONTROL_HANDLER_HH_
 #define _CCONTROL_HANDLER_HH_
 
-#include "Options.hh"
-#include "MongoLog.hh"
-#include "V2718.hh"
-#include "DDC10.hh"
-#include <thread>
+#include <string>
+#include <bsoncxx/document/value.hpp>
 
+class MongoLog;
+class Options;
+class V2718;
+class DDC10;
 class V1495;
+
 class CControl_Handler{
   
 public:

@@ -14,8 +14,7 @@
 #include <bsoncxx/document/value.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
-#include "DAXHelpers.hh"
-#include "MongoLog.hh"
+#include <mongocxx/collection.hpp>
 
 struct BoardType{
   int link;
@@ -63,6 +62,8 @@ struct HEVOptions{
 
 };
 
+class MongoLog;
+
 class Options{
 
 public:
@@ -87,7 +88,6 @@ public:
   int GetNestedInt(std::string path, int default_value);
 private:
   std::string defaultPath = "defaults/daxOptions.json";
-  DAXHelpers *fHelper;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   MongoLog *fLog;

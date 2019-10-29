@@ -1,4 +1,10 @@
 #include "CControl_Handler.hh"
+#include "Options.hh"
+#include "MongoLog.hh"
+#include <string>
+#include <iostream>
+#include <limits.h>
+#include <unistd.h>
 
 int main(int argc, char** argv){
   
