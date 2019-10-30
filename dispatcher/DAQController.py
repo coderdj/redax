@@ -219,6 +219,11 @@ class DAQController():
         '''
         if (detector not in self.arm_command_sent.keys() or
             self.arm_command_sent[detector] is None):
+
+            # Sending a new command so clear timers for other commands
+            self.start_command_sent[detector] = None
+            self.stop_command_sent[detector] = None
+            
             run_mode = self.goal_state[detector]['mode']
             host_list, cc = self.mongo.GetHostsForMode(run_mode)
             print("Crate controller: %s"%cc)
@@ -239,6 +244,11 @@ class DAQController():
         '''
         if (detector not in self.start_command_sent.keys() or
             self.start_command_sent[detector] is None):
+
+            # Sending a new command so clear timers for other commands
+            self.arm_command_sent[detector] = None
+            self.stop_command_sent[detector] = None
+            
             run_mode = self.goal_state[detector]['mode']
             host_list, cc = self.mongo.GetHostsForMode(run_mode)
             run = self.mongo.InsertRunDoc(detector, self.goal_state)
