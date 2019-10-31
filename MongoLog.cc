@@ -58,6 +58,7 @@ int MongoLog::Entry(int priority, std::string message, ...){
   va_end (args);
   message = &vec[0];
 
+  fMutex.lock();
   if(priority >= fLogLevel){
     try{
       fMongoCollection.insert_one(bsoncxx::builder::stream::document{} <<
@@ -82,10 +83,9 @@ int MongoLog::Entry(int priority, std::string message, ...){
   std::cout << to_print.str();
   if(fLocalFileLogging){
     // ALL priorities get written locally (add some sort of size control later!)
-    fMutex.lock();
     fOutfile<<to_print.str();
-    fMutex.unlock();
   }
+  fMutex.unlock();
   
   return 0;
 }

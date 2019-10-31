@@ -402,9 +402,6 @@ void DAQController::InitLink(vector<V1724*>& digis, map<int, vector<u_int16_t>>&
 		"You're fitting baselines to digi %i. Starting by getting start values",
 		digi->bid());
 
-	// Set starting values to most recent run
-	fLog->GetDACValues(digi->bid(), -1, dac_values);
-
 	// Try up to five times since sometimes will not converge. If the function
 	// returns -2 it means it crashed hard so don't bother trying again.
 	int tries=0;
