@@ -1,10 +1,13 @@
 #include "Options.hh"
 
-Options::Options(MongoLog *log, std::string options_name, mongocxx::collection opts_collection,
-		 std::string override_opts){
+Options::Options(MongoLog *log, std::string options_name,
+          mongocxx::collection opts_collection,
+          mongocxx::dac_collection, std::string override_opts){
   bson_value = NULL;
   fLog = log;
-  if(Load(options_name, opts_collection, override_opts)!=0)
+  fDAC_collection = dac_collection;
+  fBLCalibrationPeriod = 21*3600;  // 21 hours so no any off-by-one nonsense
+  if(Load(options_name, opts_collection, dac_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
 }
 
@@ -19,7 +22,7 @@ std::string Options::ExportToString(){
 }
 
 int Options::Load(std::string name, mongocxx::collection opts_collection,
-		  std::string override_opts){
+	mongocxx::collection dac_collection, std::string override_opts){
   // Try to pull doc from DB
   bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
   trydoc = opts_collection.find_one(bsoncxx::builder::stream::document{}<<
@@ -56,9 +59,37 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
     return -1;
   }
 
+  // load dac as per baselining
+  auto sort_order = bsoncxx::builder::stream::document{} <<
+    "_id" << -1 << bsoncxx::builder::stream::finalize;
+  auto opts = mongocxx::options::find{};
+  opts.sort(sort_order.view());
+  auto cursor = dac_collection.find({}, opts);
+  auto doc = cursor.begin();
+  if(doc==cursor.end()) // No docs
+    return -1;
+  dac_values = *doc;
+  if (GetString("baseline_dac_mode") == "auto") {
+    success += Override(bsoncxx::from_json("{\"baseline_dac_mode\" : \"cached\"}"));
+    std::time_t now = std::time(nullptr);
+    std::time_t last_calibration_time = doc["_id"].get_oid().get_time_t();
+
+    fLog->Entry(MongoLog::Local, "%i hours since last BL calibration",
+          (now - last_calibration_time)/3600);
+    if ((now - last_calibration_time) > fBLCalibrationPeriod) {
+      std::tm* today = std::gmtime(&now);
+      if ((today->tm_hour == 13) || (today->tm_hour == 14)) {
+        success += Override(bsoncxx::from_json("{\"baseline_dac_mode\":\"fit\"}"));
+        fLog->Entry(MongoLog::Local, "Setting BL to fit");
+      }
+      else {
+        fLog->Entry(MongoLog::Local, "Nah, wrong time");
+      }
+    }
+  }
+
   return 0;
 }
-
 
 int Options::Override(bsoncxx::document::view override_opts){
 
@@ -203,6 +234,7 @@ std::vector<RegisterType> Options::GetRegisters(int board){
     ret.push_back(rt);
   }
   return ret;
+
   
 }
 
@@ -261,4 +293,56 @@ int Options::GetHEVOpt(HEVOptions &ret){
   return 0;
 }
 
+int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs) {
+  board_dacs.clear();
+  std::map<std::string, std::vector<double>> defaults {
+                {"slope", std::vector<double>(16, -0.26)},
+                {"yint", std::vector<double>(16, 17200)}};
+  // let's provide a default
+  board_dacs[-1] = defaults;
+  std::map<std::string, std::vector<double>> this_board_dac{
+    {"slope", std::vector<double>(16)},
+    {"yint", std::vector<double>(16)}};
+  int ret(0);
+/* doc should look like this:
+ *{ run : 000042,
+ * bid : {
+ *              slope : [ch0, ch1, ch2, ...],
+ *              yint : [ch0, ch1, ch2, ...],
+ *         },
+ *         ...
+ * }
+ */
+  for (auto& bdoc : dac_values) { // subdoc {slope: array, yint : array}
+    int bid = std::stoi(bdoc.key().to_string());
+    for (auto& kv : this_board_dac) { // (string, vector<double>)
+      kv.second.clear();
+      for(auto& val : bdoc[kv.first].get_array().value)
+	kv.second.push_back(ele.get_double());
+    }
+    board_dacs[bid] = this_board_dac;
+  }
+  return ret;
+}
 
+void Options::UpdateDAC(<std::map<int, std::map<std::string, std::vector<double>>>& all_dacs){
+  using namespace bsoncxx::builder::stream;
+  std::string run_id = GetString("run_identifier", "default");
+  auto search_doc = document{} << "run" <<  run_identifier << finalize;
+  auto update_doc = document{};
+  update_doc<< "$set" << open_document << "run" << run_id;
+  for (auto& bid_map : all_dacs) { // (bid, map<string, vector>)
+    update_doc << std::to_string(bid_map.first) << open_document;
+    for(auto& str_vec : bid_map.second){ // (string, vector)
+      update_doc << str_vec.first << open_array <<
+        [&](array_context<> arr){
+        for (auto& val : str_vec.second) arr << val;
+        } << close_array;
+    }
+    update_doc << close_document;
+  }
+  auto write_doc = update_doc<<finalize;
+  mongocxx::options::update options;
+  options.upsert(true);
+  fDAC_collection.update_one(search_doc.view(), write_doc.view(), options);
+}

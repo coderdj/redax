@@ -53,11 +53,11 @@ int main(int argc, char** argv){
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
+  mongocxx::collection dac_collection = db["dac_calibration"];
   
   // Logging
   MongoLog *logger = new MongoLog(true);
-  int ret = logger->Initialize(suri, dbname, "log", hostname,
-			       "dac_values", true);
+  int ret = logger->Initialize(suri, dbname, "log", hostname, true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
     exit(-1);
@@ -205,19 +205,19 @@ int main(int argc, char** argv){
 	    bool initialized = false;
 	    
 	    // Mongocxx types confusing so passing json strings around
-	    if(fOptions != NULL)
+	    if(fOptions != NULL){
 	      delete fOptions;
+              fOptions = NULL;
+            }
 	    fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
-				   options_collection, override_json);
+				   options_collection, dac_collection, override_json);
 	    std::vector<int> links;
-	    std::map<int, std::vector<u_int16_t>> written_dacs;
-	    if(controller->InitializeElectronics(fOptions, links, written_dacs) != 0){
+            std::map<int, std::map<std::string, std::vector<double>>> dac_values;
+	    if(controller->InitializeElectronics(fOptions, links, dac_values) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->End();
 	    }
 	  else{
-	    logger->UpdateDACDatabase(fOptions->GetString("run_identifier", "default"),
-				      written_dacs);
 	    initialized = true;
 	    logger->Entry(MongoLog::Debug, "Initialized electronics");
 	  }

@@ -89,7 +89,7 @@ int MongoLog::Entry(int priority, std::string message, ...){
   
   return 0;
 }
-
+/*
 void MongoLog::UpdateDACDatabase(std::string run_identifier,
 				 std::map<int,
 				 std::vector<u_int16_t>>dac_values){
@@ -110,9 +110,35 @@ void MongoLog::UpdateDACDatabase(std::string run_identifier,
   options.upsert(true);
   fDAC_collection.update_one(search_doc.view(), write_doc.view(), options);
 
+}*/
+
+void MongoLog::UpdateDACDatabase(std::string run_identifier,
+				 std::array<std::map<int,
+				 std::vector<u_int16_t>>, 2>& dac_values){
+  using namespace bsoncxx::builder::stream;
+  auto search_doc = document{} << "run" <<  run_identifier << finalize;
+  auto update_doc = document{};
+  update_doc<< "$set" << open_document << "run" << run_identifier;
+  auto field_names[] = {"slope","yint","slope_err","yint_err"};
+  for (int i = 0; i < 4, i++) {
+    update_doc << field_names[i] << open_document;
+    for(auto iter : dac_values[i]){
+      update_doc << std::to_string(iter.first) << open_array <<
+        [&](array_context<> arr){
+        for (u_int32_t i = 0; i < iter.second.size(); i++)
+	  arr << iter.second[i];
+        } << close_array;
+    }
+    update_doc << close_document;
+  }
+  update_doc<<close_document;
+  auto write_doc = update_doc<<finalize;
+  mongocxx::options::update options;
+  options.upsert(true);
+  fDAC_collection.update_one(search_doc.view(), write_doc.view(), options);
 }
 
-int MongoLog::GetDACValues(int bid, int reference_run,
+int MongoLog::GetDACValues(int bid, int reference_run, // old method
 			   std::vector<u_int16_t> &dac_values){
   std::string runstring = std::to_string(reference_run);
   while(runstring.size()<6)
@@ -127,7 +153,7 @@ int MongoLog::GetDACValues(int bid, int reference_run,
     res = (*doc).view();
 
     try{
-      // Make sure key exists before loading                                                               
+      // Make sure key exists before loading
       if(res.find(std::to_string(bid)) != res.end()){
 	dac_values.clear();
 	bsoncxx::array::view channel_arr = res[std::to_string(bid)].get_array().value;
@@ -151,7 +177,7 @@ int MongoLog::GetDACValues(int bid, int reference_run,
     res = *doc;
     
     try{
-      // Make sure key exists before loading                                                               
+      // Make sure key exists before loading
       if(res.find(std::to_string(bid)) != res.end()){
 	dac_values.clear();
 	bsoncxx::array::view channel_arr = res[std::to_string(bid)].get_array().value;
@@ -166,3 +192,65 @@ int MongoLog::GetDACValues(int bid, int reference_run,
     
   return -1;
 }
+
+int MongoLog::GetDACValues(int reference_run,
+			   std::array<std::map<int,
+                           std::vector<u_int16_t>>, 2> &dac_values,
+                           std::time_t &cal_time){
+  std::string runstring = std::to_string(reference_run);
+  while(runstring.size()<6)
+    runstring.insert(0, "0");
+
+  bsoncxx::document::view res;
+  bsoncxx::document::value doc;
+  if(reference_run >= 0){
+    doc = fDAC_collection.find_one(bsoncxx::builder::stream::document{}<<
+					"run" << runstring <<
+					bsoncxx::builder::stream::finalize);
+    if(!doc) return -1;
+    res = (*doc).view();
+  }
+  else {
+    auto sort_order = bsoncxx::builder::stream::document{} <<
+      "_id" << -1 << bsoncxx::builder::stream::finalize;
+    auto opts = mongocxx::options::find{};
+    opts.sort(sort_order.view());    
+    auto cursor = fDAC_collection.find({}, opts);
+    doc = cursor.begin();
+    if(doc==cursor.end()) // No docs
+      return -1;
+    res = *doc;
+  }
+/* doc should look like this:
+ *{ run : 000042,
+ * slope : {
+ *              bid : [ch0, ch1, ch2, ...],
+ *              ...
+ *         },
+ * yint : {
+ *              bid : [ch0, ch1, ch2, ...],
+ *              ...
+ *        }
+ * }
+ */
+  try{
+    cal_time = doc["_id"].get_oid().get_time_t();
+    auto subdoc = doc["slope"];
+    if (!subdoc) throw;
+    for (auto& val : subdoc) { // val is the array
+      int bid = iter.key().to_int32();
+      dac_values[0][bid].try_emplace(bid, std::vector<double>());
+      dac_values[0][bid].clear();
+      bsoncxx::array::view channel_arr = iter.second.get_array().value;
+      for(bsoncxx::array::element ele : channel_arr)
+	dac_values[0][bid].push_back(ele.get_double());
+    }
+      if(res.find(std::to_string(bid)) != res.end()){
+	dac_values.clear();
+	return 0;
+      }
+    }catch(...){
+      dac_values = std::vector<u_int16_t>(16, 1000);
+    }
+  return -1;
+  }

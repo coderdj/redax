@@ -24,7 +24,7 @@ public:
   ~DAQController();
 
   int InitializeElectronics(Options *options, std::vector<int> &keys,
-			    std::map<int, std::vector<u_int16_t>>&written_dacs);
+			    std::map<int, std::map<std::string, std::vector<double>>>&dac_values);
 
   int status(){
     return fStatus;
@@ -55,7 +55,7 @@ public:
   
 private:
   void AppendData(vector<data_packet> &d);
-  void InitLink(vector<V1724*>&, map<int, vector<u_int16_t>>&, int&);
+  void InitLink(vector<V1724*>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
   
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;

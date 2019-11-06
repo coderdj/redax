@@ -37,7 +37,7 @@ std::string DAQController::run_mode(){
 }
 
 int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys,
-					 std::map<int, std::vector<u_int16_t>>&written_dacs){
+		<std::map<int, std::map<std::string, std::vector<double>>>&dac_values){
 
   End();
   
@@ -45,7 +45,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   fNProcessingThreads = fOptions->GetNestedInt("processing_threads."+fHostname, 8);  
   fLog->Entry(MongoLog::Local, "Beginning electronics initialization with %i threads",
 	      fNProcessingThreads);
-  
+
   // Initialize digitizers
   fStatus = DAXHelpers::Arming;
   for(auto d : fOptions->GetBoards("V17XX", fHostname)){
@@ -104,7 +104,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   for( auto& link : fDigitizers ) {
     rets.push_back(1);
     init_threads.push_back(new thread(&DAQController::InitLink, this,
-	  std::ref(link.second), std::ref(written_dacs), std::ref(rets[i])));
+	  std::ref(link.second), std::ref(dac_values), std::ref(rets[i])));
     i++;
 
   }
@@ -112,12 +112,13 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     init_threads[i]->join();
     delete init_threads[i];
   }
-  if (std::any_of(rets.begin(), rets.end(), [](int i) {return i == -1;})) {
+  if (std::any_of(rets.begin(), rets.end(), [](int i) {return i != 0;})) {
     fLog->Entry(MongoLog::Warning, "Encountered errors during digitizer programming");
     fStatus = DAXHelpers::Idle;
     return -1;
   } else
     fLog->Entry(MongoLog::Debug, "Digitizer programming successful");
+  fOptions->UpdateDAC(dac_values);
 
   for(auto const& link : fDigitizers ) {
     for(auto digi : link.second){
@@ -199,7 +200,7 @@ void DAQController::End(){
   fDigitizers.clear();
   fStatus = DAXHelpers::Idle;
 
-  if(fRawDataBuffer != NULL){
+  if(fRawDataBuffer !335= NULL){
     fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
 		fRawDataBuffer->size());	       
     for(unsigned int i=0; i<fRawDataBuffer->size(); i++){
@@ -244,9 +245,6 @@ void DAQController::ReadData(int link){
 	readcycler=0;
 	u_int32_t data = fDigitizers[link][x]->GetAcquisitionStatus();
 	std::cout<<"Board "<<fDigitizers[link][x]->bid()<<" has status "<<hex<<data<<dec<<std::endl;
-	data = fDigitizers[link][x]->ReadRegister(0x8100);
-	data = fDigitizers[link][x]->ReadRegister(0x8178);
-	data = fDigitizers[link][x]->ReadRegister(0xEF04);
       }
       data_packet d;
       d.buff=NULL;
@@ -385,96 +383,99 @@ void DAQController::CloseProcessingThreads(){
   fProcessingThreads.clear();
 }
 
-void DAQController::InitLink(vector<V1724*>& digis, map<int, vector<u_int16_t>>& dacs, int& ret) {
+void DAQController::InitLink(std::vector<V1724*>& digis,
+    std::map<int, std::map<std::string, vector<double>>>& dacs, int& ret) {
   for(auto digi : digis){
     fLog->Entry(MongoLog::Local, "Beginning specific init for board %i", digi->bid());
-      
+
     // Load DAC. n.b.: if you set the DAC value in your
     // ini file you'll overwrite the fancy stuff done here!
     vector<u_int16_t>dac_values(16, 0x0);
 
     // Multiple options here
     std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
-    int success = 0;
-    if(BL_MODE == "fit"){
-	int nominal_dac = fOptions->GetInt("baseline_value", 16000);
-	fLog->Entry(MongoLog::Local,
-		"You're fitting baselines to digi %i. Starting by getting start values",
+    int success = 0, tries=0, max_iter=100, max_tries(5);
+    bool calibrate=false;
+    int nominal_baseline = fOptions->GetInt("baseline_value", 16000);
+    std::map<std::string, std::vector<double>> board_dac_cal;
+    board_dac = dacs.count(digi->bid()) ? dacs[digi->bid()] : dacs[-1];
+    if((BL_MODE == "fit") || (BL_MODE == "cached")){
+      if (BL_MODE == "fit") {
+        fLog->Entry(MongoLog::Local, "You're fitting baselines for digi %i",
+            digi->bid());
+        max_iter = 50;
+        max_tries = 5;
+        calibrate=true;
+      } else {
+        fLog->Entry(MongoLog::Local, "You're using cached baselines for digi %i",
+            digi->bid());
+        max_iter=1;
+        max_tries = 1;
+        calibrate=false;
+      }
+      // Try a few times since sometimes will not converge. If the function
+      // returns -2 it means it crashed hard so don't bother trying again.
+      do{
+	fLog->Entry(MongoLog::Local, "Going into DAC routine. Try: %i", tries+1);
+	success = digi->ConfigureBaselines(dac_values, board_dac_cal,
+              nominal_baseline, max_iter, calibrate);
+	tries++;
+        calibrate = false; // only need to calibrate the first time
+      } while(tries<max_tries && success==-1);
+    }
+    else if(BL_MODE != "fixed"){
+      fLog->Entry(MongoLog::Warning, "Received unknown baseline mode. Fallback to fixed");
+      BL_MODE = "fixed";
+    }
+    if(BL_MODE == "fixed"){
+      int BLVal = fOptions->GetInt("baseline_fixed_value", 4000);
+      fLog->Entry(MongoLog::Local, "Loading fixed baselines at value 0x%04x for digi %i",
+		    BLVal, digi->bid());
+      dac_values.assign(dac_values.size(), BLVal);
+    }
+
+    //int success = 0;
+    std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
+    if(success==-2){
+      fLog->Entry(MongoLog::Warning, "Baselines failed with digi error");
+      fStatus = DAXHelpers::Error;
+      ret = -1;
+      return;
+    }
+    else if(success!=0){
+      fLog->Entry(MongoLog::Warning, "Baselines failed with timeout");
+      fStatus = DAXHelpers::Idle;
+      ret = -1;
+      return;
+    }
+
+    fLog->Entry(MongoLog::Local, "Digi %i survived baseline mode. Going into register setting",
 		digi->bid());
 
-	// Try up to five times since sometimes will not converge. If the function
-	// returns -2 it means it crashed hard so don't bother trying again.
-	int tries=0;
-	do{
-	  fLog->Entry(MongoLog::Local, "Going into DAC routine. Try: %i", tries+1);
-	  success = digi->ConfigureBaselines(dac_values, nominal_dac, 100);
-	  tries++;
-	} while(tries<5 && success==-1);
-      }
-      else if(BL_MODE == "cached"){
-	int rrun = fOptions->GetInt("baseline_reference_run", -1);
-	fLog->Entry(MongoLog::Local, "You're loading cached baselines for digi: %i", digi->bid());
-	if(rrun == -1 || fLog->GetDACValues(digi->bid(), rrun, dac_values) != 0){
-	  fLog->Entry(MongoLog::Warning, "Asked for cached baselines but can't find baseline_reference_run. Fallback to fixed");
-	  BL_MODE = "fixed"; // fallback in case no run set
-	}
-      }
-      else if(BL_MODE != "fixed"){
-	fLog->Entry(MongoLog::Warning, "Received unknown baseline mode. Fallback to fixed");
-	BL_MODE = "fixed";
-      }
-      if(BL_MODE == "fixed"){
-	int BLVal = fOptions->GetInt("baseline_fixed_value", 4000);
-	fLog->Entry(MongoLog::Local, "Loading fixed baselines at value 0x%04x for digi %i",
-		    BLVal, digi->bid());
-	for(unsigned int x=0;x<dac_values.size();x++)
-	  dac_values[x] = BLVal;
-      }
-
-      //int success = 0;
-      std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
-      if(success==-2){
-	fLog->Entry(MongoLog::Warning, "Baselines failed with digi error");
-	fStatus = DAXHelpers::Error;
-	ret = -1;
-        return;
-      }
-      else if(success!=0){
-	fLog->Entry(MongoLog::Warning, "Baselines failed with timeout");
-	fStatus = DAXHelpers::Idle;
-        ret = -1;
-        return;
-      }
-      
-      fLog->Entry(MongoLog::Local, "Digi %i survived baseline mode. Going into register setting",
-		  digi->bid());
-
-      for(auto regi : fOptions->GetRegisters(digi->bid())){
-	unsigned int reg = DAXHelpers::StringToHex(regi.reg);
-	unsigned int val = DAXHelpers::StringToHex(regi.val);
-	success+=digi->WriteRegister(reg, val);
-      }
-      fLog->Entry(MongoLog::Local, "User registers finished for digi %i. Loading DAC.",
+    for(auto regi : fOptions->GetRegisters(digi->bid())){
+      unsigned int reg = DAXHelpers::StringToHex(regi.reg);
+      unsigned int val = DAXHelpers::StringToHex(regi.val);
+      success+=digi->WriteRegister(reg, val);
+    }
+    fLog->Entry(MongoLog::Local, "User registers finished for digi %i. Loading DAC.",
                   digi->bid());
 
-      // Load the baselines you just configured
-      vector<bool> update_dac(16, true);
-      success += digi->LoadDAC(dac_values, update_dac);
-      dacs[digi->bid()] = dac_values;
-      std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;
+    // Load the baselines you just configured
+    vector<bool> update_dac(16, true);
+    success += digi->LoadDAC(dac_values, update_dac);
+    dacs[digi->bid()] = board_dac_cal;
 
-      fLog->Entry(MongoLog::Local,
-	        "DAC finished for %i. Assuming not directly followed by an error, that's a wrap.",
-                digi->bid());
-      if(success!=0){
-	//LOG
-	fStatus = DAXHelpers::Idle;
-	fLog->Entry(MongoLog::Warning, "Failed to configure digitizers.");
-	ret = -1;
-        return;
-      }
-      
-    } // loop over digis per link
+    fLog->Entry(MongoLog::Local,
+	"Setup finished for %i. Assuming not directly followed by an error, that's a wrap.",
+        digi->bid());
+    if(success!=0){
+      //LOG
+      fStatus = DAXHelpers::Idle;
+      fLog->Entry(MongoLog::Warning, "Failed to configure digitizers.");
+      ret = -1;
+      return;
+    }
+  } // loop over digis per link
   ret = 0;
   return;
 }
