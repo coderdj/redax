@@ -14,6 +14,7 @@
 #include <bsoncxx/document/value.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
+#include <mongocxx/collection.hpp>
 #include "DAXHelpers.hh"
 #include "MongoLog.hh"
 
@@ -66,7 +67,7 @@ struct HEVOptions{
 class Options{
 
 public:
-  Options(MongoLog *log, std::string name, mongocxx::collection opts_collection
+  Options(MongoLog *log, std::string name, mongocxx::collection opts_collection,
           mongocxx::collection dac_collection, std::string override_opts);
   ~Options();
 

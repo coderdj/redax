@@ -2,7 +2,7 @@
 
 Options::Options(MongoLog *log, std::string options_name,
           mongocxx::collection opts_collection,
-          mongocxx::dac_collection, std::string override_opts){
+          mongocxx::collection dac_collection, std::string override_opts){
   bson_value = NULL;
   fLog = log;
   fDAC_collection = dac_collection;
@@ -72,7 +72,7 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
   if (GetString("baseline_dac_mode") == "auto") {
     success += Override(bsoncxx::from_json("{\"baseline_dac_mode\" : \"cached\"}"));
     std::time_t now = std::time(nullptr);
-    std::time_t last_calibration_time = doc["_id"].get_oid().get_time_t();
+    std::time_t last_calibration_time = dac_values["_id"].get_oid().value.get_time_t();
 
     fLog->Entry(MongoLog::Local, "%i hours since last BL calibration",
           (now - last_calibration_time)/3600);
@@ -318,17 +318,17 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
     for (auto& kv : this_board_dac) { // (string, vector<double>)
       kv.second.clear();
       for(auto& val : bdoc[kv.first].get_array().value)
-	kv.second.push_back(ele.get_double());
+	kv.second.push_back(val.get_double());
     }
     board_dacs[bid] = this_board_dac;
   }
   return ret;
 }
 
-void Options::UpdateDAC(<std::map<int, std::map<std::string, std::vector<double>>>& all_dacs){
+void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>& all_dacs){
   using namespace bsoncxx::builder::stream;
   std::string run_id = GetString("run_identifier", "default");
-  auto search_doc = document{} << "run" <<  run_identifier << finalize;
+  auto search_doc = document{} << "run" <<  run_id<< finalize;
   auto update_doc = document{};
   update_doc<< "$set" << open_document << "run" << run_id;
   for (auto& bid_map : all_dacs) { // (bid, map<string, vector>)
@@ -345,4 +345,5 @@ void Options::UpdateDAC(<std::map<int, std::map<std::string, std::vector<double>
   mongocxx::options::update options;
   options.upsert(true);
   fDAC_collection.update_one(search_doc.view(), write_doc.view(), options);
+  return;
 }

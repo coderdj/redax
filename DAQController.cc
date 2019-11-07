@@ -37,7 +37,7 @@ std::string DAQController::run_mode(){
 }
 
 int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys,
-		<std::map<int, std::map<std::string, std::vector<double>>>&dac_values){
+		std::map<int, std::map<std::string, std::vector<double>>>&dac_values){
 
   End();
   
@@ -200,7 +200,7 @@ void DAQController::End(){
   fDigitizers.clear();
   fStatus = DAXHelpers::Idle;
 
-  if(fRawDataBuffer !335= NULL){
+  if(fRawDataBuffer != NULL){
     fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
 		fRawDataBuffer->size());	       
     for(unsigned int i=0; i<fRawDataBuffer->size(); i++){
@@ -398,7 +398,7 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     bool calibrate=false;
     int nominal_baseline = fOptions->GetInt("baseline_value", 16000);
     std::map<std::string, std::vector<double>> board_dac_cal;
-    board_dac = dacs.count(digi->bid()) ? dacs[digi->bid()] : dacs[-1];
+    board_dac_cal = dacs.count(digi->bid()) ? dacs[digi->bid()] : dacs[-1];
     if((BL_MODE == "fit") || (BL_MODE == "cached")){
       if (BL_MODE == "fit") {
         fLog->Entry(MongoLog::Local, "You're fitting baselines for digi %i",

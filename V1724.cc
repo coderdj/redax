@@ -303,7 +303,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 
   array<int, 3> DAC_calibration = {60000, 30000, 6000};
   array<u_int16_t, 16> min_dac;
-  u_int16_t max_dac(0xffff);
+  u_int16_t max_dac(0xffff), val0(0), val1(0);
   
   // B = sum(x^2), C = sum(1), F = sum(x)
   double B(std::accumulate(DAC_calibration.begin(), DAC_calibration.end(),
@@ -403,7 +403,6 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 	idx += 4;
 	for (unsigned ch = 0; ch < fNChannels; ch++) {
 	  if (!(channel_mask & (1 << ch))) continue;
-          channel_is_trash = false;
 	  idx += DataFormatDefinition["channel_header_words"];
 	  hist.assign(hist.size(), 0);
 	  for (unsigned w = 0; w < words_per_channel; w++) {
@@ -515,7 +514,6 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 	  [=](int i) {return i < repeat_this_many;}))
     return -1; // something didn't finish
 
-  end_values = dac_values;
   return 0;
 }
 
