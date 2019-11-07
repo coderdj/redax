@@ -1,8 +1,10 @@
 #include "V2718.hh"
+#include "MongoLog.hh"
+#include <CAENVMElib.h>
 
 V2718::V2718(MongoLog *log){
   fLog = log;
-  fBoardHandle=fLink=fCrate=-1; 
+  fBoardHandle=fLink=fCrate=-1;
   fCopts.s_in = fCopts.neutron_veto = fCopts.muon_veto = -1;
   fCopts.led_trigger = fCopts.pulser_freq = -1;
 }
@@ -11,11 +13,10 @@ V2718::V2718(MongoLog *log){
 V2718::~V2718(){
 }
 
-
 int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
-        
+
   fCrate = crate;
-  fLink = link;  	
+  fLink = link;
   fCopts = c_opts;
 
   // Initialising the V2718 module via the specified optical link
@@ -23,11 +24,10 @@ int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
   if(a != cvSuccess){
     fLog->Entry(MongoLog::Error, "Failed to init V2718 with CAEN error: %i", a);
     return -1;
-  }   
+  }
   SendStopSignal(false);
   return 0;
 }
-
 
 int V2718::SendStartSignal(){
 
@@ -53,7 +53,7 @@ int V2718::SendStartSignal(){
   // Set the output register
   unsigned int data = 0x0;
   if(fCopts.neutron_veto)            //n_veto soonTM
-    data+=cvOut4Bit;       
+    data+=cvOut4Bit;
   if(fCopts.led_trigger)
     data+=cvOut2Bit;
   if(fCopts.muon_veto)
@@ -66,7 +66,7 @@ int V2718::SendStartSignal(){
     fLog->Entry(MongoLog::Error, "Couldn't set output register to crate controller");
     return -1;
   }
- 
+
   //Configure the LED pulser
   if(fCopts.pulser_freq > 0){
     // We allow a range from 1Hz to 1MHz, but this is not continuous!
@@ -75,7 +75,7 @@ int V2718::SendStartSignal(){
     CVTimeUnits tu = cvUnit104ms;
     u_int32_t width = 0x1;
     u_int32_t period = 0x0; 
-      
+
      if(fCopts.pulser_freq < 10){
 	if(fCopts.pulser_freq > 5)
 	   period = 0xFF;
@@ -101,7 +101,7 @@ int V2718::SendStartSignal(){
          fLog->Entry(MongoLog::Error, "Given an invalid LED frequency");
 	 return -1;
       }
-    // Set pulser    
+    // Set pulser
     int ret = CAENVME_SetPulserConf(fCrate, cvPulserB, period, width, tu, 0,
 	 		  cvManualSW, cvManualSW);
     ret *= CAENVME_StartPulser(fCrate,cvPulserB); 
@@ -118,11 +118,11 @@ int V2718::SendStopSignal(bool end){
 
   if(fCrate == -1)
     return 0;
-  
+
   // Stop the pulser if it's running
   CAENVME_StopPulser(fCrate, cvPulserB);
   usleep(1000);
- 
+
   // Line 0 : S-IN.
   CAENVME_SetOutputConf(fCrate, cvOutput0, cvDirect, cvActiveHigh, cvManualSW);
   // Line 1 : MV S-IN Logic 
@@ -141,10 +141,10 @@ int V2718::SendStopSignal(bool end){
 
   if(end){
     if(CAENVME_End(fCrate)!= cvSuccess){
-      std::cout << "Failed to end crate" << std::endl;  
+      fLog->Entry(MongoLog::Warning, "Failed to end crate");
     }
     fBoardHandle=fLink=fCrate=-1;
   }
-  return 0;   
+  return 0;
 }
 

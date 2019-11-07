@@ -2,8 +2,12 @@
 #include <string>
 #include <iomanip>
 #include <csignal>
-#include "V1724.hh"
 #include "DAQController.hh"
+#include <thread>
+#include <unistd.h>
+#include "MongoLog.hh"
+#include "Options.hh"
+#include <limits.h>
 
 bool b_run = true;
 
@@ -31,7 +35,7 @@ int main(int argc, char** argv){
     std::cout<<"...exiting"<<std::endl;
     exit(0);
   }
-  string dbname = "xenonnt";
+  std::string dbname = "xenonnt";
   if(argc >= 4)
     dbname = argv[3];
 
@@ -40,13 +44,13 @@ int main(int argc, char** argv){
   gethostname(chostname, HOST_NAME_MAX);
   std::string hostname=chostname;
   hostname+= "_reader_";
-  string sid = argv[1];
+  std::string sid = argv[1];
   hostname += sid;
   std::cout<<"Reader starting with ID: "<<hostname<<std::endl;
   
   // MongoDB Connectivity for control database. Bonus for later:
   // exception wrap the URI parsing and client connection steps
-  string suri = argv[2];  
+  std::string suri = argv[2];  
   mongocxx::uri uri(suri.c_str());
   mongocxx::client client(uri);
   mongocxx::database db = client[dbname];
@@ -113,8 +117,8 @@ int main(int argc, char** argv){
 	std::cout<<"Updated doc"<<std::endl;
 	
 	// Get the command out of the doc
-	string command = "";
-	string user = "";
+	std::string command = "";
+	std::string user = "";
 	try{
 	  command = (doc)["command"].get_utf8().value.to_string();
 	  user = (doc)["user"].get_utf8().value.to_string();
@@ -205,10 +209,10 @@ int main(int argc, char** argv){
 	    bool initialized = false;
 	    
 	    // Mongocxx types confusing so passing json strings around
-	    if(fOptions != NULL){
+	    if(fOptions != NULL) {
 	      delete fOptions;
-              fOptions = NULL;
-            }
+	      fOptions = NULL;
+	    }
 	    fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
 				   options_collection, dac_collection, override_json);
 	    std::vector<int> links;
@@ -227,7 +231,7 @@ int main(int argc, char** argv){
 			    "Cannot start DAQ while readout thread from previous run active. Please perform a reset");
 	    }
 	    else if(!initialized){
-	      cout<<"Skipping readout configuration since init failed"<<std::endl;
+	      std::cout<<"Skipping readout configuration since init failed"<<std::endl;
 	    }
 	    else{
 	      controller->CloseProcessingThreads();

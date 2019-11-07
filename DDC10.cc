@@ -1,8 +1,9 @@
-#include <iostream>
 #include "DDC10.hh"
+#include <iostream>
 #include <tcl8.6/expect.h>
 #include <sys/wait.h>
 #include <math.h>
+#include <string>
 
 
 // Note: Need to make sure that you have tcl8.6 and expect libraries for communication with the DDC10 device
@@ -25,7 +26,7 @@ int DDC10::Initialize(HEVOptions d_opts)
 	exp_loguser = 0;
         
 	// Connect to DDC10 via ssh
-        string temp = "ssh root@";
+        std::string temp = "ssh root@";
         temp += d_opts.address; 
 
         // exp_open spawn ssh and returns a stream.

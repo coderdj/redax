@@ -1,4 +1,10 @@
 #include "CControl_Handler.hh"
+#include "Options.hh"
+#include "MongoLog.hh"
+#include <string>
+#include <iostream>
+#include <limits.h>
+#include <unistd.h>
 
 int main(int argc, char** argv){
   
@@ -108,8 +114,10 @@ int main(int argc, char** argv){
        }	  
               
        //Here are our options
-       if(options != NULL)
+       if(options != NULL) {
 	 delete options;
+	 options = NULL;
+       }
        options = new Options(logger, mode, options_collection, override_json);
 	 
        // Initialise the V2178, V1495 and DDC10...etc.      

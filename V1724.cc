@@ -4,6 +4,12 @@
 #include <algorithm>
 #include <bitset>
 #include <cmath>
+#include <unistd.h>
+#include <cstring>
+#include <iostream>
+#include "MongoLog.hh"
+#include "Options.hh"
+#include <CAENVMElib.h>
 
 
 V1724::V1724(MongoLog  *log, Options *options){
@@ -12,7 +18,6 @@ V1724::V1724(MongoLog  *log, Options *options){
   fBaseAddress=0;
   fLog = log;
 
-  fNChannels = 8;
   fAqCtrlRegister = 0x8100;
   fAqStatusRegister = 0x8104;
   fSwTrigRegister = 0x8108;
@@ -31,9 +36,9 @@ V1724::V1724(MongoLog  *log, Options *options){
     // i.e. the channel size is at index '0'
     {"channel_time_msb_idx", -1},
     {"channel_time_msb_mask", -1},
-    
+
   };
-  
+
 }
 V1724::~V1724(){
   End();
@@ -63,11 +68,10 @@ u_int32_t V1724::GetAcquisitionStatus(){
 
 
 int V1724::Init(int link, int crate, int bid, unsigned int address){
-	  
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
-    cout<<"Failed to init board, error code: "<<a<<", handle: "<<fBoardHandle<<
-      " at link "<<link<<" and bdnum "<<crate<<endl;
+    std::cout<<"Failed to init board, error code: "<<a<<", handle: "<<fBoardHandle<<
+      " at link "<<link<<" and bdnum "<<crate<<std::endl;
     fBoardHandle = -1;
     return -1;
   }
@@ -78,7 +82,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   fCrate = crate;
   fBID = bid;
   fBaseAddress=address;
-  cout<<"Successfully initialized board at "<<fBoardHandle<<endl;
+  std::cout<<"Successfully initialized board at "<<fBoardHandle<<std::endl;
   clock_counter = 0;
   last_time = 0;
   seen_over_15 = false;
@@ -204,8 +208,8 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   // the other, V1724G, has 512 MS/channel = 1MB/channel
   //unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
   unsigned int BLT_SIZE=524288;
-  vector<u_int32_t*> transferred_buffers;
-  vector<u_int32_t> transferred_bytes;
+  std::vector<u_int32_t*> transferred_buffers;
+  std::vector<u_int32_t> transferred_bytes;
 
   int count = 0;
   do{
@@ -291,7 +295,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   u_int32_t words_in_event(0), channel_mask(0), words_per_channel(0), idx(0);
   int channels_in_event(0);
 
-  vector<int> hist(nbins);
+  std::vector<int> hist(nbins);
   // some iterators to handle looping through the histogram
   auto beg_it = hist.begin();
   auto max_it = beg_it;
@@ -301,16 +305,16 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   // +1 for exclusive endpoint
   auto max_end = max_it;
 
-  array<int, 3> DAC_calibration = {60000, 30000, 6000};
-  array<u_int16_t, 16> min_dac;
+  std::array<int, 3> DAC_calibration = {60000, 30000, 6000};
+  std::array<u_int16_t, 16> min_dac;
   u_int16_t max_dac(0xffff), val0(0), val1(0);
   
   // B = sum(x^2), C = sum(1), F = sum(x)
   double B(4536000000), C(DAC_calibration.size()), D(0), E(0), F(96000);
 
-  array<vector<double>, 16> bl_per_channel;
+  std::array<std::vector<double>, 16> bl_per_channel;
 
-  dac_values = vector<u_int16_t>(fNChannels);
+  dac_values = std::vector<u_int16_t>(fNChannels);
   if (!calibrate) { // calibration already done, values are usable
     for (unsigned ch = 0; ch < fNChannels; ch++) {
       if (cal_values["yint"][ch] > 0x3fff) {
@@ -330,8 +334,8 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   for (auto& v : dac_values) msg << " 0x" << v << ",";
   fLog->Entry(MongoLog::Local, msg.str());
 
-  vector<int> channel_finished(fNChannels, 0);
-  vector<bool> update_dac(fNChannels, true);
+  std::vector<int> channel_finished(fNChannels, 0);
+  std::vector<bool> update_dac(fNChannels, true);
 
   u_int32_t* buffer;
   int bytes_read;
@@ -516,7 +520,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 }
 
 
-int V1724::LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac){
+int V1724::LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update_dac){
   // Loads DAC values into registers
   for(unsigned int x=0; x<dac_values.size(); x++){
     if(x>fNChannels || update_dac[x]==false) // oops
@@ -563,8 +567,8 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
     counter++;
     usleep(sleep);
   }
-  std::cout<<"MonitorRegister failed for "<<hex<<reg<<" with mask "<<
-    mask<<" and register value "<<rval<<"... couldn't get "<<val<<dec<<
+  std::cout<<"MonitorRegister failed for "<<std::hex<<reg<<" with mask "<<
+    mask<<" and register value "<<rval<<"... couldn't get "<<val<<std::dec<<
     std::endl;
   return false;
 }

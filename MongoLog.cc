@@ -1,6 +1,6 @@
 #include "MongoLog.hh"
-#include <sstream>
 #include <experimental/filesystem>
+#include <iostream>
 
 MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays){
   fLogLevel = 0;

@@ -15,8 +15,6 @@
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
 #include <mongocxx/collection.hpp>
-#include "DAXHelpers.hh"
-#include "MongoLog.hh"
 
 struct BoardType{
   int link;
@@ -64,6 +62,8 @@ struct HEVOptions{
 
 };
 
+class MongoLog;
+
 class Options{
 
 public:
@@ -90,7 +90,6 @@ public:
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
 private:
-  DAXHelpers *fHelper;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   MongoLog *fLog;

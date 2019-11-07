@@ -1,15 +1,16 @@
 #ifndef _MONGOLOG_HH_
 #define _MONGOLOG_HH_
 
-#include <iostream>
 #include <unistd.h>
-#include <limits.h>
 #include <sstream>
 #include <fstream>
 #include <iomanip>
 #include <cstdarg>
 #include <cstring>
 #include <mutex>
+#include <string>
+#include <map>
+#include <vector>
 
 #include <mongocxx/client.hpp>
 #include <mongocxx/uri.hpp>

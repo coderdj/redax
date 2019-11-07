@@ -3,10 +3,17 @@
 
 #include <thread>
 #include <atomic>
-#include "V1724_MV.hh"
-#include "DAXHelpers.hh"
-#include "Options.hh"
-#include "StraxInserter.hh"
+#include <string>
+#include <map>
+#include <vector>
+#include <cstdint>
+#include <mutex>
+
+class StraxInserter;
+class MongoLog;
+class Options;
+class V1724;
+class data_packet;
 
 struct processingThread{
   std::thread *pthread;
@@ -32,7 +39,7 @@ public:
   int buffer_length(){
     return fBufferLength;
   };
-  std::string run_mode();    
+  std::string run_mode();
   
   int Start();
   int Stop();
@@ -54,27 +61,27 @@ public:
   std::map<std::string, int> GetDataFormat();
   
 private:
-  void AppendData(vector<data_packet> &d);
-  void InitLink(vector<V1724*>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
+
+  void AppendData(std::vector<data_packet> &d);
+  void InitLink(std::vector<V1724*>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
   
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;
   std::mutex fBufferMutex;
-  
+
   bool fReadLoop;
   std::vector<data_packet> *fRawDataBuffer;
   int fStatus;
   int fNProcessingThreads;
-  string fHostname;
+  std::string fHostname;
   MongoLog *fLog;
   Options *fOptions;
-  
+
   // For reporting to frontend
   u_int64_t fBufferLength;
   u_int64_t fDatasize;
   std::map<int, std::atomic_ulong> fDataPerDigi;
-  
-  
+
 };
 
 #endif

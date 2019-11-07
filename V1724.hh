@@ -1,18 +1,12 @@
 #ifndef _V1724_HH_
 #define _V1724_HH_
 
-#include <unistd.h>
-#include <cstring>
-
-#include <stdint.h>
-#include <CAENVMElib.h>
+#include <cstdint>
 #include <vector>
+#include <map>
 
-#include <iostream>
-#include "MongoLog.hh"
-#include "Options.hh"
-
-using namespace std;
+class MongoLog;
+class Options;
 
 class V1724{
 
@@ -26,9 +20,9 @@ class V1724{
   unsigned int ReadRegister(unsigned int reg);
   int ConfigureBaselines(std::vector<u_int16_t> &dac_values,
           std::map<std::string, std::vector<double>>& cal_values,
-			 int nominal_value=16000,
-			 int ntries=100,
-             bool calibrate=true);
+			    int nominal_value=16000,
+			    int ntries=100,
+          bool calibrate=true);
   int GetClockCounter(u_int32_t timestamp);
   int End();
 
@@ -36,7 +30,7 @@ class V1724{
     return fBID;
   };
 
-  int LoadDAC(vector<u_int16_t>dac_values, vector<bool> &update_dac);
+  int LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update_dac);
 
   // Acquisition Control
   int SINStart();
@@ -47,7 +41,7 @@ class V1724{
   bool EnsureStopped(int ntries, int sleep);
   u_int32_t GetAcquisitionStatus();
   u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
-  
+
   int fNsPerSample;
   std::map<std::string, int> DataFormatDefinition;
 

@@ -1,20 +1,9 @@
 #ifndef _V2718_HH_
 #define _V2718_HH_
 
-
-#include <CAENVMElib.h>
-#include "MongoLog.hh"
 #include "Options.hh"
 
-//#include <unistd.h>
-//#include <cstring>
-//#include <stdint.h>
-//#include <vector>
-//#include <iostream>
-
-using namespace std;
-
-
+class MongoLog;
 
 class V2718{
  
@@ -40,6 +29,3 @@ private:
 };
 
 #endif
-
-
-

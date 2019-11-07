@@ -1,4 +1,6 @@
 #include "Options.hh"
+#include "DAXHelpers.hh"
+#include "MongoLog.hh"
 
 Options::Options(MongoLog *log, std::string options_name,
           mongocxx::collection opts_collection,
@@ -12,8 +14,10 @@ Options::Options(MongoLog *log, std::string options_name,
 }
 
 Options::~Options(){
-  if(bson_value != NULL)
+  if(bson_value != NULL) {
     delete bson_value;
+    bson_value = NULL;
+  }
 }
 
 std::string Options::ExportToString(){
@@ -31,8 +35,10 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
     fLog->Entry(MongoLog::Warning, "Failed to find your options file '%s' in DB", name);
     return -1;
   }
-  if(bson_value != NULL)
+  if(bson_value != NULL) {
     delete bson_value;
+    bson_value = NULL;
+  }
   bson_value = new bsoncxx::document::value((*trydoc).view());
   bson_options = bson_value->view();
   

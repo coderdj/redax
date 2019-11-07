@@ -1,4 +1,6 @@
 #include "V1724_MV.hh"
+#include "MongoLog.hh"
+#include "Options.hh"
 
 V1724_MV::V1724_MV(MongoLog *log, Options *options)
   :V1724(log, options){
