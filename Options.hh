@@ -14,6 +14,7 @@
 #include <bsoncxx/document/value.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
+#include <mongocxx/collection.hpp>
 #include "DAXHelpers.hh"
 #include "MongoLog.hh"
 
@@ -67,11 +68,11 @@ class Options{
 
 public:
   Options(MongoLog *log, std::string name, mongocxx::collection opts_collection,
-	  std::string override_opts);
+          mongocxx::collection dac_collection, std::string override_opts);
   ~Options();
 
   int Load(std::string name, mongocxx::collection opts_collection,
-	   std::string override_opts);
+          mongocxx::collection dac_collection, std::string override_opts);
   int Override(bsoncxx::document::view override_opts);
   std::string ExportToString();
   
@@ -81,16 +82,21 @@ public:
 
   std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
   std::vector<RegisterType> GetRegisters(int board=-1);
+  int GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs);
   int GetCrateOpt(CrateOptions &ret);
   int GetHEVOpt(HEVOptions &ret);
   int GetChannel(int bid, int cid);
   int GetNestedInt(std::string path, int default_value);
+
+  void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
 private:
-  std::string defaultPath = "defaults/daxOptions.json";
   DAXHelpers *fHelper;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   MongoLog *fLog;
+  bsoncxx::document::view dac_values;
+  mongocxx::collection fDAC_collection;
+  int fBLCalibrationPeriod;
 };
 
 #endif

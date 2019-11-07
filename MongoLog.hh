@@ -58,8 +58,7 @@ public:
   
   int  Initialize(std::string connection_string,
 		  std::string db, std::string collection,
-		  std::string host, std::string dac_collection="",
-		  bool debug=false);
+		  std::string host, bool debug=false);
 
   const static int Debug   = 0;  // Verbose output
   const static int Message = 1;  // Normal output
@@ -70,21 +69,15 @@ public:
 
   int Entry(int priority,std::string message, ...);
 
-
-  int GetDACValues(int bid, int reference_run,
-		   std::vector<u_int16_t>&dac_values);
-  void UpdateDACDatabase(std::string run_identifier,
-			 std::map<int, std::vector<u_int16_t>>dac_values);
-
 private:
   std::string FormatTime(struct tm* date);
   int Today(struct tm* date);
   int RotateLogFile();
   std::vector<std::string> fPriorities{"LOCAL", "DEBUG", "MESSAGE",
       "WARNING", "ERROR", "FATAL"};
-  std::ofstream fOutfile; 
+  std::ofstream fOutfile;
   mongocxx::client fMongoClient;
-  mongocxx::collection fMongoCollection, fDAC_collection;
+  mongocxx::collection fMongoCollection;
   std::string fHostname;
   std::string fLogFileNameFormat;
   int fLogLevel;

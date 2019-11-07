@@ -24,7 +24,7 @@ public:
   ~DAQController();
 
   int InitializeElectronics(Options *options, std::vector<int> &keys,
-			    std::map<int, std::vector<u_int16_t>>&written_dacs);
+			    std::map<int, std::map<std::string, std::vector<double>>>&dac_values);
 
   int status(){
     return fStatus;
@@ -42,20 +42,20 @@ public:
   int GetData(std::vector <data_packet> *&retVec);
     
   // Static wrapper so we can call ReadData in a std::thread
-  static void* ReadThreadWrapper(void* data, int link);
-  static void* ProcessingThreadWrapper(void* data);
+  void ReadThreadWrapper(void* data, int link);
+  void ProcessingThreadWrapper(void* data);
 
   u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;};
   std::map<int, u_int64_t> GetDataPerDigi();
   bool CheckErrors();
-  void OpenProcessingThreads();
+  int OpenProcessingThreads();
   void CloseProcessingThreads();
 
   std::map<std::string, int> GetDataFormat();
   
 private:
   void AppendData(vector<data_packet> &d);
-  void InitLink(vector<V1724*>&, map<int, vector<u_int16_t>>&, int&);
+  void InitLink(vector<V1724*>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
   
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;
