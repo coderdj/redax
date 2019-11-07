@@ -95,7 +95,6 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   // Seriously. This sleep statement is absolutely vital.
   fLog->Entry(MongoLog::Local, "That felt great, thanks.");
 
-  unsigned i = 0;
   vector<thread*> init_threads;
   init_threads.reserve(fDigitizers.size());
   vector<int> rets;
@@ -104,11 +103,9 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   for( auto& link : fDigitizers ) {
     rets.push_back(1);
     init_threads.push_back(new thread(&DAQController::InitLink, this,
-	  std::ref(link.second), std::ref(dac_values), std::ref(rets[i])));
-    i++;
-
+	  std::ref(link.second), std::ref(dac_values), std::ref(rets.back())));
   }
-  for (i = 0; i < init_threads.size(); i++) {
+  for (unsigned i = 0; i < init_threads.size(); i++) {
     init_threads[i]->join();
     delete init_threads[i];
   }
@@ -212,13 +209,13 @@ void DAQController::End(){
 
   std::cout<<"Finished end"<<std::endl;
 }
-
+/*
 void* DAQController::ReadThreadWrapper(void* data, int link){
   DAQController *dc = static_cast<DAQController*>(data);
   dc->ReadData(link);
   return dc;
 }  
-
+*/
 void DAQController::ReadData(int link){
   fReadLoop = true;
   
@@ -333,13 +330,13 @@ int DAQController::GetData(std::vector <data_packet> *&retVec){
   return ret;
 }
   
-
+/*
 void* DAQController::ProcessingThreadWrapper(void* data){
   StraxInserter *mi = static_cast<StraxInserter*>(data);
   mi->ReadAndInsertData();
   return data;
 }
-
+*/
 bool DAQController::CheckErrors(){
 
   // This checks for errors from the threads by checking the
@@ -357,18 +354,21 @@ bool DAQController::CheckErrors(){
   return false;
 }
 
-void DAQController::OpenProcessingThreads(){
-
+int DAQController::OpenProcessingThreads(){
+  int ret = 0;
   for(int i=0; i<fNProcessingThreads; i++){
     processingThread p;
     //p.inserter = new MongoInserter();
     p.inserter = new StraxInserter();
-    p.inserter->Initialize(fOptions, fLog, this, fHostname);
-    p.pthread = new std::thread(ProcessingThreadWrapper,
-			       static_cast<void*>(p.inserter));
+    if (p.inserter->Initialize(fOptions, fLog, this, fHostname)) {
+      p.pthread = new std::thread(); // something to delete later
+      ret++;
+    } else
+      p.pthread = new std::thread(&StraxInserter::ReadAndInsertData, p.inserter),
+//			       static_cast<void*>(p.inserter));
     fProcessingThreads.push_back(p);
   }
-
+  return ret;
 }
 
 void DAQController::CloseProcessingThreads(){

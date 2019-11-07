@@ -233,12 +233,18 @@ int main(int argc, char** argv){
 	      controller->CloseProcessingThreads();
 	      for(unsigned int i=0; i<links.size(); i++){
 		std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
-		controller->OpenProcessingThreads(); // open nprocessingthreads per link
+		if (controller->OpenProcessingThreads()) {
+		  // open nprocessingthreads per link
+		  logger->Entry(MongoLog::Warning, "Could not open processing threads!");
+		  // fail somehow?
+		  controller->CloseProcessingThreads();
+		  throw std::runtime_error("Error while arming");
+		}
 		std:: thread *readoutThread = new std::thread
 		  (
-		   DAQController::ReadThreadWrapper,
-		   (static_cast<void*>(controller)), links[i]
-		   );
+		   &DAQController::ReadData, controller, links[i]);
+//		   (static_cast<void*>(controller)), links[i]
+//		   );
 		readoutThreads.push_back(readoutThread);
 	      }
 	    }

@@ -42,13 +42,13 @@ public:
   int GetData(std::vector <data_packet> *&retVec);
     
   // Static wrapper so we can call ReadData in a std::thread
-  static void* ReadThreadWrapper(void* data, int link);
-  static void* ProcessingThreadWrapper(void* data);
+  void ReadThreadWrapper(void* data, int link);
+  void ProcessingThreadWrapper(void* data);
 
   u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;};
   std::map<int, u_int64_t> GetDataPerDigi();
   bool CheckErrors();
-  void OpenProcessingThreads();
+  int OpenProcessingThreads();
   void CloseProcessingThreads();
 
   std::map<std::string, int> GetDataFormat();
