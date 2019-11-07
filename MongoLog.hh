@@ -53,7 +53,7 @@ class MongoLog{
   */
   
 public:
-  MongoLog(bool LocalFileLogging=false);
+  MongoLog(bool LocalFileLogging=false, int DeleteAfterDays=7);
   ~MongoLog();
   
   int  Initialize(std::string connection_string,
@@ -70,14 +70,20 @@ public:
   int Entry(int priority,std::string message, ...);
 
 private:
+  std::string FormatTime(struct tm* date);
+  int Today(struct tm* date);
+  int RotateLogFile();
   std::vector<std::string> fPriorities{"LOCAL", "DEBUG", "MESSAGE",
       "WARNING", "ERROR", "FATAL"};
   std::ofstream fOutfile;
   mongocxx::client fMongoClient;
   mongocxx::collection fMongoCollection;
   std::string fHostname;
+  std::string fLogFileNameFormat;
   int fLogLevel;
   bool fLocalFileLogging;
+  int fDeleteAfterDays;
+  int fToday;
   std::mutex fMutex;
 };
 
