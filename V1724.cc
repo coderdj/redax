@@ -273,8 +273,9 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   
 }
 
-int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
-			      int nominal_value, int ntries){
+int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
+        std::map<std::string, std::vector<double>> &cal_values,
+	int nominal_value, int ntries, bool calibrate){
   // The point of this function is to set the voltage offset per channel such
   // that the baseline is at exactly 16000 (or whatever value is set in the
   // config file). The DAC seems to be a very sensitive thing and there
@@ -282,7 +283,7 @@ int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
   // and tears) throughout the code. Take care if changing things here.
 
   // Initial parameters:
-  int adjustment_threshold = 5; // baseline units
+  int adjustment_threshold = 10; // baseline units
   int repeat_this_many=3;
   int rebin_factor_log = 1;  //log base 2.
   int nbins = 1 << (14 - rebin_factor_log);
@@ -305,18 +306,29 @@ int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
   auto max_end = max_it;
 
   std::array<int, 3> DAC_calibration = {60000, 30000, 6000};
-  std::array<double, 16> calibration_slope; // 16 channel support
-  std::array<double, 16> calibration_intercept;
   std::array<u_int16_t, 16> min_dac;
-  u_int16_t max_dac(0xffff);
+  u_int16_t max_dac(0xffff), val0(0), val1(0);
   
-  // if the calibration points change, these numbers also change
   // B = sum(x^2), C = sum(1), F = sum(x)
-  double B(4536000000.), C(3.), D(0), E(0), F(96000.);
+  double B(4536000000), C(DAC_calibration.size()), D(0), E(0), F(96000);
 
   std::array<std::vector<double>, 16> bl_per_channel;
 
-  std::vector<u_int16_t> dac_values(fNChannels);
+  dac_values = std::vector<u_int16_t>(fNChannels);
+  if (!calibrate) { // calibration already done, values are usable
+    for (unsigned ch = 0; ch < fNChannels; ch++) {
+      if (cal_values["yint"][ch] > 0x3fff) {
+        min_dac[ch] = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
+      } else {
+        min_dac[ch] = 0;
+      }
+      dac_values[ch] = std::clamp(dac_values[ch], min_dac[ch], max_dac);
+      if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
+	  fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to 0x%04x",
+	    fBID, ch, dac_values[ch]);
+      }
+    }
+  }
   std::stringstream msg;
   msg << "Found starting values for digi " << fBID << " BLs:" << std::hex;
   for (auto& v : dac_values) msg << " 0x" << v << ",";
@@ -337,12 +349,13 @@ int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
 		  "Baselines report all channels finished for board %i", fBID);
       break;
     }
+    if ((step < 3) && (!calibrate)) continue;
     fLog->Entry(MongoLog::Local, "Baseline iteration %i/%i for board %i",
 		step, ntries, fBID);
-    if (step < 3)
+    if ((step < 3))
       dac_values.assign(dac_values.size(), DAC_calibration[step]);
     if(LoadDAC(dac_values, update_dac)){
-      fLog->Entry(MongoLog::Error, "Digitizer %i failed to load DAC in baseline calibration", fBID);
+      fLog->Entry(MongoLog::Warning, "Digitizer %i failed to load DAC in baseline calibration", fBID);
       return -2;
     }
     WriteRegister(fAqCtrlRegister,0x4);//x24?
@@ -377,6 +390,10 @@ int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
     while (idx * sizeof(u_int32_t) < bytes_read) {
       if ((buffer[idx]>>28) == 0xA) { // start of header
 	words_in_event = buffer[idx]&0xFFFFFFF;
+        if (words_in_event == 4) {
+          idx += 4;
+          continue;
+        }
 	channel_mask = buffer[idx+1]&0xFF;
 	if (DataFormatDefinition["channel_mask_msb_idx"] != -1) {
 	  // fill in V1730 stuff here
@@ -390,8 +407,11 @@ int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
 	  idx += DataFormatDefinition["channel_header_words"];
 	  hist.assign(hist.size(), 0);
 	  for (unsigned w = 0; w < words_per_channel; w++) {
-	    hist[(buffer[idx+w]&0xFFFF)>>rebin_factor_log]++;
-	    hist[((buffer[idx+w]>>16)&0xFFFF)>>rebin_factor_log]++;
+            val0 = buffer[idx+w]&0xFFFF;
+            val1 = (buffer[idx+w]>>16)&0xFFFF;
+            if (val0 * val1 == 0) continue;
+	    hist[val0>>rebin_factor_log]++;
+	    hist[val1>>rebin_factor_log]++;
 	  }
 	  idx += words_per_channel;
           for (auto it = beg_it; it < end_it; it++)
@@ -423,6 +443,8 @@ int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
 
     if (step < 2) continue;
     if (step == 2) {
+      cal_values["slope"] = std::vector<double>(fNChannels);
+      cal_values["yint"] = std::vector<double>(fNChannels);
       // ****************
       // First: calibrate
       // ****************
@@ -430,18 +452,17 @@ int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
         // basic chi-squared minimization
 	D = E = 0;
         for (int i = 0; i < 3; i++) {
-	        D += DAC_calibration[i]*bl_per_channel[ch][i];
+	  D += DAC_calibration[i]*bl_per_channel[ch][i];
           E += bl_per_channel[ch][i];
-
 	}
-    calibration_slope[ch] = (C*D-E*F)/(B*C-F*F);
-	  calibration_intercept[ch] = (B*E-D*F)/(B*C-F*F);
-        fLog->Entry(MongoLog::Debug, "Board %i channel %i baseline calibration: %.3f/%.1f",
-	  fBID, ch, calibration_slope[ch], calibration_intercept[ch]);
+        cal_values["slope"][ch] = (C*D-E*F)/(B*C-F*F);
+	cal_values["yint"][ch] = (B*E-D*F)/(B*C-F*F);
+        fLog->Entry(MongoLog::Debug, "Board %i ch %i baseline calibration: %.3f/%.1f",
+	  fBID, ch, cal_values["slope"][ch], cal_values["yint"][ch]);
 
-        dac_values[ch] = (nominal_value - calibration_intercept[ch])/calibration_slope[ch];
-	if (calibration_intercept[ch] > 0x3fff) {
-          min_dac[ch] = (0x3fff - calibration_intercept[ch])/calibration_slope[ch];
+        dac_values[ch] = (nominal_value - cal_values["yint"][ch])/cal_values["slope"][ch];
+	if (cal_values["yint"][ch] > 0x3fff) {
+          min_dac[ch] = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
 	} else {
           min_dac[ch] = 0;
 	}
@@ -468,7 +489,7 @@ int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
 	  update_dac[ch] = true;
 	}
 
-	int adjustment = off_by * calibration_slope[ch];
+	int adjustment = off_by * cal_values["slope"][ch];
 	if (abs(adjustment) < min_adjustment)
 	  adjustment = std::copysign(min_adjustment, adjustment);
 	fLog->Entry(MongoLog::Local, "Board %i channel %i dac %04x bl %.1f adjust %i iter %i",
@@ -495,7 +516,6 @@ int V1724::ConfigureBaselines(std::vector <u_int16_t> &end_values,
 	  [=](int i) {return i < repeat_this_many;}))
     return -1; // something didn't finish
 
-  end_values = dac_values;
   return 0;
 }
 
