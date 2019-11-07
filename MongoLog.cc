@@ -117,6 +117,7 @@ int MongoLog::Entry(int priority, std::string message, ...){
     catch(const std::exception &e){
       std::cout<<"Failed to insert log message "<<message<<" ("<<
 	priority<<")"<<std::endl;
+      fMutex.unlock();
       return -1;
     }
   }
@@ -128,11 +129,10 @@ int MongoLog::Entry(int priority, std::string message, ...){
 	    <<"]: "<<message<<std::endl;
   std::cout << msg.str();
   if(fLocalFileLogging){
-    fMutex.lock();
     if (Today(&tm) != fToday) RotateLogFile();
     fOutfile<<msg.str();
-    fMutex.unlock();
   }
+  fMutex.unlock();
 
   return 0;
 }
