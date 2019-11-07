@@ -306,10 +306,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   u_int16_t max_dac(0xffff), val0(0), val1(0);
   
   // B = sum(x^2), C = sum(1), F = sum(x)
-  double B(std::accumulate(DAC_calibration.begin(), DAC_calibration.end(),
-              0, [](double tot, double v){return std::move(tot) + v*v;})),
-          C(DAC_calibration.size()), D(0), E(0),
-          F(std::accumulate(DAC_calibration.begin(), DAC_calibration.end(), 0));
+  double B(4536000000), C(DAC_calibration.size()), D(0), E(0), F(96000);
 
   array<vector<double>, 16> bl_per_channel;
 
@@ -442,6 +439,8 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 
     if (step < 2) continue;
     if (step == 2) {
+      cal_values["slope"] = std::vector<double>(fNChannels);
+      cal_values["yint"] = std::vector<double>(fNChannels);
       // ****************
       // First: calibrate
       // ****************
@@ -449,17 +448,16 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
         // basic chi-squared minimization
 	D = E = 0;
         for (int i = 0; i < 3; i++) {
-	        D += DAC_calibration[i]*bl_per_channel[ch][i];
+	  D += DAC_calibration[i]*bl_per_channel[ch][i];
           E += bl_per_channel[ch][i];
-
 	}
-          cal_values["slope"][ch] = (C*D-E*F)/(B*C-F*F);
-	  cal_values["yint"][ch] = (B*E-D*F)/(B*C-F*F);
-        fLog->Entry(MongoLog::Debug, "Board %i channel %i baseline calibration: %.3f/%d",
+        cal_values["slope"][ch] = (C*D-E*F)/(B*C-F*F);
+	cal_values["yint"][ch] = (B*E-D*F)/(B*C-F*F);
+        fLog->Entry(MongoLog::Debug, "Board %i ch %i baseline calibration: %.3f/%.1f",
 	  fBID, ch, cal_values["slope"][ch], cal_values["yint"][ch]);
 
         dac_values[ch] = (nominal_value - cal_values["yint"][ch])/cal_values["slope"][ch];
-	if (cal_values["int"][ch] > 0x3fff) {
+	if (cal_values["yint"][ch] > 0x3fff) {
           min_dac[ch] = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
 	} else {
           min_dac[ch] = 0;

@@ -66,8 +66,12 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
   opts.sort(sort_order.view());
   auto cursor = dac_collection.find({}, opts);
   auto doc = cursor.begin();
-  if(doc==cursor.end()) // No docs
-    return -1;
+  if(doc==cursor.end()) {// No docs
+    fLog->Entry(MongoLog::Debug,"No baseline calibration? You must be new");
+    std::string bl_mode = GetString("baseline_dac_mode");
+    if ((bl_mode == "auto") || (bl_mode == "cached"))
+      Override(bsoncxx::from_json("{\"baseline_dac_mode\" : \"fit\"}"));
+  }
   dac_values = *doc;
   if (GetString("baseline_dac_mode") == "auto") {
     success += Override(bsoncxx::from_json("{\"baseline_dac_mode\" : \"cached\"}"));
@@ -124,7 +128,7 @@ long int Options::GetLongInt(std::string path, long int default_value){
     return bson_options[path.c_str()].get_int64();
   }
   catch (const std::exception &e){
-    std::cout<<e.what()<<std::endl;
+    //std::cout<<e.what()<<std::endl;
     
     // Some APIs autoconvert big ints to doubles. Why? I don't know.
     // But we can handle this here rather than chase those silly things
@@ -133,6 +137,7 @@ long int Options::GetLongInt(std::string path, long int default_value){
       return (long int)(bson_options[path.c_str()].get_double());
     }
     catch(const std::exception &e){
+      std::cout<<"Using default value for "<<path<<std::endl;
       return default_value;
     }
   }  
@@ -146,8 +151,8 @@ int Options::GetInt(std::string path, int default_value){
   }
   catch (const std::exception &e){
     //LOG
-    std::cout<<"Exception: "<< e.what()<<std::endl;
-    return default_value;    
+    std::cout<<"Using default value for "<<path<<std::endl;
+    return default_value;
   }
   return -1;  
 }
@@ -180,7 +185,7 @@ std::string Options::GetString(std::string path, std::string default_value){
   }
   catch (const std::exception &e){
     //LOG
-    std::cout<< "Exception: "<< e.what()<<std::endl;
+    std::cout<<"Using default value for "<<path<<std::endl;
     return default_value;
   }  
   return "";
@@ -341,6 +346,7 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
     }
     update_doc << close_document;
   }
+  update_doc << close_document;
   auto write_doc = update_doc<<finalize;
   mongocxx::options::update options;
   options.upsert(true);
