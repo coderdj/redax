@@ -24,9 +24,11 @@ class V1724{
   int64_t ReadMBLT(u_int32_t *&buffer);
   int WriteRegister(unsigned int reg, unsigned int value);
   unsigned int ReadRegister(unsigned int reg);
-  int ConfigureBaselines(vector <u_int16_t> &end_values,
+  int ConfigureBaselines(std::vector<u_int16_t> &dac_values,
+          std::map<std::string, std::vector<double>>& cal_values,
 			 int nominal_value=16000,
-			 int ntries=100);
+			 int ntries=100,
+             bool calibrate=true);
   int GetClockCounter(u_int32_t timestamp);
   int End();
 
