@@ -112,7 +112,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   for( auto& link : fDigitizers ) {
     rets.push_back(1);
     init_threads.push_back(new std::thread(&DAQController::InitLink, this,
-	  std::ref(link.second), std::ref(written_dacs), std::ref(rets.back())));
+	  std::ref(link.second), std::ref(dac_values), std::ref(rets.back())));
   }
   for (unsigned i = 0; i < init_threads.size(); i++) {
     init_threads[i]->join();
@@ -393,7 +393,7 @@ void DAQController::CloseProcessingThreads(){
 }
 
 void DAQController::InitLink(std::vector<V1724*>& digis,
-    std::map<int, std::map<std::string, vector<double>>>& dacs, int& ret) {
+    std::map<int, std::map<std::string, std::vector<double>>>& dacs, int& ret) {
   for(auto digi : digis){
     fLog->Entry(MongoLog::Local, "Beginning specific init for board %i", digi->bid());
 
@@ -472,7 +472,7 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
       // Load the baselines you just configured
       std::vector<bool> update_dac(16, true);
       success += digi->LoadDAC(dac_values, update_dac);
-      dacs[digi->bid()] = dac_values;
+      dacs[digi->bid()] = board_dac_cal;
       std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;
 
       fLog->Entry(MongoLog::Local,
