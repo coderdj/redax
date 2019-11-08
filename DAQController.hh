@@ -79,7 +79,7 @@ private:
   Options *fOptions;
 
   // For reporting to frontend
-  u_int64_t fBufferLength;
+  std::atomic_uint64_t fBufferLength;
   u_int64_t fDatasize;
   std::map<int, std::atomic_ulong> fDataPerDigi;
 

@@ -194,9 +194,9 @@ int DAQController::Stop(){
 }
 void DAQController::End(){
   Stop();
-  std::cout<<"Closing Processing Threads"<<std::endl;
+  fLog->Entry(MongoLog::Local, "Closing Processing Threads");
   CloseProcessingThreads();
-  std::cout<<"Closing Digitizers"<<std::endl;
+  fLog->Entry(MongoLog::Local, "Closing Digitizers");
   for( auto const& link : fDigitizers ){    
     for(auto digi : link.second){
       digi->End();
@@ -211,6 +211,7 @@ void DAQController::End(){
 		fRawDataBuffer->size());	       
     for(unsigned int i=0; i<fRawDataBuffer->size(); i++){
       delete[] (*fRawDataBuffer)[i].buff;
+      (*fRawDataBuffer)[i].buff = NULL;
     }
     delete fRawDataBuffer;
     fRawDataBuffer = NULL;
@@ -229,17 +230,18 @@ void DAQController::ReadData(int link){
   fReadLoop = true;
   
   // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
+  fBufferMutex.lock();
   if(fRawDataBuffer != NULL){
     fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
-    fBufferMutex.lock();
     for(unsigned int x=0;x<fRawDataBuffer->size(); x++){
       delete[] (*fRawDataBuffer)[x].buff;
+      (*fRawDataBuffer)[x].buff = NULL;
     }
     delete fRawDataBuffer;
     fBufferLength=0;
     fRawDataBuffer = NULL;
-    fBufferMutex.unlock();
   }
+  fBufferMutex.unlock();
   
   u_int32_t lastRead = 0; // bytes read in last cycle. make sure we clear digitizers at run stop
   long int readcycler = 0;
@@ -265,8 +267,10 @@ void DAQController::ReadData(int link){
       
       if(d.size<0){
 	//LOG ERROR
-	if(d.buff!=NULL)
+	if(d.buff!=NULL){
 	  delete[] d.buff;
+          d.buff = NULL;
+        }
 	break;
       }
       if(d.size>0){
