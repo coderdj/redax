@@ -407,7 +407,9 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     bool calibrate=false;
     int nominal_baseline = fOptions->GetInt("baseline_value", 16000);
     std::map<std::string, std::vector<double>> board_dac_cal;
+    fMapMutex.lock();
     board_dac_cal = dacs.count(digi->bid()) ? dacs[digi->bid()] : dacs[-1];
+    fMapMutex.unlock();
     if((BL_MODE == "fit") || (BL_MODE == "cached")){
       if (BL_MODE == "fit") {
         fLog->Entry(MongoLog::Local, "You're fitting baselines for digi %i",

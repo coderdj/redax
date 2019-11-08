@@ -68,6 +68,7 @@ private:
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;
   std::mutex fBufferMutex;
+  std::mutex fMapMutex;
 
   bool fReadLoop;
   std::vector<data_packet> *fRawDataBuffer;
