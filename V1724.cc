@@ -70,8 +70,8 @@ u_int32_t V1724::GetAcquisitionStatus(){
 int V1724::Init(int link, int crate, int bid, unsigned int address){
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
-    std::cout<<"Failed to init board, error code: "<<a<<", handle: "<<fBoardHandle<<
-      " at link "<<link<<" and bdnum "<<crate<<std::endl;
+    fLog->Entry(MongoLog::Warning, "Failed to init board, error %i handle %i link %i bdnum %i",
+            a, fBoardHandle, link, crate);
     fBoardHandle = -1;
     return -1;
   }
@@ -82,7 +82,6 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   fCrate = crate;
   fBID = bid;
   fBaseAddress=address;
-  std::cout<<"Successfully initialized board at "<<fBoardHandle<<std::endl;
   clock_counter = 0;
   last_time = 0;
   seen_over_15 = false;
@@ -92,7 +91,6 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
 
 u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
   u_int32_t idx = 0;
-  //std::cout<<"Size is: "<<size<<std::endl;
   while(idx < size/sizeof(u_int32_t)){
     if(buff[idx]>>28==0xA)
       return buff[idx+3]&0x7FFFFFFF;
@@ -169,7 +167,6 @@ int V1724::GetClockCounter(u_int32_t timestamp){
 }
 
 int V1724::WriteRegister(unsigned int reg, unsigned int value){
-  //std::cout<<"Writing reg:val: "<<hex<<reg<<":"<<value<<dec<<std::endl;
   u_int32_t write=0;
   write+=value;
   if(CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg,
@@ -424,8 +421,8 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
           counts_total = std::accumulate(beg_it, end_it, 0.);
           counts_around_max = std::accumulate(max_start, max_end, 0.);
 	  if (counts_around_max/counts_total < fraction_around_max) {
-	    std::cout << (int)counts_around_max << " counts out of " << (int)counts_total
-	      << " ch " << ch << " max_i " << ((max_it - beg_it)<<rebin_factor_log) << "\n";
+	    fLog->Entry(MongoLog::Local, "%d out of %d are around max, ch %i max_i %i",
+                counts_around_max,counts_total,ch,(max_it - beg_it)<<rebin_factor_log);
 	    if (step > 2) continue; // we can't drop calibration steps
 	  }
           baseline = 0;
@@ -567,8 +564,7 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
     counter++;
     usleep(sleep);
   }
-  std::cout<<"MonitorRegister failed for "<<std::hex<<reg<<" with mask "<<
-    mask<<" and register value "<<rval<<"... couldn't get "<<val<<std::dec<<
-    std::endl;
+  fLog->Entry(MongoLog::Warning,"MonitorRegister failed for 0x%04x with mask 0x%04x and register value 0x%04x, wanted 0x%04x",
+          reg, mask, rval,val);
   return false;
 }

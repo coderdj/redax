@@ -250,7 +250,8 @@ void DAQController::ReadData(int link){
       if(readcycler%10000==0){
 	readcycler=0;
 	u_int32_t data = fDigitizers[link][x]->GetAcquisitionStatus();
-	std::cout<<"Board "<<fDigitizers[link][x]->bid()<<" has status "<<std::hex<<data<<std::dec<<std::endl;
+        fLog->Entry(MongoLog::Local, "Board %i has status 0x%04x",
+            fDigitizers[link][x]->bid(), data);
       }
       data_packet d;
       d.buff=NULL;
@@ -443,7 +444,7 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     }
 
     //int success = 0;
-    std::cout<<"Baselines finished for digi "<<digi->bid()<<std::endl;
+    fLog->Entry(MongoLog::Local, "Baselines finished for digi %i",digi->bid());
     if(success==-2){
       fLog->Entry(MongoLog::Warning, "Baselines failed with digi error");
       fStatus = DAXHelpers::Error;
@@ -472,7 +473,6 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
       std::vector<bool> update_dac(16, true);
       success += digi->LoadDAC(dac_values, update_dac);
       dacs[digi->bid()] = board_dac_cal;
-      std::cout<<"Configuration finished for digi "<<digi->bid()<<std::endl;
 
       fLog->Entry(MongoLog::Local,
 	        "DAC finished for %i. Assuming not directly followed by an error, that's a wrap.",

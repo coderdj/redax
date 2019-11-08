@@ -396,7 +396,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     std::string filename = fHostname;
     write_path /= "THE_END";
     if(!std::experimental::filesystem::exists(write_path)){
-      std::cout<<"Creating END directory at "<<write_path<<std::endl;
+      fLog->Entry(MongoLog::Local,"Creating END directory at %s",write_path);
       try{
 	std::experimental::filesystem::create_directory(write_path);
       }

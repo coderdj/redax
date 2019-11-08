@@ -339,12 +339,11 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
 void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>& all_dacs){
   using namespace bsoncxx::builder::stream;
   std::string run_id = GetString("run_identifier", "default");
-  std::cout << "Updating dac calibration\n";
+  fLog->Entry(MongoLog::Local, "Saving DAC calibration");
   auto search_doc = document{} << "run" <<  run_id<< finalize;
   auto update_doc = document{};
   update_doc<< "$set" << open_document << "run" << run_id;
   for (auto& bid_map : all_dacs) { // (bid, map<string, vector>)
-    std::cout << "Board: " << bid_map.first << '\n';
     update_doc << std::to_string(bid_map.first) << open_document;
     for(auto& str_vec : bid_map.second){ // (string, vector)
       update_doc << str_vec.first << open_array <<
