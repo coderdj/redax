@@ -29,6 +29,7 @@ int main(int argc, char** argv){
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
+  mongocxx::collection dac_collection = db["dac_calibration"];
 
   // Build a unique name for this process
   // we trust that the user has given {ID} uniquely
@@ -41,8 +42,7 @@ int main(int argc, char** argv){
 
   // Logging
   MongoLog *logger = new MongoLog();
-  int ret = logger->Initialize(mongo_uri, dbname, "log", hostname, 
-			       "", true);
+  int ret = logger->Initialize(mongo_uri, dbname, "log", hostname, true);
   if(ret!=0){
     std::cout<<"Log couldn't be initialized. Exiting."<<std::endl;
     exit(-1);
@@ -118,7 +118,7 @@ int main(int argc, char** argv){
 	 delete options;
 	 options = NULL;
        }
-       options = new Options(logger, mode, options_collection, override_json);
+       options = new Options(logger, mode, options_collection, dac_collection, override_json);
 	 
        // Initialise the V2178, V1495 and DDC10...etc.      
        if(fHandler->DeviceArm(run, options) != 0){
