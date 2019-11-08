@@ -11,6 +11,8 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <atomic>
+#include <thread>
 
 #include <mongocxx/client.hpp>
 #include <mongocxx/uri.hpp>
@@ -45,7 +47,7 @@
    FATAL: reserved for something to write out right before crashing and 
    dying. Like a last gasp before giving up the ghost. These are the words
    on your process' tombstone. An operator shouldn't expect to find a running
-   process.
+   *process.
 */
 
 class MongoLog{
@@ -71,6 +73,7 @@ public:
   int Entry(int priority,std::string message, ...);
 
 private:
+  void Flusher();
   std::string FormatTime(struct tm* date);
   int Today(struct tm* date);
   int RotateLogFile();
@@ -86,6 +89,9 @@ private:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
+  std::thread fFlushThread;
+  std::atomic_bool fFlush;
+  int fFlushPeriod;
 };
 
 #endif

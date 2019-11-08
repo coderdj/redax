@@ -1,21 +1,36 @@
 #include "MongoLog.hh"
 #include <experimental/filesystem>
 #include <iostream>
+#include <chrono>
 
 MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays){
   fLogLevel = 0;
   fHostname = "_host_not_set";
   fLogFileNameFormat = "%Y%m%d.log";
   fDeleteAfterDays = DeleteAfterDays;
+  fFlushPeriod = 5; // seconds
 
   if(LocalFileLogging){
     std::cout<<"Configured WITH local file logging."<<std::endl;
     RotateLogFile();
   }
   fLocalFileLogging = LocalFileLogging;
+  fFlush = true;
+  fFlushThread = std::thread(&MongoLog::Flusher, this);
 }
 MongoLog::~MongoLog(){
+  fFlush = false;
+  fFlushThread.join();
   fOutfile.close();
+}
+
+void MongoLog::Flusher() {
+  while (fFlush == true) {
+    std::this_thread::wait_for(std::chrono::seconds(fFlushPeriod));
+    fMutex.lock();
+    fOutfile << std::flush;
+    fMutex.unlock();
+  }
 }
 
 std::string MongoLog::FormatTime(struct tm* date) {

@@ -134,8 +134,6 @@ long int Options::GetLongInt(std::string path, long int default_value){
     return bson_options[path.c_str()].get_int64();
   }
   catch (const std::exception &e){
-    //std::cout<<e.what()<<std::endl;
-    
     // Some APIs autoconvert big ints to doubles. Why? I don't know.
     // But we can handle this here rather than chase those silly things
     // around in each implementation.
@@ -143,7 +141,7 @@ long int Options::GetLongInt(std::string path, long int default_value){
       return (long int)(bson_options[path.c_str()].get_double());
     }
     catch(const std::exception &e){
-      std::cout<<"Using default value for "<<path<<std::endl;
+      fLog->Entry(MongoLog::Local, "Using default value for %s", path);
       return default_value;
     }
   }  
@@ -157,7 +155,7 @@ int Options::GetInt(std::string path, int default_value){
   }
   catch (const std::exception &e){
     //LOG
-    std::cout<<"Using default value for "<<path<<std::endl;
+    fLog->Entry(MongoLog::Local, "Using default value for %s", path);
     return default_value;
   }
   return -1;  
@@ -178,8 +176,7 @@ int Options::GetNestedInt(std::string path, int default_value){
       val = val[fields[i].c_str()];
     return val.get_int32();
   }catch(const std::exception &e){
-    std::cout<<"Exception: "<<e.what()<<std::endl;
-    std::cout<<"Failed to find path "<<path<<std::endl;
+    fLog->Entry("Exception while finding %s: %s",path,e.what());
     return default_value;
   }
   return 0;
@@ -191,7 +188,7 @@ std::string Options::GetString(std::string path, std::string default_value){
   }
   catch (const std::exception &e){
     //LOG
-    std::cout<<"Using default value for "<<path<<std::endl;
+    fLog->Entry("Using default value for %s", path);
     return default_value;
   }  
   return "";
@@ -260,7 +257,7 @@ int Options::GetCrateOpt(CrateOptions &ret){
     ret.neutron_veto = bson_options["V2718"]["neutron_veto"].get_int32().value;
     ret.led_trigger = bson_options["V2718"]["led_trigger"].get_int32().value;
   }catch(std::exception &E){
-    std::cout<<"Exception getting ccontroller opts: "<<std::endl<<E.what()<<std::endl;
+    fLog->Entry(MongoLog::Local, "Exception getting ccontroller opts: %s", E.what());
     return -1;
   }
   return 0;
@@ -272,7 +269,7 @@ int Options::GetChannel(int bid, int cid){
     return bson_options["channels"][boardstring][cid].get_int32().value;
   }
   catch(std::exception& e){
-    std::cout<<"Failed to look up "<<bid<<" "<<cid<<std::endl;
+    fLog->Entry(MongoLog::Local, "Failed to look up board %i ch %i", bid, cid);
     return -1;
   }
 }
@@ -298,7 +295,7 @@ int Options::GetHEVOpt(HEVOptions &ret){
     ret.address = bson_options["DDC10"]["address"].get_utf8().value.to_string();
     ret.required = bson_options["DDC10"]["required"].get_utf8().value.to_string();
   }catch(std::exception &E){
-    std::cout<<"Exception getting DDC10 opts: "<<std::endl<<E.what()<<std::endl;
+    fLog->Entry(MongoLog::Local, "Exception getting DDC10 opts: %s",E.what());
     return -1;
   }
   return 0;
