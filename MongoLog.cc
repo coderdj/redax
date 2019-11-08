@@ -26,7 +26,7 @@ MongoLog::~MongoLog(){
 
 void MongoLog::Flusher() {
   while (fFlush == true) {
-    std::this_thread::wait_for(std::chrono::seconds(fFlushPeriod));
+    std::this_thread::sleep_for(std::chrono::seconds(fFlushPeriod));
     fMutex.lock();
     fOutfile << std::flush;
     fMutex.unlock();

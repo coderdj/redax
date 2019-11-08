@@ -141,7 +141,7 @@ long int Options::GetLongInt(std::string path, long int default_value){
       return (long int)(bson_options[path.c_str()].get_double());
     }
     catch(const std::exception &e){
-      fLog->Entry(MongoLog::Local, "Using default value for %s", path);
+      fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
       return default_value;
     }
   }  
@@ -155,7 +155,7 @@ int Options::GetInt(std::string path, int default_value){
   }
   catch (const std::exception &e){
     //LOG
-    fLog->Entry(MongoLog::Local, "Using default value for %s", path);
+    fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
     return default_value;
   }
   return -1;  
@@ -176,7 +176,7 @@ int Options::GetNestedInt(std::string path, int default_value){
       val = val[fields[i].c_str()];
     return val.get_int32();
   }catch(const std::exception &e){
-    fLog->Entry("Exception while finding %s: %s",path,e.what());
+    fLog->Entry(MongoLog::Local, "Exception while finding %s: %s",path.c_str(),e.what());
     return default_value;
   }
   return 0;
@@ -188,7 +188,7 @@ std::string Options::GetString(std::string path, std::string default_value){
   }
   catch (const std::exception &e){
     //LOG
-    fLog->Entry("Using default value for %s", path);
+    fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
     return default_value;
   }  
   return "";
