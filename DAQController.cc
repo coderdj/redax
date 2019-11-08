@@ -367,13 +367,12 @@ int DAQController::OpenProcessingThreads(){
   int ret = 0;
   for(int i=0; i<fNProcessingThreads; i++){
     processingThread p;
-    //p.inserter = new MongoInserter();
     p.inserter = new StraxInserter();
     if (p.inserter->Initialize(fOptions, fLog, this, fHostname)) {
       p.pthread = new std::thread(); // something to delete later
       ret++;
     } else
-      p.pthread = new std::thread(&StraxInserter::ReadAndInsertData, p.inserter),
+      p.pthread = new std::thread(&StraxInserter::ReadAndInsertData, p.inserter);
 //			       static_cast<void*>(p.inserter));
     fProcessingThreads.push_back(p);
   }
