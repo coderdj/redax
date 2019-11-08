@@ -230,13 +230,15 @@ void DAQController::ReadData(int link){
   
   // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
   if(fRawDataBuffer != NULL){
-    fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");	       
+    fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
+    fBufferMutex.lock();
     for(unsigned int x=0;x<fRawDataBuffer->size(); x++){
       delete[] (*fRawDataBuffer)[x].buff;
     }
     delete fRawDataBuffer;
     fBufferLength=0;
     fRawDataBuffer = NULL;
+    fBufferMutex.unlock();
   }
   
   u_int32_t lastRead = 0; // bytes read in last cycle. make sure we clear digitizers at run stop
