@@ -344,6 +344,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   int bytes_read;
 
   int steps_repeated = 0;
+  int max_repeats = 10;
 
   for (int step = 0; step < 3 + ntries; step++) {
     if (std::all_of(channel_finished.begin(), channel_finished.end(),
@@ -386,9 +387,9 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
       delete[] buffer;
       step--;
       steps_repeated++;
-      if (steps_repeated > 5) {
+      if (steps_repeated > max_repeats) {
 	fLog->Entry(MongoLog::Error, "Baselines board %i keeps failing readouts", fBID);
-	return -2;
+	return -1;
       }
       continue;
     }
@@ -399,7 +400,6 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 	words_in_event = buffer[idx]&0xFFFFFFF;
         if (words_in_event == 4) {
           idx += 4;
-          redo_iter = true;
           continue;
         }
 	channel_mask = buffer[idx+1]&0xFF;
@@ -454,9 +454,9 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
       redo_iter=false;
       step--;
       steps_repeated++;
-      if (steps_repeated > 5) {
+      if (steps_repeated > max_repeats) {
 	fLog->Entry(MongoLog::Error, "Baselines board %i keeps failing readouts", fBID);
-	return -2;
+	return -1;
       }
       continue;
     }
