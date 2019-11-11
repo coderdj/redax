@@ -289,8 +289,10 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   int bins_around_max = 3;
   // the counts in these bins must be this fraction of total counts
   double fraction_around_max = 0.8, counts_around_max(0), counts_total(0), baseline(0);
-  u_int32_t words_in_event(0), channel_mask(0), words_per_channel(0), idx(0);
-  int channels_in_event(0);
+  double slope(0), yint(0);
+  u_int32_t words_in_event(0), channel_mask(0), words_per_channel(0);
+  int channels_in_event(0), idx(0);
+  bool redo_iter(false);
 
   std::vector<int> hist(nbins);
   // some iterators to handle looping through the histogram
@@ -303,13 +305,13 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   auto max_end = max_it;
 
   std::array<int, 3> DAC_calibration = {60000, 30000, 6000};
-  std::array<u_int16_t, 16> min_dac;
+  std::vector<u_int16_t> min_dac(fNChannels);
   u_int16_t max_dac(0xffff), val0(0), val1(0);
   
   // B = sum(x^2), C = sum(1), F = sum(x)
   double B(4536000000), C(DAC_calibration.size()), D(0), E(0), F(96000);
 
-  std::array<std::vector<double>, 16> bl_per_channel;
+  std::vector<<std::vector<double>> bl_per_channel(fNChannels, std::vector<double>(3+ntries));
 
   dac_values = std::vector<u_int16_t>(fNChannels);
   if (!calibrate) { // calibration already done, values are usable
@@ -357,7 +359,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
     }
     WriteRegister(fAqCtrlRegister,0x4);//x24?
     if(MonitorRegister(fAqStatusRegister, 0x4, 1000, 1000) != true){
-      fLog->Entry(MongoLog::Warning, "Timed out waiting for acquisition to start in baselines");
+      fLog->Entry(MongoLog::Warning, "Timed out waiting for acquisition to start in baselines for board %i", fBID);
       return -1;
     }
     usleep(5000);
@@ -370,25 +372,30 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
     usleep(5000);
 
     bytes_read = ReadMBLT(buffer);
-    if (bytes_read < 0) return -2;
+    if (bytes_read < 0) {
+        fLog->Entry(MongoLog::Warning, "Baselines for board %i read %i bytes",
+                fBID, bytes_read);
+        return -2;
+    }
     else if ((0<=bytes_read) && (bytes_read<=16)) {
       std::cout << "Buffer undersized ("<<bytes_read<<")\n";
       delete[] buffer;
-      step--;  // repeat this step
+      step--;
       steps_repeated++;
       if (steps_repeated > 5) {
-	fLog->Entry(MongoLog::Error, "Baseline routine keeps failing readouts");
+	fLog->Entry(MongoLog::Error, "Baselines board %i keeps failing readouts", fBID);
 	return -2;
       }
       continue;
     }
     
     idx = 0;
-    while (idx * sizeof(u_int32_t) < bytes_read) {
+    while ((idx * sizeof(u_int32_t) < bytes_read) && (idx >= 0)) {
       if ((buffer[idx]>>28) == 0xA) { // start of header
 	words_in_event = buffer[idx]&0xFFFFFFF;
         if (words_in_event == 4) {
           idx += 4;
+          redo_iter = true;
           continue;
         }
 	channel_mask = buffer[idx+1]&0xFF;
@@ -421,22 +428,34 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
           counts_total = std::accumulate(beg_it, end_it, 0.);
           counts_around_max = std::accumulate(max_start, max_end, 0.);
 	  if (counts_around_max/counts_total < fraction_around_max) {
-	    fLog->Entry(MongoLog::Local, "%d out of %d are around max, ch %i max_i %i",
-                counts_around_max,counts_total,ch,(max_it - beg_it)<<rebin_factor_log);
-	    if (step > 2) continue; // we can't drop calibration steps
+	    fLog->Entry(MongoLog::Local, "Bd %i: %d out of %d are around max, ch %i max_i %i",
+                fBID,counts_around_max,counts_total,ch,(max_it - beg_it)<<rebin_factor_log);
+	    if (step > 2) redo_iter=true; // we can't drop calibration steps
 	  }
+          if (counts_total/words_per_channel < 1.5) // too many zeros
+              redo_iter = true;
           baseline = 0;
           // calculate the weighted average for the baseline
           for (auto it = max_start; it < max_end; it++)
             baseline += ((it - beg_it)<<rebin_factor_log)*(*it);
           baseline /= counts_around_max;
-	  bl_per_channel[ch].push_back(baseline);
+	  bl_per_channel[ch][step] = baseline;
 	} // end of for channels
       } // end of header
       else
 	idx++;
     } // end of while
     delete[] buffer;
+    if (redo_iter) {
+      redo_iter=false;
+      steps--;
+      steps_repeated++;
+      if (steps_repeated > 5) {
+	fLog->Entry(MongoLog::Error, "Baselines board %i keeps failing readouts", fBID);
+	return -2;
+      }
+      continue;
+    }
 
     if (step < 2) continue;
     if (step == 2) {
@@ -452,14 +471,14 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 	  D += DAC_calibration[i]*bl_per_channel[ch][i];
           E += bl_per_channel[ch][i];
 	}
-        cal_values["slope"][ch] = (C*D-E*F)/(B*C-F*F);
-	cal_values["yint"][ch] = (B*E-D*F)/(B*C-F*F);
+        cal_values["slope"][ch] = slope = (C*D-E*F)/(B*C-F*F);
+	cal_values["yint"][ch] = yint = (B*E-D*F)/(B*C-F*F);
         fLog->Entry(MongoLog::Debug, "Board %i ch %i baseline calibration: %.3f/%.1f",
-	  fBID, ch, cal_values["slope"][ch], cal_values["yint"][ch]);
+	  fBID, ch, slope, yint);
 
-        dac_values[ch] = (nominal_value - cal_values["yint"][ch])/cal_values["slope"][ch];
+        dac_values[ch] = (nominal_value - yint)/slope;
 	if (cal_values["yint"][ch] > 0x3fff) {
-          min_dac[ch] = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
+          min_dac[ch] = (0x3fff - yint)/slope;
 	} else {
           min_dac[ch] = 0;
 	}
@@ -475,9 +494,8 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
       // *********
       for (unsigned ch = 0; ch < fNChannels; ch++) {
 	if (channel_finished[ch]>=repeat_this_many) continue;
-	if (bl_per_channel[ch].size() <= DAC_calibration.size()) continue;
 
-	float off_by = nominal_value - bl_per_channel[ch].back();
+	float off_by = nominal_value - bl_per_channel[ch][step];
 	if (abs(off_by) < adjustment_threshold) {
 	  channel_finished[ch]++;
 	  update_dac[ch] = false;
@@ -502,16 +520,12 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
     } // end of if calibrate/fit
   } // end of iteration
 
-  for(unsigned int x=0; x<channel_finished.size(); x++){
-    if(channel_finished[x]<2){ // Be a little more lenient in case it's just starting to converge
-      fLog->Entry(MongoLog::Message,
-		  "Baseline routine did not finish for channel %i (and maybe others)", x);
-      return -1;
-    }
-  }
   if (std::any_of(channel_finished.begin(), channel_finished.end(),
-	  [=](int i) {return i < repeat_this_many;}))
+	  [=](int i) {return i < repeat_this_many;})) {
+    fLog->Entry(MongoLog::Message,
+            "Baselines board %i didn't finish for at least one channel", fBID);
     return -1; // something didn't finish
+  }
 
   return 0;
 }
@@ -520,16 +534,13 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 int V1724::LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update_dac){
   // Loads DAC values into registers
   for(unsigned int x=0; x<dac_values.size(); x++){
-    if(x>fNChannels || update_dac[x]==false) // oops
+    if(x>=fNChannels || update_dac[x]==false) // oops
       continue;
-
-    // Give the DAC time to be set if needed
-    usleep(5000);
 
     // Now write channel DAC values
     if(WriteRegister((fChDACRegister)+(0x100*x), dac_values[x])!=0){
-      fLog->Entry(MongoLog::Error, "Failed writing DAC 0x%04x in channel %i",
-		  dac_values[x], x);
+      fLog->Entry(MongoLog::Error, "Board %i failed writing DAC 0x%04x in channel %i",
+		  fBID, dac_values[x], x);
       return -1;
     }
 
@@ -540,7 +551,6 @@ int V1724::LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update
   // Sleep a bit because the DAC responds kinda slow
   usleep(200000);
   return 0;
-  
 }
 
 int V1724::End(){
@@ -564,7 +574,7 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
     counter++;
     usleep(sleep);
   }
-  fLog->Entry(MongoLog::Warning,"MonitorRegister failed for 0x%04x with mask 0x%04x and register value 0x%04x, wanted 0x%04x",
-          reg, mask, rval,val);
+  fLog->Entry(MongoLog::Warning,"MonitorRegister board %i failed for 0x%04x with mask 0x%04x and register value 0x%04x, wanted 0x%04x",
+          fBID, reg, mask, rval,val);
   return false;
 }

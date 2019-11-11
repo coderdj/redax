@@ -477,10 +477,12 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     fLog->Entry(MongoLog::Local, "User registers finished for digi %i. Loading DAC.",
                   digi->bid());
 
-      // Load the baselines you just configured
-      std::vector<bool> update_dac(16, true);
-      success += digi->LoadDAC(dac_values, update_dac);
-      dacs[digi->bid()] = board_dac_cal;
+    // Load the baselines you just configured
+    std::vector<bool> update_dac(16, true);
+    success += digi->LoadDAC(dac_values, update_dac);
+    fMapMutex.lock();
+    dacs[digi->bid()] = board_dac_cal;
+    fMapMutex.unlock();
 
       fLog->Entry(MongoLog::Local,
 	        "DAC finished for %i. Assuming not directly followed by an error, that's a wrap.",
