@@ -311,7 +311,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   // B = sum(x^2), C = sum(1), F = sum(x)
   double B(4536000000), C(DAC_calibration.size()), D(0), E(0), F(96000);
 
-  std::vector<<std::vector<double>> bl_per_channel(fNChannels, std::vector<double>(3+ntries));
+  std::vector<std::vector<double>> bl_per_channel(fNChannels, std::vector<double>(3+ntries));
 
   dac_values = std::vector<u_int16_t>(fNChannels);
   if (!calibrate) { // calibration already done, values are usable
@@ -448,7 +448,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
     delete[] buffer;
     if (redo_iter) {
       redo_iter=false;
-      steps--;
+      step--;
       steps_repeated++;
       if (steps_repeated > 5) {
 	fLog->Entry(MongoLog::Error, "Baselines board %i keeps failing readouts", fBID);
