@@ -70,12 +70,12 @@ u_int32_t V1724::GetAcquisitionStatus(){
 int V1724::Init(int link, int crate, int bid, unsigned int address){
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
-    fLog->Entry(MongoLog::Warning, "Failed to init board, error %i handle %i link %i bdnum %i",
-            a, fBoardHandle, link, crate);
+    fLog->Entry(MongoLog::Warning, "Board %i failed to init, error %i handle %i link %i bdnum %i",
+            fBID, a, fBoardHandle, link, crate);
     fBoardHandle = -1;
     return -1;
   }
-  fLog->Entry(MongoLog::Debug, "Initialized board %i with handle %i (link/crate)(%i/%i)",
+  fLog->Entry(MongoLog::Debug, "Board %i initialized with handle %i (link/crate)(%i/%i)",
 	      bid, fBoardHandle, link, crate);  
 
   fLink = link;
@@ -159,8 +159,8 @@ int V1724::GetClockCounter(u_int32_t timestamp){
   }
   else{
     fLog->Entry(MongoLog::Warning,
-      "Something odd in your clock counters. t_new: %i, last_time: %i, over_15: %i, under_5: %i",
-		timestamp, last_time, seen_over_15, seen_under_5);
+      "Board %i something odd in your clock counters. t_new: %i, last_time: %i, over_15: %i, under_5: %i",
+		fBID, timestamp, last_time, seen_over_15, seen_under_5);
     // Counter equal to last time, so we're happy and keep the same counter
     return clock_counter;
   }  
@@ -172,8 +172,8 @@ int V1724::WriteRegister(unsigned int reg, unsigned int value){
   if(CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg,
 			&write,cvA32_U_DATA,cvD32) != cvSuccess){
     fLog->Entry(MongoLog::Warning,
-		"Failed to write register 0x%04x to board %i with value %08x (handle %i)",
-		reg, fBID, value, fBoardHandle);
+		"Board %i failed to write register 0x%04x with value %08x (handle %i)",
+		fBID, reg, value, fBoardHandle);
     return -1;
   }
   //fLog->Entry(MongoLog::Local, "Board %i wrote register 0x%04x with value 0x%04x",
@@ -188,8 +188,8 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   if((ret = CAENVME_ReadCycle(fBoardHandle, fBaseAddress+reg, &temp,
 			      cvA32_U_DATA, cvD32)) != cvSuccess){
     fLog->Entry(MongoLog::Warning,
-		"Read returned: %i (ret) 0x%08x (val) for reg 0x%04x on board %i",
-		ret, temp, reg, fBID);
+		"Board %i read returned: %i (ret) 0x%08x (val) for reg 0x%04x",
+		fBID, ret, temp, reg);
     return 0xFFFFFFFF;
   }
   //fLog->Entry(MongoLog::Local, "Board %i read register 0x%04x as value 0x%04x",
@@ -227,7 +227,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
     };
     if( (ret != cvSuccess) && (ret != cvBusError) ){
       fLog->Entry(MongoLog::Error,
-		  "Read error in board %i after %i reads: (%i) and transferred %i bytes this read",
+		  "Board %i read error after %i reads: (%i) and transferred %i bytes this read",
 		  fBID, count, ret, nb);
 
       // Delete all reserved data and fail
@@ -272,7 +272,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
 
 int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
         std::map<std::string, std::vector<double>> &cal_values,
-	int nominal_value, int ntries, bool calibrate){
+	int nominal_value, int ntries, bool &calibrate){
   // The point of this function is to set the voltage offset per channel such
   // that the baseline is at exactly 16000 (or whatever value is set in the
   // config file). The DAC seems to be a very sensitive thing and there
@@ -332,10 +332,6 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
       }
     }
   }
-  std::stringstream msg;
-  msg << "Found starting values for digi " << fBID << " BLs:" << std::hex;
-  for (auto& v : dac_values) msg << " 0x" << v << ",";
-  fLog->Entry(MongoLog::Local, msg.str());
 
   std::vector<int> channel_finished(fNChannels, 0);
   std::vector<bool> update_dac(fNChannels, true);
@@ -350,21 +346,21 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
     if (std::all_of(channel_finished.begin(), channel_finished.end(),
 	  [=](int i) {return i >= repeat_this_many;})) {
       fLog->Entry(MongoLog::Local,
-		  "Baselines report all channels finished for board %i", fBID);
+		  "Board %i baselines report all channels finished", fBID);
       break;
     }
     if ((step < 3) && (!calibrate)) continue;
-    fLog->Entry(MongoLog::Local, "Baseline iteration %i/%i for board %i",
-		step, ntries, fBID);
+    fLog->Entry(MongoLog::Local, "Board %i baseline iteration %i/%i",
+		fBID, step, ntries);
     if ((step < 3))
       dac_values.assign(dac_values.size(), DAC_calibration[step]);
     if(LoadDAC(dac_values, update_dac)){
-      fLog->Entry(MongoLog::Warning, "Digitizer %i failed to load DAC in baseline calibration", fBID);
+      fLog->Entry(MongoLog::Warning, "Board %i failed to load DAC in baseline calibration", fBID);
       return -2;
     }
     WriteRegister(fAqCtrlRegister,0x4);//x24?
     if(MonitorRegister(fAqStatusRegister, 0x4, 1000, 1000) != true){
-      fLog->Entry(MongoLog::Warning, "Timed out waiting for acquisition to start in baselines for board %i", fBID);
+      fLog->Entry(MongoLog::Warning, "Board %i timed out waiting for acquisition to start in baselines", fBID);
       return -1;
     }
     usleep(5000);
@@ -378,7 +374,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 
     bytes_read = ReadMBLT(buffer);
     if (bytes_read < 0) {
-        fLog->Entry(MongoLog::Warning, "Baselines for board %i read %i bytes",
+        fLog->Entry(MongoLog::Warning, "Board %i baselines read %i bytes",
                 fBID, bytes_read);
         return -2;
     }
@@ -388,7 +384,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
       step--;
       steps_repeated++;
       if (steps_repeated > max_repeats) {
-	fLog->Entry(MongoLog::Error, "Baselines board %i keeps failing readouts", fBID);
+	fLog->Entry(MongoLog::Error, "Board %i baselines keeps failing readouts", fBID);
 	return -1;
       }
       continue;
@@ -455,7 +451,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
       step--;
       steps_repeated++;
       if (steps_repeated > max_repeats) {
-	fLog->Entry(MongoLog::Error, "Baselines board %i keeps failing readouts", fBID);
+	fLog->Entry(MongoLog::Error, "Board %i baselines keeps failing readouts", fBID);
 	return -1;
       }
       continue;
@@ -488,10 +484,11 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 	}
         dac_values[ch] = std::clamp(dac_values[ch], min_dac[ch], max_dac);
 	if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
-          fLog->Entry(MongoLog::Local, "Calibration for board %i channel %i clamped to %04x",
+          fLog->Entry(MongoLog::Local, "Board %i calibration for channel %i clamped to %04x",
 	      fBID, ch, dac_values[ch]);
 	}
       }
+      calibrate=false;
     } else {
       // *********
       // Next: fit
@@ -527,7 +524,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   if (std::any_of(channel_finished.begin(), channel_finished.end(),
 	  [=](int i) {return i < repeat_this_many;})) {
     fLog->Entry(MongoLog::Message,
-            "Baselines board %i didn't finish for at least one channel", fBID);
+            "Board %i baselines didn't finish for at least one channel", fBID);
     return -1; // something didn't finish
   }
 
@@ -578,7 +575,7 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
     counter++;
     usleep(sleep);
   }
-  fLog->Entry(MongoLog::Warning,"MonitorRegister board %i failed for 0x%04x with mask 0x%04x and register value 0x%04x, wanted 0x%04x",
+  fLog->Entry(MongoLog::Warning,"Board %i MonitorRegister failed for 0x%04x with mask 0x%04x and register value 0x%04x, wanted 0x%04x",
           fBID, reg, mask, rval,val);
   return false;
 }

@@ -401,7 +401,7 @@ void DAQController::CloseProcessingThreads(){
 void DAQController::InitLink(std::vector<V1724*>& digis,
     std::map<int, std::map<std::string, std::vector<double>>>& dacs, int& ret) {
   for(auto digi : digis){
-    fLog->Entry(MongoLog::Local, "Beginning specific init for board %i", digi->bid());
+    fLog->Entry(MongoLog::Local, "Board %i beginning specific init", digi->bid());
 
     // Load DAC. n.b.: if you set the DAC value in your
     // ini file you'll overwrite the fancy stuff done here!
@@ -418,14 +418,12 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     fMapMutex.unlock();
     if((BL_MODE == "fit") || (BL_MODE == "cached")){
       if (BL_MODE == "fit") {
-        fLog->Entry(MongoLog::Local, "You're fitting baselines for digi %i",
-            digi->bid());
+        fLog->Entry(MongoLog::Local, "Boad %i fitting baselines", digi->bid());
         max_iter = 50;
         max_tries = 5;
         calibrate=true;
       } else {
-        fLog->Entry(MongoLog::Local, "You're using cached baselines for digi %i",
-            digi->bid());
+        fLog->Entry(MongoLog::Local, "Board %i using cached baselines", digi->bid());
         max_iter=1;
         max_tries = 1;
         calibrate=false;
@@ -433,11 +431,11 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
       // Try a few times since sometimes will not converge. If the function
       // returns -2 it means it crashed hard so don't bother trying again.
       do{
-	fLog->Entry(MongoLog::Local, "Going into DAC routine. Try: %i", tries+1);
+	fLog->Entry(MongoLog::Local, "Board %i going into DAC routine. Try: %i",
+            digi->bid(),tries+1);
 	success = digi->ConfigureBaselines(dac_values, board_dac_cal,
               nominal_baseline, max_iter, calibrate);
 	tries++;
-        calibrate = false; // only need to calibrate the first time
       } while(tries<max_tries && success==-1);
     }
     else if(BL_MODE != "fixed"){
@@ -446,27 +444,26 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     }
     if(BL_MODE == "fixed"){
       int BLVal = fOptions->GetInt("baseline_fixed_value", 4000);
-      fLog->Entry(MongoLog::Local, "Loading fixed baselines at value 0x%04x for digi %i",
-		    BLVal, digi->bid());
+      fLog->Entry(MongoLog::Local, "Loading fixed baselines with value 0x%04x", BLVal);
       dac_values.assign(dac_values.size(), BLVal);
     }
 
     //int success = 0;
-    fLog->Entry(MongoLog::Local, "Baselines finished for digi %i",digi->bid());
+    fLog->Entry(MongoLog::Local, "Board %i finished baselines",digi->bid());
     if(success==-2){
-      fLog->Entry(MongoLog::Warning, "Baselines failed with digi error");
+      fLog->Entry(MongoLog::Warning, "Board %i Baselines failed with digi error");
       fStatus = DAXHelpers::Error;
       ret = -1;
       return;
     }
     else if(success!=0){
-      fLog->Entry(MongoLog::Warning, "Baselines failed with timeout");
+      fLog->Entry(MongoLog::Warning, "Board %i failed baselines with timeout", digi->bid());
       fStatus = DAXHelpers::Idle;
       ret = -1;
       return;
     }
 
-    fLog->Entry(MongoLog::Local, "Digi %i survived baseline mode. Going into register setting",
+    fLog->Entry(MongoLog::Local, "Board %i survived baseline mode. Going into register setting",
 		digi->bid());
 
     for(auto regi : fOptions->GetRegisters(digi->bid())){

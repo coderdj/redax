@@ -22,7 +22,7 @@ class V1724{
           std::map<std::string, std::vector<double>>& cal_values,
 			    int nominal_value=16000,
 			    int ntries=100,
-          bool calibrate=true);
+          bool &calibrate=true);
   int GetClockCounter(u_int32_t timestamp);
   int End();
 
