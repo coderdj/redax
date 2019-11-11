@@ -315,16 +315,20 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 
   dac_values = std::vector<u_int16_t>(fNChannels);
   if (!calibrate) { // calibration already done, values are usable
-    for (unsigned ch = 0; ch < fNChannels; ch++) {
-      if (cal_values["yint"][ch] > 0x3fff) {
-        min_dac[ch] = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
-      } else {
-        min_dac[ch] = 0;
-      }
-      dac_values[ch] = std::clamp(dac_values[ch], min_dac[ch], max_dac);
-      if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
+    if (cal_values["yint"].size() < 1) { // something wonky happened
+        calibrate = false;
+    } else {
+      for (unsigned ch = 0; ch < fNChannels; ch++) {
+        if (cal_values["yint"][ch] > 0x3fff) {
+          min_dac[ch] = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
+        } else {
+          min_dac[ch] = 0;
+        }
+        dac_values[ch] = std::clamp(dac_values[ch], min_dac[ch], max_dac);
+        if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
 	  fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to 0x%04x",
-	    fBID, ch, dac_values[ch]);
+	      fBID, ch, dac_values[ch]);
+        }
       }
     }
   }
