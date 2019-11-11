@@ -20,9 +20,9 @@ class V1724{
   unsigned int ReadRegister(unsigned int reg);
   int ConfigureBaselines(std::vector<u_int16_t> &dac_values,
           std::map<std::string, std::vector<double>>& cal_values,
-			    int nominal_value=16000,
-			    int ntries=100,
-          bool &calibrate=true);
+			    int nominal_value,
+			    int ntries,
+          bool &calibrate);
   int GetClockCounter(u_int32_t timestamp);
   int End();
 
