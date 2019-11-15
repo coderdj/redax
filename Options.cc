@@ -8,7 +8,8 @@ Options::Options(MongoLog *log, std::string options_name,
   bson_value = NULL;
   fLog = log;
   fDAC_collection = dac_collection;
-  fBLCalibrationPeriod = 21*3600;  // 21 hours so no any off-by-one nonsense
+  //fBLCalibrationPeriod = 21*3600;  // 21 hours so no any off-by-one nonsense
+  fBLCalibrationPeriod = 55*60;  // once per hour or so
   if(Load(options_name, opts_collection, dac_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
 }
@@ -88,13 +89,13 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
           (now - last_calibration_time)/3600);
     if ((now - last_calibration_time) > fBLCalibrationPeriod) {
       std::tm* today = std::gmtime(&now);
-      if ((today->tm_hour == 13) || (today->tm_hour == 14)) {
+      //if ((today->tm_hour == 13) || (today->tm_hour == 14)) {
         success += Override(bsoncxx::from_json("{\"baseline_dac_mode\":\"fit\"}"));
         fLog->Entry(MongoLog::Local, "Setting BL to fit");
-      }
-      else {
-        fLog->Entry(MongoLog::Local, "Nah, wrong time");
-      }
+      //}
+      //else {
+      //  fLog->Entry(MongoLog::Local, "Nah, wrong time");
+      //}
     }
   }
 
