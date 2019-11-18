@@ -124,7 +124,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     return -1;
   } else
     fLog->Entry(MongoLog::Debug, "Digitizer programming successful");
-  fOptions->UpdateDAC(dac_values);
+  if (fOptions->GetBaselineMode() == "fit") fOptions->UpdateDAC(dac_values);
 
   for(auto const& link : fDigitizers ) {
     for(auto digi : link.second){
