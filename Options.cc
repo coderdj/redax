@@ -74,29 +74,31 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
   opts.sort(sort_order.view());
   auto cursor = dac_collection.find({}, opts);
   auto doc = cursor.begin();
+  std::string bl_mode = GetString("baseline_dac_mode");
   if(doc==cursor.end()) {// No docs
     fLog->Entry(MongoLog::Debug,"No baseline calibration? You must be new");
-    std::string bl_mode = GetString("baseline_dac_mode");
     if ((bl_mode == "auto") || (bl_mode == "cached"))
       fBaselineMode = "fit";
-  }
-  dac_values = *doc;
-  if (GetString("baseline_dac_mode") == "auto") {
-    fBaselineMode = "cached";
-    std::time_t now = std::time(nullptr);
-    std::time_t last_calibration_time = dac_values["_id"].get_oid().value.get_time_t();
+  } else {
+    fDAC_value = bsoncxx::document::value(doc->view());
+    fDAC_view = fDAC_value.view();
+    if (bl_mode == "auto") {
+      fBaselineMode = "cached";
+      std::time_t now = std::time(nullptr);
+      std::time_t last_calibration_time = fDAC_view["_id"].get_oid().value.get_time_t();
 
-    fLog->Entry(MongoLog::Local, "%i minutes since last BL calibration",
+      fLog->Entry(MongoLog::Local, "%i minutes since last BL calibration",
           (now - last_calibration_time)/60);
-    if ((now - last_calibration_time) > fBLCalibrationPeriod) {
-      std::tm* today = std::gmtime(&now);
-      //if ((today->tm_hour == 13) || (today->tm_hour == 14)) {
-        fBaselineMode = "fit";
-        fLog->Entry(MongoLog::Local, "Setting BL to fit");
-      //}
-      //else {
-      //  fLog->Entry(MongoLog::Local, "Nah, wrong time");
-      //}
+      if ((now - last_calibration_time) > fBLCalibrationPeriod) {
+        std::tm* today = std::gmtime(&now);
+        //if ((today->tm_hour == 13) || (today->tm_hour == 14)) {
+          fBaselineMode = "fit";
+          fLog->Entry(MongoLog::Local, "Setting BL to fit");
+        //}
+        //else {
+        //  fLog->Entry(MongoLog::Local, "Nah, wrong time");
+        //}
+      }
     }
   }
 
@@ -323,7 +325,7 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
  *         ...
  * }
  */
-  for (auto& bdoc : dac_values) { // subdoc {slope: array, yint : array}
+  for (auto& bdoc : fDAC_view) { // subdoc {slope: array, yint : array}
     int bid = std::stoi(bdoc.key().to_string());
     for (auto& kv : this_board_dac) { // (string, vector<double>)
       kv.second.clear();
@@ -339,7 +341,7 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
   using namespace bsoncxx::builder::stream;
   std::string run_id = GetString("run_identifier", "default");
   fLog->Entry(MongoLog::Local, "Saving DAC calibration");
-  auto search_doc = document{} << "run" <<  run_id<< finalize;
+  auto search_doc = document{} << "run" << run_id << finalize;
   auto update_doc = document{};
   update_doc<< "$set" << open_document << "run" << run_id;
   for (auto& bid_map : all_dacs) { // (bid, map<string, vector>)

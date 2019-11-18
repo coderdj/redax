@@ -102,7 +102,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   // Seriously. This sleep statement is absolutely vital.
   fLog->Entry(MongoLog::Local, "That felt great, thanks.");
   std::map<int, std::map<std::string, std::vector<double>>> dac_values;
-  fOptions->GetDAC(dac_values);
+  if (fOptions->GetBaselineMode() == "cached") fOptions->GetDAC(dac_values);
   std::vector<std::thread*> init_threads;
 
   init_threads.reserve(fDigitizers.size());
