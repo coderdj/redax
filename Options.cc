@@ -329,9 +329,12 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
  *         ...
  * }
  */
+  int bid(0);
+  std::string key;
   for (auto& bdoc : fDAC_view) { // subdoc {slope: array, yint : array}
-    if (bdoc.key().to_string() == "_id") continue;
-    int bid = std::stoi(bdoc.key().to_string());
+    key = bdoc.key().to_string();
+    if ((key == "_id") || (key == "run")) continue;
+    bid = std::stoi(key);
     for (auto& kv : this_board_dac) { // (string, vector<double>)
       kv.second.clear();
       for(auto& val : bdoc[kv.first].get_array().value)
