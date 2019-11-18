@@ -44,8 +44,7 @@ std::string DAQController::run_mode(){
   }
 }
 
-int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys,
-		std::map<int, std::map<std::string, std::vector<double>>>&dac_values){
+int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys){
 
   End();
   
@@ -102,7 +101,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   sleep(2); // <-- this one. Leave it here.
   // Seriously. This sleep statement is absolutely vital.
   fLog->Entry(MongoLog::Local, "That felt great, thanks.");
-
+  std::map<int, std::map<std::string, std::vector<double>>> dac_values;
+  fOptions->GetDAC(dac_values);
   std::vector<std::thread*> init_threads;
 
   init_threads.reserve(fDigitizers.size());
@@ -431,8 +431,8 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
       // Try a few times since sometimes will not converge. If the function
       // returns -2 it means it crashed hard so don't bother trying again.
       do{
-	fLog->Entry(MongoLog::Local, "Board %i going into DAC routine. Try: %i",
-            digi->bid(),tries+1);
+	fLog->Entry(MongoLog::Local, "Board %i going into DAC routine. Try: %i, %s",
+            digi->bid(),tries+1, calibrate ? "calibrating" : "not calibrating");
 	success = digi->ConfigureBaselines(dac_values, board_dac_cal,
               nominal_baseline, max_iter, calibrate);
 	tries++;

@@ -430,7 +430,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 	  if (counts_around_max/counts_total < fraction_around_max) {
 	    fLog->Entry(MongoLog::Local, "Bd %i: %d out of %d are around max, ch %i max_i %i",
                 fBID,counts_around_max,counts_total,ch,(max_it - beg_it)<<rebin_factor_log);
-	    if (step > 2) redo_iter=true; // we can't drop calibration steps
+	    redo_iter=true;
 	  }
           if (counts_total/words_per_channel < 1.5) // too many zeros
               redo_iter = true;

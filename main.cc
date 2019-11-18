@@ -216,8 +216,7 @@ int main(int argc, char** argv){
 	    fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
 				   options_collection, dac_collection, override_json);
 	    std::vector<int> links;
-            std::map<int, std::map<std::string, std::vector<double>>> dac_values;
-	    if(controller->InitializeElectronics(fOptions, links, dac_values) != 0){
+	    if(controller->InitializeElectronics(fOptions, links) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->End();
 	    }
