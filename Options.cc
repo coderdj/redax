@@ -80,7 +80,7 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
     if ((bl_mode == "auto") || (bl_mode == "cached"))
       fBaselineMode = "fit";
   } else {
-    fDAC_value = bsoncxx::document::value((*doc).view());
+    fDAC_value = bsoncxx::document::value(*doc);
     fDAC_view = fDAC_value.view();
     if (bl_mode == "auto") {
       fBaselineMode = "cached";
