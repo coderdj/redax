@@ -30,8 +30,7 @@ public:
   DAQController(MongoLog *log=NULL, std::string hostname="DEFAULT");
   ~DAQController();
 
-  int InitializeElectronics(Options *options, std::vector<int> &keys,
-			    std::map<int, std::map<std::string, std::vector<double>>>&dac_values);
+  int InitializeElectronics(Options *options, std::vector<int> &keys);
 
   int status(){
     return fStatus;
