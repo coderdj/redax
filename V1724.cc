@@ -324,7 +324,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
         } else {
           min_dac[ch] = 0;
         }
-        dac_values[ch] = std::clamp(dac_values[ch], min_dac[ch], max_dac);
+        dac_values[ch] = std::clamp(nominal_value*cal_values["slope"][ch] + cal_values["yint"][ch], min_dac[ch], max_dac);
         if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
 	  fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to 0x%04x",
 	      fBID, ch, dac_values[ch]);
@@ -522,7 +522,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
   } // end of iteration
 
   if (std::any_of(channel_finished.begin(), channel_finished.end(),
-	  [=](int i) {return i < repeat_this_many;})) {
+	  [=](int i) {return i < repeat_this_many;}) && calibrate) {
     fLog->Entry(MongoLog::Message,
             "Board %i baselines didn't finish for at least one channel", fBID);
     return -1; // something didn't finish
