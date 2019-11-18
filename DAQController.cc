@@ -408,7 +408,7 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     std::vector<u_int16_t>dac_values(16, 0x0);
 
     // Multiple options here
-    std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
+    std::string BL_MODE = fOptions->GetBaselineMode();
     int success = 0, tries=0, max_iter=100, max_tries(5);
     bool calibrate=false;
     int nominal_baseline = fOptions->GetInt("baseline_value", 16000);
@@ -439,7 +439,7 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
       } while(tries<max_tries && success==-1);
     }
     else if(BL_MODE != "fixed"){
-      fLog->Entry(MongoLog::Warning, "Received unknown baseline mode. Fallback to fixed");
+      fLog->Entry(MongoLog::Warning, "Received unknown baseline mode '%s', fallback to fixed", BL_MODE);
       BL_MODE = "fixed";
     }
     if(BL_MODE == "fixed"){

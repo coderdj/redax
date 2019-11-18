@@ -65,6 +65,7 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
     fLog->Entry(MongoLog::Warning, "Failed to override options doc with includes and overrides.");
     return -1;
   }
+  fBaselineMode = "fixed";
 
   // load dac as per baselining
   auto sort_order = bsoncxx::builder::stream::document{} <<
@@ -77,20 +78,20 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
     fLog->Entry(MongoLog::Debug,"No baseline calibration? You must be new");
     std::string bl_mode = GetString("baseline_dac_mode");
     if ((bl_mode == "auto") || (bl_mode == "cached"))
-      Override(bsoncxx::from_json("{\"baseline_dac_mode\" : \"fit\"}"));
+      fBaselineMode = "fit";
   }
   dac_values = *doc;
   if (GetString("baseline_dac_mode") == "auto") {
-    success += Override(bsoncxx::from_json("{\"baseline_dac_mode\" : \"cached\"}"));
+    fBaselineMode = "cached";
     std::time_t now = std::time(nullptr);
     std::time_t last_calibration_time = dac_values["_id"].get_oid().value.get_time_t();
 
-    fLog->Entry(MongoLog::Local, "%i hours since last BL calibration",
-          (now - last_calibration_time)/3600);
+    fLog->Entry(MongoLog::Local, "%i minutes since last BL calibration",
+          (now - last_calibration_time)/60);
     if ((now - last_calibration_time) > fBLCalibrationPeriod) {
       std::tm* today = std::gmtime(&now);
       //if ((today->tm_hour == 13) || (today->tm_hour == 14)) {
-        success += Override(bsoncxx::from_json("{\"baseline_dac_mode\":\"fit\"}"));
+        fBaselineMode = "fit";
         fLog->Entry(MongoLog::Local, "Setting BL to fit");
       //}
       //else {
