@@ -19,6 +19,10 @@ Options::~Options(){
     delete bson_value;
     bson_value = NULL;
   }
+  if (fDAC_value != NULL) {
+    delete fDAC_value;
+    fDAC_value = NULL;
+  }
 }
 
 std::string Options::ExportToString(){
@@ -80,8 +84,8 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
     if ((bl_mode == "auto") || (bl_mode == "cached"))
       fBaselineMode = "fit";
   } else {
-    fDAC_value = bsoncxx::document::value(*doc);
-    fDAC_view = fDAC_value.view();
+    fDAC_value = new bsoncxx::document::value(*doc);
+    fDAC_view = fDAC_value->view();
     if (bl_mode == "auto") {
       fBaselineMode = "cached";
       std::time_t now = std::time(nullptr);

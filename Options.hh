@@ -95,7 +95,7 @@ private:
   bsoncxx::document::value *bson_value;
   MongoLog *fLog;
   bsoncxx::document::view fDAC_view;
-  bsoncxx::document::value fDAC_value;
+  bsoncxx::document::value *fDAC_value;
   mongocxx::collection fDAC_collection;
   int fBLCalibrationPeriod;
   std::string fBaselineMode;
