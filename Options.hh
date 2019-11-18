@@ -82,7 +82,7 @@ public:
 
   std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
   std::vector<RegisterType> GetRegisters(int board=-1);
-  int GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs);
+  int GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs, std::vector<int>& bids);
   int GetCrateOpt(CrateOptions &ret);
   int GetHEVOpt(HEVOptions &ret);
   int GetChannel(int bid, int cid);

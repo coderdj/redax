@@ -309,7 +309,8 @@ int Options::GetHEVOpt(HEVOptions &ret){
   return 0;
 }
 
-int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs) {
+int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs,
+                    std::vector<int>& bids) {
   board_dacs.clear();
   std::map<std::string, std::vector<double>> defaults {
                 {"slope", std::vector<double>(16, -0.26)},
@@ -331,13 +332,18 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
  */
   int bid(0);
   std::string key;
-  for (auto& bdoc : fDAC_view) { // subdoc {slope: array, yint : array}
-    key = bdoc.key().to_string();
-    if ((key == "_id") || (key == "run")) continue;
-    bid = std::stoi(key);
+  for (auto bid : bids) {
+  //for (auto& bdoc : fDAC_view) { // subdoc {slope: array, yint : array}
+    //key = bdoc.key().to_string();
+    //if ((key == "_id") || (key == "run")) continue;
+    //bid = std::stoi(key);
+    if (fDAC_view.find(std::to_string(bid)) == fDAC_view.end()) {
+      board_dacs[bid] = defaults;
+      continue;
+    }
     for (auto& kv : this_board_dac) { // (string, vector<double>)
       kv.second.clear();
-      for(auto& val : bdoc[kv.first].get_array().value)
+      for(auto& val : fDAC_view[std::to_string(bid)][kv.first].get_array().value)
 	kv.second.push_back(val.get_double());
     }
     board_dacs[bid] = this_board_dac;

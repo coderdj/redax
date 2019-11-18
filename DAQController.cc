@@ -55,6 +55,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 
   // Initialize digitizers
   fStatus = DAXHelpers::Arming;
+  std::vector<int> BIDs;
   for(auto d : fOptions->GetBoards("V17XX", fHostname)){
     fLog->Entry(MongoLog::Local, "Arming new digitizer %i", d.board);
 
@@ -70,6 +71,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
 	fDigitizers[d.link].push_back(digi);
 	fDataPerDigi[digi->bid()] = 0;
+        BIDs.push_back(digi->bid());
 
 	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){
 	  fLog->Entry(MongoLog::Local, "Defining a new optical link at %i", d.link);
@@ -94,7 +96,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       return -1;
     }
   }
-
+  fLog->Entry(MongoLog::Local, "This host has %i boards", BIDs.size());
   fLog->Entry(MongoLog::Local, "Sleeping for two seconds");
   // For the sake of sanity and sleeping through the night,
   // do not remove this statement.
@@ -102,7 +104,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   // Seriously. This sleep statement is absolutely vital.
   fLog->Entry(MongoLog::Local, "That felt great, thanks.");
   std::map<int, std::map<std::string, std::vector<double>>> dac_values;
-  if (fOptions->GetBaselineMode() == "cached") fOptions->GetDAC(dac_values);
+  if (fOptions->GetBaselineMode() == "cached") fOptions->GetDAC(dac_values, BIDs);
   std::vector<std::thread*> init_threads;
 
   init_threads.reserve(fDigitizers.size());
