@@ -324,7 +324,8 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
         } else {
           min_dac[ch] = 0;
         }
-        dac_values[ch] = std::clamp(nominal_value*cal_values["slope"][ch] + cal_values["yint"][ch], min_dac[ch], max_dac);
+        val0 = nominal_value*cal_values["slope"][ch] + cal_values["yint"][ch];
+        dac_values[ch] = std::clamp(val0, min_dac[ch], max_dac);
         if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
 	  fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to 0x%04x",
 	      fBID, ch, dac_values[ch]);
