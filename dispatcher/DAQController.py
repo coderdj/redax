@@ -252,10 +252,10 @@ class DAQController():
             run_mode = self.goal_state[detector]['mode']
             host_list, cc = self.mongo.GetHostsForMode(run_mode)
             run = self.mongo.InsertRunDoc(detector, self.goal_state)
+            for c in cc:
+                host_list.append(c)
             self.mongo.SendCommand("start", host_list, self.goal_state[detector]['user'],
                                    detector, self.goal_state[detector]['mode'])
-            self.mongo.SendCommand("start", cc, self.goal_state[detector]['user'],
-                                   detector, self.goal_state[detector]['mode'], 5)
             self.start_command_sent[detector] = datetime.datetime.utcnow()
         else:
             self.CheckTimeouts(detector)
@@ -391,6 +391,12 @@ class DAQController():
         automatically stop and restart the run. No biggie. We check the time here
         to see if it's something we have to do.
         '''
+        # If no stop after configured, return
+        try:
+            assert(type(self.goal_state[detector]['stop_after']) == int)
+        except:
+            return
+        
         try:
             number = self.latest_status[detector]['number']
         except:
