@@ -10,5 +10,5 @@
 main
 ccontrol
 
-# DAQ log
-DAQLog.log
+# DAQ logs
+*.log

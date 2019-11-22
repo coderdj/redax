@@ -12,6 +12,7 @@
 #include <bitset>
 #include <chrono>
 #include <math>
+#include <numeric>
 
 // Status:
 // 0-idle
@@ -470,10 +471,12 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
 }
 
 int DAQController::FitBaselines(std::vector<V1724*> &digis,
-    std::map<int, std::vector<u_int16_t>> &dac_values, int target_value,
+    std::map<int, std::vector<u_int16_t>> &dac_values, int target_baseline,
     std::map<int, std::map<std::string, std::vector<double>>> &cal_values) {
   using std::vector;
-  int max_iter(5), max_steps(20), digis_this_link(digis.size()), ch_per_digi(digis[0]->GetNumChan());
+  using namespace std::chrono_literals;
+  int max_iter(5);
+  unsigned max_steps(20), digis_this_link(digis.size()), ch_per_digi(digis[0]->GetNumChannels());
   int adjustment_threshold(10), convergence_threshold(3), min_adjustment(8);
   int rebin_factor(1); // log base 2
   int nbins(1 << (14-rebin_factor)), bins_around_max(3);
@@ -487,11 +490,12 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   vector<int> bytes_read(digis_this_link);
   vector<vector<vector<double>>> bl_per_channel(digis_this_link,
          vector<vector<double>>(ch_per_digi, vector<double>(max_steps)));
-  bool done(false), redo_iter(false), fail(false);
-  int ret(0), bid(0);
+  bool done(false), redo_iter(false), fail(false), calibrate(true);
+  int bid(0);
   double counts_total(0), counts_around_max(0), B,C,D,E,F, slope, yint, baseline;
   double fraction_around_max(0.8);
   u_int32_t words_in_event, channel_mask, words_per_channel;
+  u_int16_t val0, val1;
   int channels_in_event, idx;
   auto beg_it = hist.begin(), max_it = hist.begin(), end_it = hist.end();
   auto max_start = max_it, max_end = max_it;
@@ -506,10 +510,9 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       for (auto& v : vv) // v = vector<double>
         v.assign(v.size(), 0);
     for (auto& v : channel_finished) v.assign(v.size(), 0);
-    boards_finished.assign(digis_this_link, false);
     steps_repeated = 0;
 
-    for (unsigned step = 0; step < max_steps; steps++) {
+    for (unsigned step = 0; step < max_steps; step++) {
       if (std::all_of(channel_finished.begin(), channel_finished.end(),
             [&](vector<int>& v) {
               return std::all_of(v.begin(), v.end(), [=](int i)
@@ -547,7 +550,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       std::this_thread::sleep_for(5ms);
       for (auto digi : digis) {
         if (!digi->EnsureStarted(1000,1000)) {
-          digi->SoftwareStop();
+          digi->AcquisitionStop();
           fail = true;
         }
       }
@@ -559,13 +562,13 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       }
       // stop
       for (auto digi : digis) {
-        digi->SoftwareStop();
+        digi->AcquisitionStop();
         if (!digi->EnsureStopped(1000,1000)) {
           fail = true;
         }
       }
       if (fail) {
-        for (auto digi : digis) digi->SoftwareStop();
+        for (auto digi : digis) digi->AcquisitionStop();
         fLog->Entry(MongoLog::Warning, "Error in baseline digi control");
         break;
       }
@@ -598,12 +601,12 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         idx = 0;
         while ((idx * sizeof(u_int32_t) < bytes_read[d]) && (idx >= 0)) {
           if ((buffers[d][idx]>>28) == 0xA) {
-            words_in_event = buffer[d][idx]&0xFFFFFFF;
+            words_in_event = buffers[d][idx]&0xFFFFFFF;
             if (words_in_event == 4) {
               idx += 4;
               continue;
             }
-            channel_mask = buffer[idx+1]&0xFF;
+            channel_mask = buffers[idx+1]&0xFF;
             if (digis[d]->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
               // V1730 stuff here
             }
@@ -628,7 +631,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
                 hist[val1 >> rebin_factor]++;
               }
               idx += words_per_channel;
-              for (auto it = beg_it; it < end_id; it++) if (*it > *max_it) max_it = it;
+              for (auto it = beg_it; it < end_it; it++) if (*it > *max_it) max_it = it;
               max_start = std::max(max_it - bins_around_max, beg_it);
               max_end = std::min(max_it + bins_around_max+1, end_it);
               counts_total = std::accumulate(beg_it, end_it, 0.);
@@ -716,7 +719,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         } // for digis
       } // fit/calibrate
       for (auto d : digis)
-        d->SetDACValue(dac_values[d->bid()], target_baseline, cal_values[d->bid()]);
+        d->SetDACValues(dac_values[d->bid()], target_baseline, cal_values[d->bid()]);
 
     } // end steps
     if (std::all_of(channel_finished.begin(), channel_finished.end(),
