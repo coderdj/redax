@@ -606,7 +606,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               idx += 4;
               continue;
             }
-            channel_mask = buffers[idx+1]&0xFF;
+            channel_mask = buffers[d][idx+1]&0xFF;
             if (digis[d]->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
               // V1730 stuff here
             }
