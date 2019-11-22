@@ -547,9 +547,9 @@ int V1724::End(){
   return 0;
 }
 
-void SetDACValues(std::vector<u_int16_t> &dac_values, u_int16_t nominal_value,
+void V1724::SetDACValues(std::vector<u_int16_t> &dac_values, u_int16_t nominal_value,
                   std::map<std::string, std::vector<double>> &cal_values) {
-  u_int16_t val, min_dac;
+  u_int16_t val, min_dac, max_dac(0xffff);
   if (dac_values.size() < fNChannels) dac_values = std::vector<u_int16_t>(fNChannels);
   for (unsigned ch = 0; ch < fNChannels; ch++) {
     if (cal_values["yint"][ch] > 0x3fff) {
@@ -558,7 +558,7 @@ void SetDACValues(std::vector<u_int16_t> &dac_values, u_int16_t nominal_value,
       min_dac = 0;
     }
     val = nominal_value*cal_values["slope"][ch] + cal_values["yint"][ch];
-    dac_values[ch] = std::clamp(val0, min_dac, max_dac);
+    dac_values[ch] = std::clamp(val, min_dac, max_dac);
     if ((dac_values[ch] == min_dac) || (dac_values[ch] == max_dac)) {
       fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to 0x%04x",
 	fBID, ch, dac_values[ch]);
