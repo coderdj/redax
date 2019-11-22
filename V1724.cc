@@ -516,10 +516,10 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 }
 
 
-int V1724::LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update_dac){
+int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){
   // Loads DAC values into registers
   for(unsigned int x=0; x<dac_values.size(); x++){
-    if(x>=fNChannels || update_dac[x]==false) // oops
+    if(x>=fNChannels) // oops
       continue;
 
     if (MonitorRegister(fChStatusRegister + 0x100*x, 0x4, 1000, 1000, 0)) {

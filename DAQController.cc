@@ -8,6 +8,10 @@
 #include "StraxInserter.hh"
 #include "MongoLog.hh"
 #include <unistd.h>
+#include <algorithm>
+#include <bitset>
+#include <chrono>
+#include <math>
 
 // Status:
 // 0-idle
@@ -399,20 +403,20 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
       fLog->Entry(MongoLog::Warning, "Errors during baseline fitting");
       return;
     }
+  }
 
   for(auto digi : digis){
     fLog->Entry(MongoLog::Local, "Board %i beginning specific init", digi->bid());
 
     // Multiple options here
-    int success = 0, tries=0, max_iter=100, max_tries(5);
-    std::map<std::string, std::vector<double>> board_dac_cal;
+    int bid = digi->bid(), success(0);
     fMapMutex.lock();
-    auto board_dac_cal = dacs.count(digi->bid()) ? dacs[digi->bid()] : dacs[-1];
+    auto board_dac_cal = cal_values.count(bid) ? cal_values[bid] : cal_values[-1];
     fMapMutex.unlock();
     if(BL_MODE == "cached") {
-      dac_values[digi->bid()] = std::vector<u_int16_t>(digi->GetNumChannels());
-      fLog->Entry(MongoLog::Local, "Board %i using cached baselines", digi->bid());
-      digi->SetDACValues(dac_values[digi->bid()], nominal_baseline, board_dac_cal);
+      dac_values[bid] = std::vector<u_int16_t>(digi->GetNumChannels());
+      fLog->Entry(MongoLog::Local, "Board %i using cached baselines", bid);
+      digi->SetDACValues(dac_values[bid], nominal_baseline, board_dac_cal);
     }
     else if(BL_MODE != "fixed"){
       fLog->Entry(MongoLog::Warning, "Received unknown baseline mode '%s', fallback to fixed", BL_MODE);
@@ -421,11 +425,11 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     if(BL_MODE == "fixed"){
       int BLVal = fOptions->GetInt("baseline_fixed_value", 4000);
       fLog->Entry(MongoLog::Local, "Loading fixed baselines with value 0x%04x", BLVal);
-      dac_values[digi->bid()] = std::vector<u_int16_t>(digi->GetNumChan(), BLVal);
+      dac_values[bid] = std::vector<u_int16_t>(digi->GetNumChannels(), BLVal);
     }
 
     //int success = 0;
-    fLog->Entry(MongoLog::Local, "Board %i finished baselines",digi->bid());
+    fLog->Entry(MongoLog::Local, "Board %i finished baselines", bid);
     if(success==-2){
       fLog->Entry(MongoLog::Warning, "Board %i Baselines failed with digi error");
       ret = -2;
@@ -438,18 +442,17 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     }
 
     fLog->Entry(MongoLog::Local, "Board %i survived baseline mode. Going into register setting",
-		digi->bid());
+		bid);
 
-    for(auto regi : fOptions->GetRegisters(digi->bid())){
+    for(auto regi : fOptions->GetRegisters(bid)){
       unsigned int reg = DAXHelpers::StringToHex(regi.reg);
       unsigned int val = DAXHelpers::StringToHex(regi.val);
       success+=digi->WriteRegister(reg, val);
     }
-    fLog->Entry(MongoLog::Local, "User registers finished for digi %i. Loading DAC.",
-                  digi->bid());
+    fLog->Entry(MongoLog::Local, "Board %i loaded user registers, loading DAC.", bid);
 
     // Load the baselines you just configured
-    success += digi->LoadDAC(dac_values[digi->bid()]);
+    success += digi->LoadDAC(dac_values[bid]);
 
     fLog->Entry(MongoLog::Local,
 	"DAC finished for %i. Assuming not directly followed by an error, that's a wrap.",

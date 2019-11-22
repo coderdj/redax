@@ -30,9 +30,9 @@ class V1724{
     return fBID;
   };
 
-  int LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update_dac);
+  int LoadDAC(std::vector<u_int16_t> &dac_values);
   void SetDACValues(std::vector<u_int16_t>&, u_int16_t, std::map<std::string, std::vector<double>>&);
-  int GetNumChan() {return fNChannels;}
+  int GetNumChannels() {return fNChannels;}
 
   // Acquisition Control
   int SINStart();
