@@ -346,7 +346,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 		fBID, step, ntries);
     if ((step < 3))
       dac_values.assign(dac_values.size(), DAC_calibration[step]);
-    if(LoadDAC(dac_values, update_dac)){
+    if(LoadDAC(dac_values)){
       fLog->Entry(MongoLog::Warning, "Board %i failed to load DAC in baseline calibration", fBID);
       return -2;
     }
@@ -495,7 +495,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 	  adjustment = std::copysign(min_adjustment, adjustment);
 	fLog->Entry(MongoLog::Local, "Board %i channel %i dac %04x bl %.1f adjust %i iter %i",
 	  fBID, ch, dac_values[ch], bl_per_channel[ch].back(), adjustment, step);
-	dac_values[ch] = std::clamp(dac_values[ch]+adjustment, min_dac[ch], max_dac);
+	//dac_values[ch] = std::clamp(dac_values[ch]+adjustment, min_dac[ch], max_dac);
 	if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
 	  fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to %04x",
 	    fBID, ch, dac_values[ch]);
