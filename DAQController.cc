@@ -11,7 +11,7 @@
 #include <algorithm>
 #include <bitset>
 #include <chrono>
-#include <math>
+#include <cmath>
 #include <numeric>
 
 // Status:
