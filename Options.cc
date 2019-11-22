@@ -17,10 +17,6 @@ Options::~Options(){
     delete bson_value;
     bson_value = NULL;
   }
-  if (fDAC_value != NULL) {
-    delete fDAC_value;
-    fDAC_value = NULL;
-  }
 }
 
 std::string Options::ExportToString(){
@@ -284,6 +280,16 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
     {"slope", std::vector<double>(16)},
     {"yint", std::vector<double>(16)}};
   int ret(0);
+  auto sort_order = bsoncxx::builder::stream::document{} <<
+    "_id" << -1 << bsoncxx::builder::stream::finalize;
+  auto opts = mongodxx::options::find{};
+  opts.sort(sort_order.view());
+  auto cursor = fDAC_collection.find({}, opts);
+  auto doc = cursor.begin();
+  if (doc == cursor.end()) {
+    fLog->Entry(MongoLog::Local, "No baseline calibrations? You must be new");
+    return -1;
+  }
 /* doc should look like this:
  *{ run : 000042,
  * bid : {
@@ -294,13 +300,13 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
  * }
  */
   for (auto bid : bids) {
-    if (fDAC_view.find(std::to_string(bid)) == fDAC_view.end()) {
+    if (doc.find(std::to_string(bid)) == doc.end()) {
       board_dacs[bid] = defaults;
       continue;
     }
     for (auto& kv : this_board_dac) { // (string, vector<double>)
       kv.second.clear();
-      for(auto& val : fDAC_view[std::to_string(bid)][kv.first].get_array().value)
+      for(auto& val : doc[std::to_string(bid)][kv.first].get_array().value)
 	kv.second.push_back(val.get_double());
     }
     board_dacs[bid] = this_board_dac;
