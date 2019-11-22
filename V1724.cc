@@ -53,6 +53,9 @@ int V1724::SoftwareStart(){
 int V1724::AcquisitionStop(){
   return WriteRegister(fAqCtrlRegister, 0x100);
 }
+int V1724::SWTrigger(){
+  return WriteRegister(fSwTrigRegister, 0x1);
+}
 bool V1724::EnsureReady(int ntries, int tsleep){
   return MonitorRegister(fAqStatusRegister, 0x100, ntries, tsleep, 0x1);
 }
@@ -315,22 +318,10 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 
   dac_values = std::vector<u_int16_t>(fNChannels);
   if (!calibrate) { // calibration already done, values are usable
-    if (cal_values["yint"].size() < 1) { // something wonky happened
+    if (cal_values["yint"].size() < fNChannels) { // something wonky happened
         calibrate = false;
     } else {
-      for (unsigned ch = 0; ch < fNChannels; ch++) {
-        if (cal_values["yint"][ch] > 0x3fff) {
-          min_dac[ch] = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
-        } else {
-          min_dac[ch] = 0;
-        }
-        val0 = nominal_value*cal_values["slope"][ch] + cal_values["yint"][ch];
-        dac_values[ch] = std::clamp(val0, min_dac[ch], max_dac);
-        if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
-	  fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to 0x%04x",
-	      fBID, ch, dac_values[ch]);
-        }
-      }
+      SetDACValues(dac_values, nominal_value, cal_values);
     }
   }
 
@@ -359,6 +350,10 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
       fLog->Entry(MongoLog::Warning, "Board %i failed to load DAC in baseline calibration", fBID);
       return -2;
     }
+    // "After writing the user is recommended to wait for a few seconds before
+    // a new RUN to let the DAC output get stabilized" - CAEN documentation
+    sleep(1);
+
     WriteRegister(fAqCtrlRegister,0x4);//x24?
     if(MonitorRegister(fAqStatusRegister, 0x4, 1000, 1000) != true){
       fLog->Entry(MongoLog::Warning, "Board %i timed out waiting for acquisition to start in baselines", fBID);
@@ -476,19 +471,8 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 	cal_values["yint"][ch] = yint = (B*E-D*F)/(B*C-F*F);
         fLog->Entry(MongoLog::Debug, "Board %i ch %i baseline calibration: %.3f/%.1f",
 	  fBID, ch, slope, yint);
-
-        dac_values[ch] = (nominal_value - yint)/slope;
-	if (cal_values["yint"][ch] > 0x3fff) {
-          min_dac[ch] = (0x3fff - yint)/slope;
-	} else {
-          min_dac[ch] = 0;
-	}
-        dac_values[ch] = std::clamp(dac_values[ch], min_dac[ch], max_dac);
-	if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
-          fLog->Entry(MongoLog::Local, "Board %i calibration for channel %i clamped to %04x",
-	      fBID, ch, dac_values[ch]);
-	}
       }
+      SetDACValues(dac_values, nominal_value, cal_values);
       calibrate=false;
     } else {
       // *********
@@ -511,8 +495,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
 	  adjustment = std::copysign(min_adjustment, adjustment);
 	fLog->Entry(MongoLog::Local, "Board %i channel %i dac %04x bl %.1f adjust %i iter %i",
 	  fBID, ch, dac_values[ch], bl_per_channel[ch].back(), adjustment, step);
-	dac_values[ch] += adjustment;
-	dac_values[ch] = std::clamp(dac_values[ch], min_dac[ch], max_dac);
+	dac_values[ch] = std::clamp(dac_values[ch]+adjustment, min_dac[ch], max_dac);
 	if ((dac_values[ch] == min_dac[ch]) || (dac_values[ch] == max_dac)) {
 	  fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to %04x",
 	    fBID, ch, dac_values[ch]);
@@ -539,6 +522,12 @@ int V1724::LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update
     if(x>=fNChannels || update_dac[x]==false) // oops
       continue;
 
+    if (MonitorRegister(fChStatusRegister + 0x100*x, 0x4, 1000, 1000, 0)) {
+      fLog->Entry(MongoLog::Error, "Board %i channel %i not ready for DAC input",
+          fBID, x);
+      return -1;
+    }
+
     // Now write channel DAC values
     if(WriteRegister((fChDACRegister)+(0x100*x), dac_values[x])!=0){
       fLog->Entry(MongoLog::Error, "Board %i failed writing DAC 0x%04x in channel %i",
@@ -546,12 +535,7 @@ int V1724::LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update
       return -1;
     }
 
-    // Give the DAC time to be set if needed
-    usleep(5000);
-
   }
-  // Sleep a bit because the DAC responds kinda slow
-  usleep(200000);
   return 0;
 }
 
@@ -563,17 +547,34 @@ int V1724::End(){
   return 0;
 }
 
+void SetDACValues(std::vector<u_int16_t> &dac_values, u_int16_t nominal_value,
+                  std::map<std::string, std::vector<double>> &cal_values) {
+  u_int16_t val, min_dac;
+  if (dac_values.size() < fNChannels) dac_values = std::vector<u_int16_t>(fNChannels);
+  for (unsigned ch = 0; ch < fNChannels; ch++) {
+    if (cal_values["yint"][ch] > 0x3fff) {
+      min_dac = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
+    } else {
+      min_dac = 0;
+    }
+    val = nominal_value*cal_values["slope"][ch] + cal_values["yint"][ch];
+    dac_values[ch] = std::clamp(val0, min_dac, max_dac);
+    if ((dac_values[ch] == min_dac) || (dac_values[ch] == max_dac)) {
+      fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to 0x%04x",
+	fBID, ch, dac_values[ch]);
+    }
+  }
+}
+
 bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep, u_int32_t val){
-  int counter = 0;
   u_int32_t rval = 0;
   if(val == 0) rval = 0xffffffff;
-  while(counter < ntries){
+  for(int counter = 0; counter < ntries; counter++){
     rval = ReadRegister(reg);
     if(rval == 0xffffffff)
-      return false;
+      break;
     if((val == 1 && (rval&mask)) || (val == 0 && !(rval&mask)))
       return true;
-    counter++;
     usleep(sleep);
   }
   fLog->Entry(MongoLog::Warning,"Board %i MonitorRegister failed for 0x%04x with mask 0x%04x and register value 0x%04x, wanted 0x%04x",

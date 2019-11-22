@@ -8,8 +8,6 @@ Options::Options(MongoLog *log, std::string options_name,
   bson_value = NULL;
   fLog = log;
   fDAC_collection = dac_collection;
-  //fBLCalibrationPeriod = 21*3600;  // 21 hours so no any off-by-one nonsense
-  fBLCalibrationPeriod = 55*60;  // once per hour or so
   if(Load(options_name, opts_collection, dac_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
 }
@@ -64,47 +62,12 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
 
   if(override_opts != "")
     success += Override(bsoncxx::from_json(override_opts));
-  
+
   if(success!=0){
     fLog->Entry(MongoLog::Warning, "Failed to override options doc with includes and overrides.");
     return -1;
   }
-  fBaselineMode = "fixed";
 
-  // load dac as per baselining
-  auto sort_order = bsoncxx::builder::stream::document{} <<
-    "_id" << -1 << bsoncxx::builder::stream::finalize;
-  auto opts = mongocxx::options::find{};
-  opts.sort(sort_order.view());
-  auto cursor = dac_collection.find({}, opts);
-  auto doc = cursor.begin();
-  std::string bl_mode = GetString("baseline_dac_mode");
-  if(doc==cursor.end()) {// No docs
-    fLog->Entry(MongoLog::Debug,"No baseline calibration? You must be new");
-    if ((bl_mode == "auto") || (bl_mode == "cached"))
-      fBaselineMode = "fit";
-  } else {
-    fDAC_value = new bsoncxx::document::value(*doc);
-    fDAC_view = fDAC_value->view();
-    if (bl_mode == "auto") {
-      fBaselineMode = "cached";
-      std::time_t now = std::time(nullptr);
-      std::time_t last_calibration_time = fDAC_view["_id"].get_oid().value.get_time_t();
-
-      fLog->Entry(MongoLog::Local, "%i minutes since last BL calibration",
-          (now - last_calibration_time)/60);
-      if ((now - last_calibration_time) > fBLCalibrationPeriod) {
-        std::tm* today = std::gmtime(&now);
-        //if ((today->tm_hour == 13) || (today->tm_hour == 14)) {
-          fBaselineMode = "fit";
-          fLog->Entry(MongoLog::Local, "Setting BL to fit");
-        //}
-        //else {
-        //  fLog->Entry(MongoLog::Local, "Nah, wrong time");
-        //}
-      }
-    }
-  }
 
   return 0;
 }
@@ -184,7 +147,7 @@ int Options::GetNestedInt(std::string path, int default_value){
       val = val[fields[i].c_str()];
     return val.get_int32();
   }catch(const std::exception &e){
-    fLog->Entry(MongoLog::Local, "Exception while finding %s: %s",path.c_str(),e.what());
+    fLog->Entry(MongoLog::Local, "Using default value for %s",path.c_str());
     return default_value;
   }
   return 0;

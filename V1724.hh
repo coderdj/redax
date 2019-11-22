@@ -31,11 +31,14 @@ class V1724{
   };
 
   int LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update_dac);
+  void SetDACValues(std::vector<u_int16_t>&, u_int16_t, std::map<std::string, std::vector<double>>&);
+  int GetNumChan() {return fNChannels;}
 
   // Acquisition Control
   int SINStart();
   int SoftwareStart();
   int AcquisitionStop();
+  int SWTrigger();
   bool EnsureReady(int ntries, int sleep);
   bool EnsureStarted(int ntries, int sleep);
   bool EnsureStopped(int ntries, int sleep);

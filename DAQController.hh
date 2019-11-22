@@ -63,6 +63,8 @@ private:
 
   void AppendData(std::vector<data_packet> &d);
   void InitLink(std::vector<V1724*>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
+  void FitBaselines(std::vector<V1724*>&, std::map<int, std::vector<u_int16_t>>&, int,
+      std::map<int, std::map<std::string, std::vector<double>>>&);
   
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;

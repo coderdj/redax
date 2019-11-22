@@ -87,7 +87,6 @@ public:
   int GetHEVOpt(HEVOptions &ret);
   int GetChannel(int bid, int cid);
   int GetNestedInt(std::string path, int default_value);
-  std::string GetBaselineMode() {return fBaselineMode;}
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
 private:
@@ -97,8 +96,6 @@ private:
   bsoncxx::document::view fDAC_view;
   bsoncxx::document::value *fDAC_value;
   mongocxx::collection fDAC_collection;
-  int fBLCalibrationPeriod;
-  std::string fBaselineMode;
 };
 
 #endif
