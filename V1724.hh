@@ -32,7 +32,7 @@ class V1724{
 
   int LoadDAC(std::vector<u_int16_t> &dac_values);
   void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
-  int GetNumChannels() {return fNChannels;}
+  unsigned GetNumChannels() {return fNChannels;}
 
   // Acquisition Control
   int SINStart();

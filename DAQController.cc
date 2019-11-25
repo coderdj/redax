@@ -733,7 +733,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
     if (std::all_of(channel_finished.begin(), channel_finished.end(),
           [&](vector<int>& v){return std::all_of(v.begin(), v.end(), [=](int i){
             return i >= convergence_threshold;});})) {
-      fLog->Entry(MongoLog::Message, "All baselines for boards on this link converged");
+      fLog->Entry(MongoLog::Local, "All baselines for boards on this link converged");
       break;
     }
   } // end iterations

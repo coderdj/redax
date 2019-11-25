@@ -400,6 +400,9 @@ class DAQController():
         start_time = self.mongo.GetRunStart(number)
         nowtime = datetime.datetime.utcnow()
         run_length = int(self.goal_state[detector]['stop_after'])*60
-        if (nowtime-start_time).total_seconds() > run_length:
+        if (((nowtime-start_time).total_seconds() > run_length) and
+            (self.stop_command_sent[detector] is None or
+             (nowtime - self.stop_command_sent[detector]).total_seconds() > self.stop_timeout)):
+            self.log.info('Stopping run')
             self.stop_command_sent[detector] = nowtime
             self.StopDetector(detector)
