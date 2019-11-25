@@ -282,7 +282,7 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
   int ret(0);
   auto sort_order = bsoncxx::builder::stream::document{} <<
     "_id" << -1 << bsoncxx::builder::stream::finalize;
-  auto opts = mongodxx::options::find{};
+  auto opts = mongocxx::options::find{};
   opts.sort(sort_order.view());
   auto cursor = fDAC_collection.find({}, opts);
   auto doc = cursor.begin();
@@ -300,13 +300,13 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
  * }
  */
   for (auto bid : bids) {
-    if (doc.find(std::to_string(bid)) == doc.end()) {
+    if ((*doc).find(std::to_string(bid)) == (*doc).end()) {
       board_dacs[bid] = defaults;
       continue;
     }
     for (auto& kv : this_board_dac) { // (string, vector<double>)
       kv.second.clear();
-      for(auto& val : doc[std::to_string(bid)][kv.first].get_array().value)
+      for(auto& val : (*doc)[std::to_string(bid)][kv.first].get_array().value)
 	kv.second.push_back(val.get_double());
     }
     board_dacs[bid] = this_board_dac;

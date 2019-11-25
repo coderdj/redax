@@ -321,7 +321,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
     if (cal_values["yint"].size() < fNChannels) { // something wonky happened
         calibrate = false;
     } else {
-      SetDACValues(dac_values, nominal_value, cal_values);
+      ClampDACValues(dac_values, cal_values);
     }
   }
 
@@ -472,7 +472,7 @@ int V1724::ConfigureBaselines(std::vector<u_int16_t> &dac_values,
         fLog->Entry(MongoLog::Debug, "Board %i ch %i baseline calibration: %.3f/%.1f",
 	  fBID, ch, slope, yint);
       }
-      SetDACValues(dac_values, nominal_value, cal_values);
+      ClampDACValues(dac_values, cal_values);
       calibrate=false;
     } else {
       // *********
@@ -522,11 +522,11 @@ int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){
     if(x>=fNChannels) // oops
       continue;
 
-    if (MonitorRegister(fChStatusRegister + 0x100*x, 0x4, 1000, 1000, 0)) {
+/*    if (MonitorRegister(fChStatusRegister + 0x100*x, 0x4, 1000, 1000, 0)) {
       fLog->Entry(MongoLog::Error, "Board %i channel %i not ready for DAC input",
           fBID, x);
       return -1;
-    }
+    }*/
 
     // Now write channel DAC values
     if(WriteRegister((fChDACRegister)+(0x100*x), dac_values[x])!=0){
@@ -547,18 +547,16 @@ int V1724::End(){
   return 0;
 }
 
-void V1724::SetDACValues(std::vector<u_int16_t> &dac_values, u_int16_t nominal_value,
+void V1724::ClampDACValues(std::vector<u_int16_t> &dac_values,
                   std::map<std::string, std::vector<double>> &cal_values) {
   u_int16_t val, min_dac, max_dac(0xffff);
-  if (dac_values.size() < fNChannels) dac_values = std::vector<u_int16_t>(fNChannels);
   for (unsigned ch = 0; ch < fNChannels; ch++) {
     if (cal_values["yint"][ch] > 0x3fff) {
       min_dac = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
     } else {
       min_dac = 0;
     }
-    val = nominal_value*cal_values["slope"][ch] + cal_values["yint"][ch];
-    dac_values[ch] = std::clamp(val, min_dac, max_dac);
+    dac_values[ch] = std::clamp(dac_values[ch], min_dac, max_dac);
     if ((dac_values[ch] == min_dac) || (dac_values[ch] == max_dac)) {
       fLog->Entry(MongoLog::Local, "Board %i channel %i clamped dac to 0x%04x",
 	fBID, ch, dac_values[ch]);

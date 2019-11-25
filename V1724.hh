@@ -31,7 +31,7 @@ class V1724{
   };
 
   int LoadDAC(std::vector<u_int16_t> &dac_values);
-  void SetDACValues(std::vector<u_int16_t>&, u_int16_t, std::map<std::string, std::vector<double>>&);
+  void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
   int GetNumChannels() {return fNChannels;}
 
   // Acquisition Control
