@@ -266,8 +266,8 @@ class MongoConnect():
                 retnodes.append(r)
             for r in self.latest_status['muon_veto']['controller'].keys():
                 retcc.append(r)
-        self.log.debug("Nodes: %s" % retnodes)
-        self.log.debug("CCs: %s" % retcc)
+        #self.log.debug("Nodes: %s" % retnodes)
+        #self.log.debug("CCs: %s" % retcc)
         return retnodes, retcc
 
     def GetRunMode(self, mode):
