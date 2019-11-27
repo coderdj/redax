@@ -306,7 +306,7 @@ int V1724::End(){
 
 void V1724::ClampDACValues(std::vector<u_int16_t> &dac_values,
                   std::map<std::string, std::vector<double>> &cal_values) {
-  u_int16_t val, min_dac, max_dac(0xffff);
+  u_int16_t min_dac, max_dac(0xffff);
   for (unsigned ch = 0; ch < fNChannels; ch++) {
     if (cal_values["yint"][ch] > 0x3fff) {
       min_dac = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];

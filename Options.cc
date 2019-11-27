@@ -8,7 +8,7 @@ Options::Options(MongoLog *log, std::string options_name,
   bson_value = NULL;
   fLog = log;
   fDAC_collection = dac_collection;
-  if(Load(options_name, opts_collection, dac_collection, override_opts)!=0)
+  if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
 }
 
