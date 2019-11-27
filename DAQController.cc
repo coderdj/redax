@@ -485,10 +485,10 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   int triggers_per_step = 3, steps_repeated(0), max_repeated_steps(10);
   std::chrono::milliseconds ms_between_triggers(10);
   vector<int> hist(nbins);
-  vector<double> DAC_cal_points = {60000, 30000, 6000}; // arithmetic overflow
+  vector<long> DAC_cal_points = {60000, 30000, 6000}; // arithmetic overflow
   vector<vector<int>> channel_finished(digis_this_link, vector<int>(ch_per_digi));
   vector<u_int32_t*> buffers(digis_this_link);
-  vector<int> bytes_read(digis_this_link);
+  vector<int> bytes_read(digis_this_link), ret_vect(digis_this_link);
   vector<vector<vector<double>>> bl_per_channel(digis_this_link,
          vector<vector<double>>(ch_per_digi, vector<double>(max_steps)));
   vector<vector<int>> diff(digis_this_link, vector<int>(ch_per_digi));
@@ -576,7 +576,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       if (fail) {
         for (auto digi : digis) digi->AcquisitionStop();
         fLog->Entry(MongoLog::Warning, "Error in baseline digi control");
-        break;
+        return -2;
       }
       std::this_thread::sleep_for(1ms);
 

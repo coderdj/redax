@@ -24,6 +24,7 @@ h.setFormatter(f)
 logger.addHandler(h)
 h = logging.handlers.TimedRotatingFileHandler(
     datetime.date.today().isoformat()+'.log',when='midnight', utc=True,backupCount=7)
+h.setFormatter(f)
 logger.addHandler(h)
 logger.setLevel(getattr(logging, args.log))
 print("Config arm timeout: %i"%int(config["DEFAULT"]["ArmCommandTimeout"]))
