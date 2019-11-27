@@ -72,7 +72,7 @@ public:
   ~Options();
 
   int Load(std::string name, mongocxx::collection opts_collection,
-          mongocxx::collection dac_collection, std::string override_opts);
+          std::string override_opts);
   int Override(bsoncxx::document::view override_opts);
   std::string ExportToString();
   

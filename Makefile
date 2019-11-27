@@ -37,8 +37,8 @@ $(EXEC_CC) : $(OBJECTS_CC)
 %.o : %.cc %.d
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-include $(SOURCES_SLAVE:.cc=.d)
-include $(SOURCES_CC:.cc=.d)
+include $(DEPS_SLAVE)
+include $(DEPS_CC)
 
 .PHONY: clean
 
@@ -46,5 +46,4 @@ clean:
 	rm -f *.o *.d
 	rm -f $(EXEC_SLAVE)
 	rm -f $(EXEC_CC)
-
 

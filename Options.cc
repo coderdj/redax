@@ -25,7 +25,7 @@ std::string Options::ExportToString(){
 }
 
 int Options::Load(std::string name, mongocxx::collection opts_collection,
-	mongocxx::collection dac_collection, std::string override_opts){
+	std::string override_opts){
   // Try to pull doc from DB
   bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
   trydoc = opts_collection.find_one(bsoncxx::builder::stream::document{}<<
