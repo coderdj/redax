@@ -94,7 +94,7 @@ while(1):
     stat['ceph_size'] = statvfs.f_frsize * statvfs.f_blocks
     stat['ceph_free'] = statvfs.f_frsize * statvfs.f_bfree
     stat['ceph_available'] = statvfs.f_frsize * statvfs.f_bavail
-    print(stat)
+    #print(stat)
     coll.insert(stat)
     time.sleep(timeout)
 
