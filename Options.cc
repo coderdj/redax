@@ -8,9 +8,7 @@ Options::Options(MongoLog *log, std::string options_name,
   bson_value = NULL;
   fLog = log;
   fDAC_collection = dac_collection;
-  //fBLCalibrationPeriod = 21*3600;  // 21 hours so no any off-by-one nonsense
-  fBLCalibrationPeriod = 55*60;  // once per hour or so
-  if(Load(options_name, opts_collection, dac_collection, override_opts)!=0)
+  if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
 }
 
@@ -18,10 +16,6 @@ Options::~Options(){
   if(bson_value != NULL) {
     delete bson_value;
     bson_value = NULL;
-  }
-  if (fDAC_value != NULL) {
-    delete fDAC_value;
-    fDAC_value = NULL;
   }
 }
 
@@ -31,7 +25,7 @@ std::string Options::ExportToString(){
 }
 
 int Options::Load(std::string name, mongocxx::collection opts_collection,
-	mongocxx::collection dac_collection, std::string override_opts){
+	std::string override_opts){
   // Try to pull doc from DB
   bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
   trydoc = opts_collection.find_one(bsoncxx::builder::stream::document{}<<
@@ -64,47 +58,12 @@ int Options::Load(std::string name, mongocxx::collection opts_collection,
 
   if(override_opts != "")
     success += Override(bsoncxx::from_json(override_opts));
-  
+
   if(success!=0){
     fLog->Entry(MongoLog::Warning, "Failed to override options doc with includes and overrides.");
     return -1;
   }
-  fBaselineMode = "fixed";
 
-  // load dac as per baselining
-  auto sort_order = bsoncxx::builder::stream::document{} <<
-    "_id" << -1 << bsoncxx::builder::stream::finalize;
-  auto opts = mongocxx::options::find{};
-  opts.sort(sort_order.view());
-  auto cursor = dac_collection.find({}, opts);
-  auto doc = cursor.begin();
-  std::string bl_mode = GetString("baseline_dac_mode");
-  if(doc==cursor.end()) {// No docs
-    fLog->Entry(MongoLog::Debug,"No baseline calibration? You must be new");
-    if ((bl_mode == "auto") || (bl_mode == "cached"))
-      fBaselineMode = "fit";
-  } else {
-    fDAC_value = new bsoncxx::document::value(*doc);
-    fDAC_view = fDAC_value->view();
-    if (bl_mode == "auto") {
-      fBaselineMode = "cached";
-      std::time_t now = std::time(nullptr);
-      std::time_t last_calibration_time = fDAC_view["_id"].get_oid().value.get_time_t();
-
-      fLog->Entry(MongoLog::Local, "%i minutes since last BL calibration",
-          (now - last_calibration_time)/60);
-      if ((now - last_calibration_time) > fBLCalibrationPeriod) {
-        std::tm* today = std::gmtime(&now);
-        //if ((today->tm_hour == 13) || (today->tm_hour == 14)) {
-          fBaselineMode = "fit";
-          fLog->Entry(MongoLog::Local, "Setting BL to fit");
-        //}
-        //else {
-        //  fLog->Entry(MongoLog::Local, "Nah, wrong time");
-        //}
-      }
-    }
-  }
 
   return 0;
 }
@@ -184,7 +143,7 @@ int Options::GetNestedInt(std::string path, int default_value){
       val = val[fields[i].c_str()];
     return val.get_int32();
   }catch(const std::exception &e){
-    fLog->Entry(MongoLog::Local, "Exception while finding %s: %s",path.c_str(),e.what());
+    fLog->Entry(MongoLog::Local, "Using default value for %s",path.c_str());
     return default_value;
   }
   return 0;
@@ -321,6 +280,16 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
     {"slope", std::vector<double>(16)},
     {"yint", std::vector<double>(16)}};
   int ret(0);
+  auto sort_order = bsoncxx::builder::stream::document{} <<
+    "_id" << -1 << bsoncxx::builder::stream::finalize;
+  auto opts = mongocxx::options::find{};
+  opts.sort(sort_order.view());
+  auto cursor = fDAC_collection.find({}, opts);
+  auto doc = cursor.begin();
+  if (doc == cursor.end()) {
+    fLog->Entry(MongoLog::Local, "No baseline calibrations? You must be new");
+    return -1;
+  }
 /* doc should look like this:
  *{ run : 000042,
  * bid : {
@@ -331,13 +300,13 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
  * }
  */
   for (auto bid : bids) {
-    if (fDAC_view.find(std::to_string(bid)) == fDAC_view.end()) {
+    if ((*doc).find(std::to_string(bid)) == (*doc).end()) {
       board_dacs[bid] = defaults;
       continue;
     }
     for (auto& kv : this_board_dac) { // (string, vector<double>)
       kv.second.clear();
-      for(auto& val : fDAC_view[std::to_string(bid)][kv.first].get_array().value)
+      for(auto& val : (*doc)[std::to_string(bid)][kv.first].get_array().value)
 	kv.second.push_back(val.get_double());
     }
     board_dacs[bid] = this_board_dac;

@@ -243,7 +243,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  char *reductionLevel = reinterpret_cast<char*> (&rl);
 	  fragment.append(reductionLevel, 1);
 	  
-	  // Copy the raw buffer	  
+	  // Copy the raw buffer
 	  if(samples_this_channel>fFragmentLength/2){
 	    std::cout<<samples_this_channel<<"!"<<std::endl;
 	    exit(-1);
@@ -252,7 +252,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  const char *data_loc = reinterpret_cast<const char*>(&(payload[offset+index_in_sample]));
 	  fragment.append(data_loc, samples_this_channel*2);
 	  while(fragment.size()<fFragmentLength+fStraxHeaderSize)
-	    fragment.append("0");	  
+	    fragment.append(reductionLevel, 1); // int(0) != int("0")
 
 	  //copy(data_loc, data_loc+(samples_this_channel*2),&(fragment[31]));
 

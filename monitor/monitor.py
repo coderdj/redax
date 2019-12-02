@@ -36,6 +36,6 @@ while(1):
         disk[mount]['device'] = device
     ret_doc['disk'] = disk
     
-    print(ret_doc)
+    #print(ret_doc)
     collection.insert(ret_doc)    
     time.sleep(timeout)

@@ -18,11 +18,6 @@ class V1724{
   int64_t ReadMBLT(u_int32_t *&buffer);
   int WriteRegister(unsigned int reg, unsigned int value);
   unsigned int ReadRegister(unsigned int reg);
-  int ConfigureBaselines(std::vector<u_int16_t> &dac_values,
-          std::map<std::string, std::vector<double>>& cal_values,
-			    int nominal_value,
-			    int ntries,
-          bool &calibrate);
   int GetClockCounter(u_int32_t timestamp);
   int End();
 
@@ -30,12 +25,15 @@ class V1724{
     return fBID;
   };
 
-  int LoadDAC(std::vector<u_int16_t> &dac_values, std::vector<bool> &update_dac);
+  int LoadDAC(std::vector<u_int16_t> &dac_values);
+  void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
+  unsigned GetNumChannels() {return fNChannels;}
 
   // Acquisition Control
   int SINStart();
   int SoftwareStart();
   int AcquisitionStop();
+  int SWTrigger();
   bool EnsureReady(int ntries, int sleep);
   bool EnsureStarted(int ntries, int sleep);
   bool EnsureStopped(int ntries, int sleep);
