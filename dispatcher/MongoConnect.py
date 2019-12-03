@@ -302,7 +302,7 @@ class MongoConnect():
             return [], []
         cc = []
         hostlist = []
-        self.log.debug([(b['type'], b['host']) for b in doc['boards']])
+        #self.log.debug([(b['type'], b['host']) for b in doc['boards']])
         for b in doc['boards']:
             if 'V17' in b['type'] and b['host'] not in hostlist:
                 hostlist.append(b['host'])
