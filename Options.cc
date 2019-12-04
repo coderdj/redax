@@ -272,8 +272,8 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
                     std::vector<int>& bids) {
   board_dacs.clear();
   std::map<std::string, std::vector<double>> defaults {
-                {"slope", std::vector<double>(16, -0.26)},
-                {"yint", std::vector<double>(16, 17200)}};
+                {"slope", std::vector<double>(16, -0.2695)},
+                {"yint", std::vector<double>(16, 17169)}};
   // let's provide a default
   board_dacs[-1] = defaults;
   std::map<std::string, std::vector<double>> this_board_dac{

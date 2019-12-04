@@ -477,9 +477,9 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
     std::map<int, std::map<std::string, std::vector<double>>> &cal_values) {
   using std::vector;
   using namespace std::chrono_literals;
-  int max_iter(1);
+  int max_iter(2);
   unsigned max_steps(20), digis_this_link(digis.size()), ch_per_digi(digis[0]->GetNumChannels());
-  int adjustment_threshold(10), convergence_threshold(3), min_adjustment(8);
+  int adjustment_threshold(10), convergence_threshold(3), min_adjustment(0xA);
   int rebin_factor(1); // log base 2
   int nbins(1 << (14-rebin_factor)), bins_around_max(3);
   int triggers_per_step = 3, steps_repeated(0), max_repeated_steps(10);
