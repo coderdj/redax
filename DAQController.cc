@@ -383,15 +383,23 @@ int DAQController::OpenProcessingThreads(){
 }
 
 void DAQController::CloseProcessingThreads(){
+  std::map<int,int> board_fails;
 
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
-    fProcessingThreads[i].inserter->Close();
+    fProcessingThreads[i].inserter->Close(board_fails);
     fProcessingThreads[i].pthread->join();
 
     delete fProcessingThreads[i].pthread;
     delete fProcessingThreads[i].inserter;
   }
   fProcessingThreads.clear();
+  if (std::accumulate(board_fails.begin(), board_fails.end(), 0,
+	[=](int tot, std::pair<int,int> iter) {return tot + iter.second;})) {
+    std::stringstream msg;
+    msg << "Found board failures: ";
+    for (auto& iter : board_fails) msg << iter.first << ":" << iter.second << " | ";
+    fLog->Entry(MongoLog::Warning, msg.str());
+  }
 }
 
 void DAQController::InitLink(std::vector<V1724*>& digis,

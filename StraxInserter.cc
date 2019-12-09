@@ -7,6 +7,8 @@
 #include <thread>
 #include <cstring>
 #include <cstdarg>
+#include <numeric>
+#include <sstream>
 
 StraxInserter::StraxInserter(){
   fOptions = NULL;
@@ -23,7 +25,6 @@ StraxInserter::StraxInserter(){
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
-  fBoardFailCount = 0;
 
 }
 
@@ -75,10 +76,8 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   return 0;
 }
 
-void StraxInserter::Close(){
-  if(fBoardFailCount != 0){
-    fLog->Entry(MongoLog::Warning, "StraxInserter reports %i board fails this run", fBoardFailCount);
-  }
+void StraxInserter::Close(std::map<int,int>& ret){
+  for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
   fActive = false;
 }
 
@@ -114,9 +113,9 @@ void StraxInserter::ParseDocuments(data_packet dp){
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
       if(board_fail != 0){
-	fBoardFailCount+=1;
-	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
+	//std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
         fLog->Entry(MongoLog::Local, "Board %i failed? %x", buff[idx+1]>>27, buff[idx+1]);
+	fFailCounter[buff[idx+1]>>27]++;
         idx += 4;
         continue;
       }
