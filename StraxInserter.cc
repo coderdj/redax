@@ -107,14 +107,14 @@ void StraxInserter::ParseDocuments(data_packet dp){
       u_int32_t channel_mask = buff[idx+1]&0xFF;
       // Exercise for the reader: if you're modifying for V1730 add in the rest of the bits here!
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
-      u_int32_t board_fail  = buff[idx+1]&0x4000000;
+      bool board_fail = buff[idx+1]&0x4000000; // & (buff[idx+1]>>27)
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
       
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
-      if(board_fail != 0){
+      if(board_fail){
 	//std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
-        fLog->Entry(MongoLog::Local, "Board %i failed? %x", buff[idx+1]>>27, buff[idx+1]);
+        //fLog->Entry(MongoLog::Local, "Board %i failed? %x", buff[idx+1]>>27, buff[idx+1]);
 	fFailCounter[buff[idx+1]>>27]++;
         idx += 4;
         continue;
