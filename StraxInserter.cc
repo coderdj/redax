@@ -115,7 +115,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
       if(board_fail){
 	//std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
         //fLog->Entry(MongoLog::Local, "Board %i failed? %x", buff[idx+1]>>27, buff[idx+1]);
-	fFailCounter[buff[idx+1]>>27]++;
+	fFailCounter[dp.bid]++;
         idx += 4;
         continue;
       }
