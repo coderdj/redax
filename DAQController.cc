@@ -411,10 +411,10 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
 
     // Multiple options here
     int bid = digi->bid(), success(0);
-    fMapMutex.lock();
-    auto board_dac_cal = cal_values.count(bid) ? cal_values[bid] : cal_values[-1];
-    fMapMutex.unlock();
     if(BL_MODE == "cached") {
+      fMapMutex.lock();
+      auto board_dac_cal = cal_values.count(bid) ? cal_values[bid] : cal_values[-1];
+      fMapMutex.unlock();
       dac_values[bid] = std::vector<u_int16_t>(digi->GetNumChannels());
       fLog->Entry(MongoLog::Local, "Board %i using cached baselines", bid);
       for (unsigned ch = 0; ch < digi->GetNumChannels(); ch++)
@@ -456,6 +456,8 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
 
     // Load the baselines you just configured
     success += digi->LoadDAC(dac_values[bid]);
+    // Load all the other fancy stuff
+    success += digi->SetThresholds(fOptions->GetThresholds(bid));
 
     fLog->Entry(MongoLog::Local,
 	"DAC finished for %i. Assuming not directly followed by an error, that's a wrap.",
@@ -465,7 +467,7 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
       fLog->Entry(MongoLog::Warning, "Failed to configure digitizers.");
       ret = -1;
       return;
-      }
+    }
   } // loop over digis per link
 
   ret = 0;

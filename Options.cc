@@ -209,10 +209,21 @@ std::vector<RegisterType> Options::GetRegisters(int board){
     ret.push_back(rt);
   }
   return ret;
-
-  
 }
 
+std::vector<u_int16_t> Options::GetThresholds(int board) {
+  std::vector<u_int16_t> thresholds;
+  u_int16_t default_threshold = 0xA;
+  try{
+    for (auto& val : bson_options["thresholds"][std::to_string(board)])
+      thresholds.push_back(val.get_int32().value);
+    return thresholds;
+  }
+  catch(std::exception& e){
+    fLog->Entry(MongoLog::Local, "Using default thresholds for %i", board);
+    return std::vector<u_int16_t>(16, default_threshold);
+  }
+}
 
 int Options::GetCrateOpt(CrateOptions &ret){
   // I think we can just hack the above getters to allow dot notation
@@ -228,7 +239,7 @@ int Options::GetCrateOpt(CrateOptions &ret){
     return -1;
   }
   return 0;
-}	
+}
 
 int Options::GetChannel(int bid, int cid){
   std::string boardstring = std::to_string(bid);
