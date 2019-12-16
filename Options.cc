@@ -215,7 +215,7 @@ std::vector<u_int16_t> Options::GetThresholds(int board) {
   std::vector<u_int16_t> thresholds;
   u_int16_t default_threshold = 0xA;
   try{
-    for (auto& val : bson_options["thresholds"][std::to_string(board)])
+    for (auto& val : bson_options["thresholds"][std::to_string(board)].get_array().value)
       thresholds.push_back(val.get_int32().value);
     return thresholds;
   }

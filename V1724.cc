@@ -285,7 +285,7 @@ int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){
 
 int V1724::SetThresholds(std::vector<u_int16_t> vals) {
   int ret = 0;
-  for (unsigned ch = 0; ch < fNChannels; ch++) {
+  for (unsigned ch = 0; ch < fNChannels; ch++)
     ret += WriteRegister(fChTrigRegister + 0x100*ch, vals[ch]);
   return ret;
 }
