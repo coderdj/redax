@@ -36,11 +36,10 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fChunkLength = fOptions->GetLongInt("strax_chunk_length", 20e9); // default 20s
   fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
-  fCompressor = fOptions->GetString("compressor", "lz4");
+  fCompressor = fOptions->GetString("compressor", "lz4");  
   fHostname = hostname;
   fBoardFailCount = 0;
   std::string run_name = fOptions->GetString("run_identifier", "run");
-  
   // To start we do not know which FW version we're dealing with (for data parsing)
   fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
   if(fFirmwareVersion == -1){
@@ -51,12 +50,14 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 	std::cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<std::endl;
 	return -1;
   }
-
+  
   fMissingVerified = 0;
   fDataSource = dataSource;
   fFmt = dataSource->GetDataFormat();
   fLog = log;
   fErrorBit = false;
+
+  std::cout<<"fFmt[channel_header_words] " << fFmt["channel_header_words"] << std::endl;
 
   std::string output_path = fOptions->GetString("strax_output_path", "./");
   try{    
@@ -104,8 +105,8 @@ void StraxInserter::ParseDocuments(data_packet dp){
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
 
       // Get data from main header
-      u_int32_t words_in_event = buff[idx]&0xFFFFFFF; 
-      u_int32_t channel_mask = buff[idx+1]&0xFF;
+      u_int32_t words_in_event = buff[idx]&0xFFFFFFF;  
+      u_int32_t channel_mask = ( ((buff[idx+2]>>24)&0xFF)<<8 ) | (buff[idx+1]&0xFF); // Channels in event // --Stefano
       // Exercise for the reader: if you're modifying for V1730 add in the rest of the bits here!
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
       u_int32_t board_fail  = buff[idx+1]&0x4000000;
@@ -137,7 +138,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  idx += fFmt["channel_header_words"];
 
 	  // V1724 only. 1730 has a **26-day** clock counter. 
-	  if(fFmt["channel_header_words"] <= 2){
+	  if(fFmt["channel_header_words"] <= 3){       // --Stefano 
 	    // OK. Here's the logic for the clock reset, and I realize this is the
 	    // second place in the code where such weird logic is needed but that's it
 	    // First, on the first instance of a channel we gotta check if

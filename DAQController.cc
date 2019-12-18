@@ -2,7 +2,7 @@
 #include <functional>
 #include "V1724.hh"
 #include "V1724_MV.hh"
-//#include "V1730.hh"
+#include "V1730.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
 #include "StraxInserter.hh"
@@ -67,8 +67,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     V1724 *digi;
     if(d.type == "V1724_MV")
       digi = new V1724_MV(fLog, fOptions);
-    // else if(d.type == "V1730")
-    // digi = new V1730(fLog, fOptions);
+    else if(d.type == "V1730")
+      digi = new V1730(fLog, fOptions);
     else
       digi = new V1724(fLog, fOptions);
 
@@ -390,6 +390,7 @@ void DAQController::CloseProcessingThreads(){
 
     delete fProcessingThreads[i].pthread;
     delete fProcessingThreads[i].inserter;
+   
   }
   fProcessingThreads.clear();
 }
@@ -613,15 +614,17 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               continue;
             }
             channel_mask = buffers[d][idx+1]&0xFF;
-            if (digis[d]->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
+	    if (digis[d]->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
               // V1730 stuff here
+	     channel_mask = ( ((buffers[d][idx+2]>>24)&0xFF)<<8 ) | (buffers[d][idx+1]&0xFF); // Channels in event // --Stefano
+	   	     
             }
             if (channel_mask == 0) { // should be impossible?
               idx += 4;
               continue;
             }
             channels_in_event = std::bitset<16>(channel_mask).count();
-            words_per_channel = (words_in_event - 4)/channels_in_event;
+	    words_per_channel = (words_in_event - 4)/channels_in_event;
             words_per_channel -= digis[d]->DataFormatDefinition["channel_header_words"];
 
             idx += 4;

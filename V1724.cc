@@ -24,20 +24,22 @@ V1724::V1724(MongoLog  *log, Options *options){
   fResetRegister = 0xEF24;
   fChStatusRegister = 0x1088;
   fChDACRegister = 0x1098;
-  fNChannels = 8;
+  fNChannels = 8; 
+
   
   DataFormatDefinition = {
     {"channel_mask_msb_idx", -1},
     {"channel_mask_msb_mask", -1},
     {"channel_header_words", 2},
     {"ns_per_sample", 10},
-    {"ns_per_clk", 10},
+    {"ns_per_clk", 10},   
     // Channel indices are given relative to start of channel
     // i.e. the channel size is at index '0'
     {"channel_time_msb_idx", -1},
     {"channel_time_msb_mask", -1},
 
   };
+
 
 }
 V1724::~V1724(){
