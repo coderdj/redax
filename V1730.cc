@@ -10,7 +10,7 @@ V1730::V1730(MongoLog *log, Options *options)
   DataFormatDefinition["channel_header_words"] = 3;
   DataFormatDefinition["channel_mask_msb_idx"] = 2;
   DataFormatDefinition["channel_mask_msb_mask"] = -1;
-  DataFormatDefinition["channel_time_msb_idx"] = 2;
+  DataFormatDefinition["channel_time_msb_idx"] = 2; 
   DataFormatDefinition["channel_time_msb_mask"] = -1;
   // Channel indices are given relative to start of channel
   // i.e. the channel size is at index '0'
