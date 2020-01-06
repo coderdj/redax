@@ -87,6 +87,7 @@ public:
   int GetHEVOpt(HEVOptions &ret);
   int GetChannel(int bid, int cid);
   int GetNestedInt(std::string path, int default_value);
+  std::vector<u_int16_t> GetThresholds(int board);
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
 private:
