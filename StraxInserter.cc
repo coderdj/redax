@@ -7,6 +7,8 @@
 #include <thread>
 #include <cstring>
 #include <cstdarg>
+#include <numeric>
+#include <sstream>
 
 StraxInserter::StraxInserter(){
   fOptions = NULL;
@@ -23,7 +25,6 @@ StraxInserter::StraxInserter(){
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
-  fBoardFailCount = 0;
 
 }
 
@@ -75,10 +76,8 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   return 0;
 }
 
-void StraxInserter::Close(){
-  if(fBoardFailCount != 0){
-    fLog->Entry(MongoLog::Warning, "StraxInserter reports %i board fails this run", fBoardFailCount);
-  }
+void StraxInserter::Close(std::map<int,int>& ret){
+  for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
   fActive = false;
 }
 
@@ -108,15 +107,15 @@ void StraxInserter::ParseDocuments(data_packet dp){
       u_int32_t channel_mask = buff[idx+1]&0xFF;
       // Exercise for the reader: if you're modifying for V1730 add in the rest of the bits here!
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
-      u_int32_t board_fail  = buff[idx+1]&0x4000000;
+      bool board_fail = buff[idx+1]&0x4000000; // & (buff[idx+1]>>27)
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
       
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
-      if(board_fail != 0){
-	fBoardFailCount+=1;
-	std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
-        fLog->Entry(MongoLog::Local, "Board %i failed? %x", buff[idx+1]>>27, buff[idx+1]);
+      if(board_fail){
+	//std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
+        //fLog->Entry(MongoLog::Local, "Board %i failed? %x", buff[idx+1]>>27, buff[idx+1]);
+	fFailCounter[dp.bid]++;
         idx += 4;
         continue;
       }
@@ -220,8 +219,8 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  u_int16_t sw = fFmt["ns_per_sample"];
 	  char *sampleWidth = reinterpret_cast<char*> (&sw);
 	  fragment.append(sampleWidth, 2);
-	  
-	  u_int64_t time_this_fragment = Time64+((fFragmentLength/2)*sw*fragment_index);
+
+	  u_int64_t time_this_fragment = Time64 + (fFragmentLength>>1)*sw*fragment_index;
 	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
 	  fragment.append(pulseTime, 8);
 

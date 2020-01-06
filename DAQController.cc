@@ -72,7 +72,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     else
       digi = new V1724(fLog, fOptions);
 
-    
+
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
 	fDigitizers[d.link].push_back(digi);
 	fDataPerDigi[digi->bid()] = 0;
@@ -96,6 +96,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	}
     }
     else{
+      delete digi;
       fLog->Entry(MongoLog::Warning, "Failed to initialize digitizer %i", d.board);
       fStatus = DAXHelpers::Idle;
       return -1;
@@ -383,15 +384,23 @@ int DAQController::OpenProcessingThreads(){
 }
 
 void DAQController::CloseProcessingThreads(){
+  std::map<int,int> board_fails;
 
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
-    fProcessingThreads[i].inserter->Close();
+    fProcessingThreads[i].inserter->Close(board_fails);
     fProcessingThreads[i].pthread->join();
 
     delete fProcessingThreads[i].pthread;
     delete fProcessingThreads[i].inserter;
   }
   fProcessingThreads.clear();
+  if (std::accumulate(board_fails.begin(), board_fails.end(), 0,
+	[=](int tot, std::pair<int,int> iter) {return tot + iter.second;})) {
+    std::stringstream msg;
+    msg << "Found board failures: ";
+    for (auto& iter : board_fails) msg << iter.first << ":" << iter.second << " | ";
+    fLog->Entry(MongoLog::Warning, msg.str());
+  }
 }
 
 void DAQController::InitLink(std::vector<V1724*>& digis,
