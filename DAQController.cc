@@ -72,7 +72,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     else
       digi = new V1724(fLog, fOptions);
 
-    
+
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
 	fDigitizers[d.link].push_back(digi);
 	fDataPerDigi[digi->bid()] = 0;
@@ -96,6 +96,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	}
     }
     else{
+      delete digi;
       fLog->Entry(MongoLog::Warning, "Failed to initialize digitizer %i", d.board);
       fStatus = DAXHelpers::Idle;
       return -1;

@@ -219,8 +219,8 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  u_int16_t sw = fFmt["ns_per_sample"];
 	  char *sampleWidth = reinterpret_cast<char*> (&sw);
 	  fragment.append(sampleWidth, 2);
-	  
-	  u_int64_t time_this_fragment = Time64+((fFragmentLength/2)*sw*fragment_index);
+
+	  u_int64_t time_this_fragment = Time64 + (fFragmentLength>>1)*sw*fragment_index;
 	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
 	  fragment.append(pulseTime, 8);
 
