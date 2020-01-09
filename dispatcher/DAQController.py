@@ -393,7 +393,7 @@ class DAQController():
         '''
         # If no stop after configured, return
         try:
-            assert(type(self.goal_state[detector]['stop_after']) == int)
+            _ = int(self.goal_state[detector]['stop_after'])
         except:
             return
         

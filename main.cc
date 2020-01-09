@@ -101,8 +101,8 @@ int main(int argc, char** argv){
       
       for(auto doc : cursor) {
 	
-	std::cout<<"Found a doc with command "<<
-	  doc["command"].get_utf8().value.to_string()<<std::endl;
+	logger->Entry(MongoLog::Debug, "Found a doc with command %s",
+	  doc["command"].get_utf8().value.to_string().c_str());
 	// Very first thing: acknowledge we've seen the command. If the command
 	// fails then we still acknowledge it because we tried
 	control.update_one
@@ -230,7 +230,7 @@ int main(int argc, char** argv){
 			    "Cannot start DAQ while readout thread from previous run active. Please perform a reset");
 	    }
 	    else if(!initialized){
-	      std::cout<<"Skipping readout configuration since init failed"<<std::endl;
+	      logger->Entry(MongoLog::Warning, "Skipping readout configuration since init failed");
 	    }
 	    else{
 	      controller->CloseProcessingThreads();
@@ -246,8 +246,6 @@ int main(int argc, char** argv){
 		std:: thread *readoutThread = new std::thread
 		  (
 		   &DAQController::ReadData, controller, links[i]);
-//		   (static_cast<void*>(controller)), links[i]
-//		   );
 		readoutThreads.push_back(readoutThread);
 	      }
 	    }

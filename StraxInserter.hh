@@ -35,7 +35,7 @@ public:
   
   int  Initialize(Options *options, MongoLog *log, 
 		  DAQController *dataSource, std::string hostname);
-  void Close();
+  void Close(std::map<int,int>& ret);
   
   int ReadAndInsertData();
   bool CheckError(){ return fErrorBit; };
@@ -66,6 +66,7 @@ private:
   std::map<std::string, std::string*> fFragments;
   int fBoardFailCount;
   std::map<std::string, int>fFmt;
+  std::map<int, int> fFailCounter;
 };
 
 #endif
