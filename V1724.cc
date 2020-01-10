@@ -24,8 +24,8 @@ V1724::V1724(MongoLog  *log, Options *options){
   fResetRegister = 0xEF24;
   fChStatusRegister = 0x1088;
   fChDACRegister = 0x1098;
-  fNChannels = 8; 
-
+  fNChannels = 8;
+  fChTrigRegister = 0x1060;
   
   DataFormatDefinition = {
     {"channel_mask_msb_idx", -1},
@@ -39,9 +39,8 @@ V1724::V1724(MongoLog  *log, Options *options){
     {"channel_time_msb_mask", -1},
 
   };
-
-
 }
+
 V1724::~V1724(){
   End();
 }
@@ -174,16 +173,14 @@ int V1724::GetClockCounter(u_int32_t timestamp){
 int V1724::WriteRegister(unsigned int reg, unsigned int value){
   u_int32_t write=0;
   write+=value;
-  if(CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg,
-			&write,cvA32_U_DATA,cvD32) != cvSuccess){
+  int ret = 0;
+  if((ret = CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg,
+			&write,cvA32_U_DATA,cvD32)) != cvSuccess){
     fLog->Entry(MongoLog::Warning,
-		"Board %i failed to write register 0x%04x with value %08x (handle %i)",
-		fBID, reg, value, fBoardHandle);
+		"Board %i write returned %i (ret), reg 0x%04x, value 0x%08x",
+		fBID, ret, reg, value);
     return -1;
   }
-  //fLog->Entry(MongoLog::Local, "Board %i wrote register 0x%04x with value 0x%04x",
-	//      fBID, reg, value);
-  
   return 0;
 }
 
@@ -197,8 +194,6 @@ unsigned int V1724::ReadRegister(unsigned int reg){
 		fBID, ret, temp, reg);
     return 0xFFFFFFFF;
   }
-  //fLog->Entry(MongoLog::Local, "Board %i read register 0x%04x as value 0x%04x",
-  //            fBID, reg, temp);
   return temp;
 }
 
@@ -277,17 +272,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
 
 int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){
   // Loads DAC values into registers
-  for(unsigned int x=0; x<dac_values.size(); x++){
-    if(x>=fNChannels) // oops
-      continue;
-
-/*    if (MonitorRegister(fChStatusRegister + 0x100*x, 0x4, 1000, 1000, 0)) {
-      fLog->Entry(MongoLog::Error, "Board %i channel %i not ready for DAC input",
-          fBID, x);
-      return -1;
-    }*/
-
-    // Now write channel DAC values
+  for(unsigned int x=0; x<fNChannels; x++){
     if(WriteRegister((fChDACRegister)+(0x100*x), dac_values[x])!=0){
       fLog->Entry(MongoLog::Error, "Board %i failed writing DAC 0x%04x in channel %i",
 		  fBID, dac_values[x], x);
@@ -296,6 +281,13 @@ int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){
 
   }
   return 0;
+}
+
+int V1724::SetThresholds(std::vector<u_int16_t> vals) {
+  int ret = 0;
+  for (unsigned ch = 0; ch < fNChannels; ch++)
+    ret += WriteRegister(fChTrigRegister + 0x100*ch, vals[ch]);
+  return ret;
 }
 
 int V1724::End(){

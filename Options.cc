@@ -209,10 +209,21 @@ std::vector<RegisterType> Options::GetRegisters(int board){
     ret.push_back(rt);
   }
   return ret;
-
-  
 }
 
+std::vector<u_int16_t> Options::GetThresholds(int board) {
+  std::vector<u_int16_t> thresholds;
+  u_int16_t default_threshold = 0xA;
+  try{
+    for (auto& val : bson_options["thresholds"][std::to_string(board)].get_array().value)
+      thresholds.push_back(val.get_int32().value);
+    return thresholds;
+  }
+  catch(std::exception& e){
+    fLog->Entry(MongoLog::Local, "Using default thresholds for %i", board);
+    return std::vector<u_int16_t>(16, default_threshold);
+  }
+}
 
 int Options::GetCrateOpt(CrateOptions &ret){
   // I think we can just hack the above getters to allow dot notation
@@ -228,7 +239,7 @@ int Options::GetCrateOpt(CrateOptions &ret){
     return -1;
   }
   return 0;
-}	
+}
 
 int Options::GetChannel(int bid, int cid){
   std::string boardstring = std::to_string(bid);
@@ -272,8 +283,8 @@ int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& b
                     std::vector<int>& bids) {
   board_dacs.clear();
   std::map<std::string, std::vector<double>> defaults {
-                {"slope", std::vector<double>(16, -0.26)},
-                {"yint", std::vector<double>(16, 17200)}};
+                {"slope", std::vector<double>(16, -0.2695)},
+                {"yint", std::vector<double>(16, 17169)}};
   // let's provide a default
   board_dacs[-1] = defaults;
   std::map<std::string, std::vector<double>> this_board_dac{
