@@ -1,0 +1,14 @@
+# build files
+*.o
+*.d
+
+# temporary files
+*.swp
+*~
+
+# executables
+main
+ccontrol
+
+# DAQ logs
+*.log

@@ -107,22 +107,16 @@ void StraxInserter::ParseDocuments(data_packet dp){
       // Get data from main header
       u_int32_t words_in_event = buff[idx]&0xFFFFFFF;
       u_int32_t channel_mask = (buff[idx+1]&0xFF);
-      //u_int32_t channel_mask = ( ((buff[idx+2]>>24)&0xFF)<<8 ) | (buff[idx+1]&0xFF); // Channels in event // --Stefano
-     
+
       if (fFmt["channel_mask_msb_idx"] != -1) {
-	// V1730 stuff here
-	channel_mask = ( ((buff[idx+2]>>24)&0xFF)<<8 ) | (buff[idx+1]&0xFF); // Channels in event // --Stefano
-	//std::cout<<" channel_mask for V1730  "<< channel_mask <<std::endl;   // --Stefano     
+	channel_mask = ( ((buff[idx+2]>>24)&0xFF)<<8 ) | (buff[idx+1]&0xFF); 
       }
-      
       
       // Exercise for the reader: if you're modifying for V1730 add in the rest of the bits here!
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
       u_int32_t board_fail  = buff[idx+1]&0x4000000;
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
 
-      //std::cout<<" channel_mask  "<< std::hex<< channel_mask << " channels_in_event " << channels_in_event << std::endl;   // --Stefano
-      
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
       if(board_fail != 0){
@@ -139,23 +133,23 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// These defaults are valid for 'default' firmware where all channels same size
 	u_int32_t channel_words = (words_in_event - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
-	u_int32_t channel_timeMSB; // --Stefano
-	u_int32_t baseline_ch;     // --Stefano
+	u_int32_t channel_timeMSB; 
+	//u_int32_t baseline_ch;     
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
 	if(fFmt["channel_header_words"] > 0){
 	  channel_words = (buff[idx]&0x7FFFFF)-fFmt["channel_header_words"];
 	  channel_time = buff[idx+1]&0xFFFFFFFF;
-	  // Another exercise for reader to add the msb for the V1730
-	  if (fFmt["channel_time_msb_idx"] == 2) { //--Stefano
-	    channel_timeMSB = buff[idx+2]&0xFFFF; //--Stefano
-	    baseline_ch = (buff[idx+2]>>16)&0x3FFF;     //--Stefano
+
+	  if (fFmt["channel_time_msb_idx"] == 2) { 
+	    channel_timeMSB = buff[idx+2]&0xFFFF; 
+	    //baseline_ch = (buff[idx+2]>>16)&0x3FFF;  
 	  }
 	  
 	  idx += fFmt["channel_header_words"];
 
 	  // V1724 only. 1730 has a **26-day** clock counter. 
-	  if(fFmt["channel_header_words"] <= 2){       // --Stefano (3)
+	  if(fFmt["channel_header_words"] <= 2){    
 	    // OK. Here's the logic for the clock reset, and I realize this is the
 	    // second place in the code where such weird logic is needed but that's it
 	    // First, on the first instance of a channel we gotta check if
@@ -187,14 +181,12 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// 48 bits this line would be different
 	int iBitShift = 31;
 	int64_t Time64 ;
-	//	int64_t Time64 = fFmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
-	//				      iBitShift) + channel_time); // in ns
 
-	 if (fFmt["channel_time_msb_idx"] == 2) { //--Stefano
-	   Time64 = fFmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); // in ns  //--Stefano
+	 if (fFmt["channel_time_msb_idx"] == 2) { 
+	   Time64 = fFmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
 	   //std::cout<<" Time64 " << Time64 << " (ns) -->    " << Time64/1.e+9 << " (sec) " << std::endl;
 	 }
-	 else { //--Stefano
+	 else { 
 	   Time64 = fFmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
 					      iBitShift) + channel_time); // in ns
 	   }

@@ -614,12 +614,9 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               continue;
             }
             channel_mask = buffers[d][idx+1]&0xFF;
-	    //std::cout<<" channel_mask  "<< channel_mask <<std::endl;   // --Stefano
 	    if (digis[d]->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
-              // V1730 stuff here
-	     channel_mask = ( ((buffers[d][idx+2]>>24)&0xFF)<<8 ) | (buffers[d][idx+1]&0xFF); // Channels in event // --Stefano
-	     // std::cout<<" channel_mask for V1730  "<< channel_mask <<std::endl;   // --Stefano     
-            }
+	      channel_mask = ( ((buffers[d][idx+2]>>24)&0xFF)<<8 ) | (buffers[d][idx+1]&0xFF); 
+	    }
             if (channel_mask == 0) { // should be impossible?
               idx += 4;
               continue;
