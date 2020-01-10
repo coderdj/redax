@@ -34,7 +34,7 @@ StraxInserter::~StraxInserter(){
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
 			      std::string hostname){
   fOptions = options;
-  fChunkLength = fOptions->GetLongInt("strax_chunk_length", 20e9); // default 20s
+  fChunkLength = fOptions->GetLongInt("strax_chunk_length", 5e9); // default 5s
   fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
   fCompressor = fOptions->GetString("compressor", "lz4");
