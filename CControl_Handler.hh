@@ -24,11 +24,13 @@ public:
 private:
 
   V2718 *fV2718;
-  V1495 *fV1495;
   DDC10 *fDDC10;
+  V1495 *fV1495;
 
   int fStatus;
   int fCurrentRun;
+  int fBID;
+  int fBoardHandle;
   std::string fProcname;
   Options *fOptions;
   MongoLog *fLog;

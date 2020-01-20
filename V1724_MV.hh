@@ -10,7 +10,7 @@ public:
   virtual ~V1724_MV();
 
 private:
-
+  unsigned int fChTrigRegister;
 };
 
 #endif

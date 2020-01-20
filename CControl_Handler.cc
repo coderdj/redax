@@ -4,14 +4,14 @@
 #include "MongoLog.hh"
 #include "V2718.hh"
 #include "DDC10.hh"
-//#include "V1495.hh"
+#include "V1495.hh"
 #include <vector>
 
 CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
   fOptions = NULL;
   fLog = log;
   fProcname = procname;
-  fCurrentRun = -1;
+  fCurrentRun = fBID = fBoardHandle-1;
   fV2718 = NULL;
   fV1495 = NULL;
   fDDC10 = NULL;
@@ -57,29 +57,63 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
     fStatus = DAXHelpers::Idle;
     return -1;
   }else{
+     fBoardHandle = fV2718->GetHandle();
      std::cout << "V2718 Initialised" << std::endl;
   }
 
 // ----------------------------------------------
   // Getting options for DDC10 HEV module
   HEVOptions hopts;
-
-  if(fOptions->GetHEVOpt(hopts) == 0){
-
-    fDDC10 = new DDC10();
-    if(fDDC10->Initialize(hopts)!=0){
-      fLog->Entry(MongoLog::Error, "Failed to initialise DDC10 HEV");
-      fStatus = DAXHelpers::Idle;
-      return -1;
-    }else{
-      std::cout << "DDC10 Initialised" << std::endl;
-    }
-  }
   
+  std::vector<BoardType> dv = fOptions->GetBoards("DDC10", fProcname);
+  // Init DDC10 only when included in config - only for TPC   
+  if (dv.size() == 1){
+     if(fOptions->GetHEVOpt(hopts) == 0){
+        fDDC10 = new DDC10();
+	if(fDDC10->Initialize(hopts) != 0){
+           fLog->Entry(MongoLog::Error, "Failed to initialise DDC10 HEV");
+	   fStatus = DAXHelpers::Idle;
+	   return -1;
+	}else{
+	   std::cout << "DDC10 Initialised" << std::endl;
+	}
+     }else{
+	fLog->Entry(MongoLog::Error, "Failed to pull DDC10 options from file");
+     }
+  }
+
+ 
+  // Getting options for the V1495 board for the Muon Veto
+  // Init V1495_MV only when included config - Muon Veto only
+  std::vector<BoardType> mv = fOptions->GetBoards("V1495", fProcname);
+  BoardType mv_def = mv[0];
+  fBID = mv_def.board;
+  if (mv.size() == 1){
+     	fV1495 = new V1495(fLog, fOptions, mv_def.board, fBoardHandle, mv_def.vme_address);
+	// Writing registers to the V1495 board
+	for(auto regi : fOptions->GetRegisters(fBID)){
+		if(regi.board != fBID)
+		       continue;	
+		unsigned int reg = DAXHelpers::StringToHex(regi.reg);
+		unsigned int val = DAXHelpers::StringToHex(regi.val);
+		if(fV1495->WriteReg(reg, val)!=0){
+			fLog->Entry(MongoLog::Error, "Failed to initialise V1495 board");
+			fStatus = DAXHelpers::Idle;
+			return -1;
+		}
+	}
+  }else{
+        fLog->Entry(MongoLog::Error, "Failed to pull V1495 options from file"); 
+	return -1;
+  }
+
   fStatus = DAXHelpers::Armed;
   return 0;
 
-}
+} // end devicearm
+
+
+
 
 // Send the start signal from crate controller
 int CControl_Handler::DeviceStart(){
@@ -114,12 +148,11 @@ int CControl_Handler::DeviceStop(){
     fDDC10 = NULL;
   }
 
-  /*
   if(fV1495 != NULL){
     delete fV1495;
     fV1495 = NULL;
   }
-  */
+
   fStatus = DAXHelpers::Idle;
   return 0;
 }
@@ -147,7 +180,8 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
   // DDC10 parameters might change for future updates of the XENONnT HEV
   if(fDDC10 != NULL){
     in_array << bsoncxx::builder::stream::open_document
-             << "Address" << fDDC10->GetHEVOptions().address
+             << "type" << "DDC10"
+	     << "Address" << fDDC10->GetHEVOptions().address
              << "required" << fDDC10->GetHEVOptions().required
              << "signal_threshold" << fDDC10->GetHEVOptions().signal_threshold
              << "sign" << fDDC10->GetHEVOptions().sign
@@ -166,14 +200,21 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
              << "delay" << fDDC10->GetHEVOptions().delay
              << bsoncxx::builder::stream::close_document;
   }
-
-  // Here you would add the V1495...
+  // Setrings for the XENONnT Muon Veto V1495 board 
+  if(fV1495 != NULL){
+     in_array << bsoncxx::builder::stream::open_document
+	      << "type" << "V1495"
+	      << "Module reset" << fOptions->GetRegisters(fBID)[0].val
+	      << "Mask A" << fOptions->GetRegisters(fBID)[1].val
+	      << "Mask B" << fOptions->GetRegisters(fBID)[2].val
+	      << "Mask D" << fOptions->GetRegisters(fBID)[3].val
+	      << "Majority Threshold" << fOptions->GetRegisters(fBID)[4].val
+	      << "Coincidence Window" << fOptions->GetRegisters(fBID)[5].val
+	      << "NIM/TTL CTRL" << fOptions->GetRegisters(fBID)[6].val
+	      << bsoncxx::builder::stream::close_document; 
+  }
   
   auto after_array = in_array << bsoncxx::builder::stream::close_array;
   return after_array << bsoncxx::builder::stream::finalize;
 
 }  
-
-
-
-
