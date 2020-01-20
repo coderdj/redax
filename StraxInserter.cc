@@ -335,7 +335,7 @@ static const LZ4F_preferences_t kPrefs = {
 
 void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
-  using fs=std::experimental::filesystem;
+  namespace fs=std::experimental::filesystem;
 
   std::map<std::string, std::string*>::iterator iter;
   for(iter=fFragments.begin();
