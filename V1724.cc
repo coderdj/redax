@@ -26,7 +26,9 @@ V1724::V1724(MongoLog  *log, Options *options){
   fChDACRegister = 0x1098;
   fNChannels = 8;
   fChTrigRegister = 0x1060;
-  
+  fSNRegisterMSB = 0xF080;
+  fSNRegisterLSB = 0xF040;
+
   DataFormatDefinition = {
     {"channel_mask_msb_idx", -1},
     {"channel_mask_msb_mask", -1},
@@ -90,6 +92,23 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   last_time = 0;
   seen_over_15 = false;
   seen_under_5 = true; // starts run as true
+  u_int32_t word(0);
+  int my_bid(0);
+  if (CAENVME_ReadCycle(fBoardHandle, fSNRegisterLSB, &word, cvA32_U_DATA, cvD32) != cvSuccess) {
+    fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBoardHandle);
+    return -1;
+  }
+  my_bid |= word&0xFF;
+  if (CAENVME_ReadCycle(fBoardHandle, fSNRegisterMSB, &word, cvA32_U_DATA, cvD32) != cvSuccess) {
+    fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBoardHandle);
+    return -1;
+  }
+  my_bid |= (word&0xFF)<<8;
+  if (my_bid != fBID) {
+    fLog->Entry(MongoLog::Message, "Link %i crate %i should be SN %i but is actually %i",
+        link, crate, fBID, my_bid);
+    return 0;
+  }
   return 0;
 }
 

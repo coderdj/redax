@@ -34,8 +34,8 @@ StraxInserter::~StraxInserter(){
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
 			      std::string hostname){
   fOptions = options;
-  fChunkLength = fOptions->GetLongInt("strax_chunk_length", 5e9); // default 5s
-  fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
+  fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
+  fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
   fCompressor = fOptions->GetString("compressor", "lz4");  
   fHostname = hostname;
@@ -98,8 +98,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
   int smallest_latest_index_seen = -1;
   
   u_int32_t idx = 0;
-  while(idx < size/sizeof(u_int32_t) &&
-	buff[idx] != 0xFFFFFFFF){
+  while(idx < size/sizeof(u_int32_t) && buff[idx] != 0xFFFFFFFF){
     
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
 
@@ -119,8 +118,6 @@ void StraxInserter::ParseDocuments(data_packet dp){
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
       if(board_fail){
-	//std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
-        //fLog->Entry(MongoLog::Local, "Board %i failed? %x", buff[idx+1]>>27, buff[idx+1]);
 	fFailCounter[dp.bid]++;
         idx += 4;
         continue;
@@ -332,7 +329,6 @@ int StraxInserter::ReadAndInsertData(){
   fActive = true;
   bool haddata=false;
   while(fActive || read_length>0){
-    //std::cout<<"Factive: "<<fActive<<" read length: "<<read_length<<std::endl;
     if(readVector != NULL){
       haddata=true;
       for(unsigned int i=0; i<readVector->size(); i++){
@@ -362,6 +358,7 @@ static const LZ4F_preferences_t kPrefs = {
 
 void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
+  namespace fs=std::experimental::filesystem;
 
   std::map<std::string, std::string*>::iterator iter;
   for(iter=fFragments.begin();
@@ -372,8 +369,8 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     if(!(idnrint < smallest_index_seen-1 || end))    
       continue;
     
-    if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, true)))
-      std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, true));
+    if(!fs::exists(GetDirectoryPath(chunk_index, true)))
+      fs::create_directory(GetDirectoryPath(chunk_index, true));
 
     size_t uncompressed_size = iter->second->size();
 
@@ -403,10 +400,10 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     writefile.close();
 
     // Move this chunk from *_TEMP to the same path without TEMP
-    if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
-      std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
-    std::experimental::filesystem::rename(GetFilePath(chunk_index, true),
-					  GetFilePath(chunk_index, false));
+    if(!fs::exists(GetDirectoryPath(chunk_index, false)))
+      fs::create_directory(GetDirectoryPath(chunk_index, false));
+    fs::rename(GetFilePath(chunk_index, true),
+	       GetFilePath(chunk_index, false));
     iter = fFragments.erase(iter);
     
     CreateMissing(idnrint);
@@ -417,13 +414,13 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 
   if(end){
     fFragments.clear();
-    std::experimental::filesystem::path write_path(fOutputPath);
+    fs::path write_path(fOutputPath);
     std::string filename = fHostname;
     write_path /= "THE_END";
-    if(!std::experimental::filesystem::exists(write_path)){
-      fLog->Entry(MongoLog::Local,"Creating END directory at %s",write_path);
+    if(!fs::exists(write_path)){
+      fLog->Entry(MongoLog::Local,"Creating END directory at %s",write_path.c_str());
       try{
-	std::experimental::filesystem::create_directory(write_path);
+        fs::create_directory(write_path);
       }
       catch(...){};
     }

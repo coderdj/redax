@@ -115,6 +115,15 @@ long int Options::GetLongInt(std::string path, long int default_value){
   return -1;
 }
 
+double Options::GetDouble(std::string path, double default_value) {
+  try{
+    return bson_options[path].get_double();
+  } catch (const std::exception& e) {
+    fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
+    return default_value;
+  }
+}
+
 int Options::GetInt(std::string path, int default_value){
 
   try{
