@@ -53,8 +53,8 @@ protected:
   unsigned int fChDACRegister;
   unsigned int fChTrigRegister;
   unsigned int fNChannels;
-
-private:
+  unsigned int fSNRegisterMSB;
+  unsigned int fSNRegisterLSB;
 
   bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
 		       int sleep, u_int32_t val=1);

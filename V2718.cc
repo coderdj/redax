@@ -69,38 +69,28 @@ int V2718::SendStartSignal(){
 
   //Configure the LED pulser
   if(fCopts.pulser_freq > 0){
-    // We allow a range from 1Hz to 1MHz, but this is not continuous!
-    // If the number falls between two possible ranges it will be rounded to 
-    // the maximum value of the lower one
+    //CAEN supports frequencies from 38 mHz to 40 MHz, but it's not continuous
+    //We tell the CC about the time unit (104 ms, 410 us, 1.6 us, 25ns)
+    //and how many of them (1-FF) to set the period
     CVTimeUnits tu = cvUnit104ms;
     u_int32_t width = 0x1;
-    u_int32_t period = 0x0; 
+    u_int32_t period = 0x0;
+    std::vector<CVTimeUnits> tus = {cvUnit104ms, cvUnit410us, cvUnit1600ns, cvUnit25ns};
+    std::vector<double> widths = {104e-3, 410e-6, 1.6e-6, 25e-9};
 
-     if(fCopts.pulser_freq < 10){
-	if(fCopts.pulser_freq > 5)
-	   period = 0xFF;
-	else
-	   period = (u_int32_t)((1000/104) / fCopts.pulser_freq);
+    for (unsigned i = 0; i < widths.size(); i++) {
+      if (fCopts.pulser_freq < 1./widths[i]) {
+        period = std::clamp(int(1./(widths[i]*fCopts.pulser_freq)), 1, 0xFF);
+        tu = tus[i];
+        fLog->Entry(MongoLog::Debug, "Closest freq to %.1f Hz is %.1f",
+              fCopts.pulser_freq, 1./(period*widths[i]));
+        break;
       }
-     else if(fCopts.pulser_freq < 2450){
-	tu = cvUnit410us;
-	if(fCopts.pulser_freq > 1219)
-	   period = 0xFF;
-	else
-	   period = (u_int32_t)((1000000/410) / fCopts.pulser_freq);
+      if (i == 3) {
+        fLog->Entry(MongoLog::Error, "Given an invalid LED frequency");
+        return -1;
       }
-      else if(fCopts.pulser_freq < 312500){
-	tu = cvUnit1600ns;
-	period = (u_int32_t)((1000000/1.6) / fCopts.pulser_freq);
-      }
-      else if(fCopts.pulser_freq < 20000000){
-	tu = cvUnit25ns;
-        period = (u_int32_t)((1E9/25) / fCopts.pulser_freq);
-      }
-      else{
-         fLog->Entry(MongoLog::Error, "Given an invalid LED frequency");
-	 return -1;
-      }
+    }
     // Set pulser
     int ret = CAENVME_SetPulserConf(fCrate, cvPulserB, period, width, tu, 0,
 	 		  cvManualSW, cvManualSW);

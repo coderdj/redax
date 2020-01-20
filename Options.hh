@@ -78,6 +78,7 @@ public:
   
   int GetInt(std::string key, int default_value=-1);
   long int GetLongInt(std::string key, long int default_value=-1);
+  double GetDouble(std::string key, double default_value=-1);
   std::string GetString(std::string key, std::string default_value="");
 
   std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
