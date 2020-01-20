@@ -66,7 +66,7 @@ private:
   bool fErrorBit;
   std::string fCompressor;
   std::map<std::string, std::string*> fFragments;
-  std::map<std::string, std::atomic_long> fFragmentSize;
+  std::map<std::string, long> fFragmentSize;
   int fBoardFailCount;
   std::map<std::string, int>fFmt;
   std::map<int, int> fFailCounter;
