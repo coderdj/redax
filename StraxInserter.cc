@@ -37,11 +37,10 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fChunkLength = fOptions->GetLongInt("strax_chunk_length", 5e9); // default 5s
   fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
-  fCompressor = fOptions->GetString("compressor", "lz4");
+  fCompressor = fOptions->GetString("compressor", "lz4");  
   fHostname = hostname;
   fBoardFailCount = 0;
   std::string run_name = fOptions->GetString("run_identifier", "run");
-  
   // To start we do not know which FW version we're dealing with (for data parsing)
   fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
   if(fFirmwareVersion == -1){
@@ -52,12 +51,14 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 	std::cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<std::endl;
 	return -1;
   }
-
+  
   fMissingVerified = 0;
   fDataSource = dataSource;
   fFmt = dataSource->GetDataFormat();
   fLog = log;
   fErrorBit = false;
+
+  std::cout<<"fFmt[channel_header_words] " << fFmt["channel_header_words"] << std::endl;
 
   std::string output_path = fOptions->GetString("strax_output_path", "./");
   try{    
@@ -103,13 +104,18 @@ void StraxInserter::ParseDocuments(data_packet dp){
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
 
       // Get data from main header
-      u_int32_t words_in_event = buff[idx]&0xFFFFFFF; 
-      u_int32_t channel_mask = buff[idx+1]&0xFF;
+      u_int32_t words_in_event = buff[idx]&0xFFFFFFF;
+      u_int32_t channel_mask = (buff[idx+1]&0xFF);
+
+      if (fFmt["channel_mask_msb_idx"] != -1) {
+	channel_mask = ( ((buff[idx+2]>>24)&0xFF)<<8 ) | (buff[idx+1]&0xFF); 
+      }
+      
       // Exercise for the reader: if you're modifying for V1730 add in the rest of the bits here!
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
       bool board_fail = buff[idx+1]&0x4000000; // & (buff[idx+1]>>27)
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
-      
+
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
       if(board_fail){
@@ -129,17 +135,23 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// These defaults are valid for 'default' firmware where all channels same size
 	u_int32_t channel_words = (words_in_event - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
+	u_int32_t channel_timeMSB; 
+	//u_int32_t baseline_ch;     
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
 	if(fFmt["channel_header_words"] > 0){
 	  channel_words = (buff[idx]&0x7FFFFF)-fFmt["channel_header_words"];
 	  channel_time = buff[idx+1]&0xFFFFFFFF;
-	  // Another exercise for reader to add the msb for the V1730
+
+	  if (fFmt["channel_time_msb_idx"] == 2) { 
+	    channel_timeMSB = buff[idx+2]&0xFFFF; 
+	    //baseline_ch = (buff[idx+2]>>16)&0x3FFF;  
+	  }
 	  
 	  idx += fFmt["channel_header_words"];
 
 	  // V1724 only. 1730 has a **26-day** clock counter. 
-	  if(fFmt["channel_header_words"] <= 2){
+	  if(fFmt["channel_header_words"] <= 2){    
 	    // OK. Here's the logic for the clock reset, and I realize this is the
 	    // second place in the code where such weird logic is needed but that's it
 	    // First, on the first instance of a channel we gotta check if
@@ -159,17 +171,28 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	    if(channel_time < last_times_seen[channel] &&
 	       last_times_seen[channel]!=0xFFFFFFFF)
 	      clock_counters[channel]++;
-	    
+
 	    last_times_seen[channel] = channel_time;
+	    
 	  }
+	 
+	                                               
 	}
 
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
 	// 48 bits this line would be different
 	int iBitShift = 31;
-	int64_t Time64 = fFmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
-					      iBitShift) + channel_time); // in ns
+	int64_t Time64 ;
 
+	 if (fFmt["channel_time_msb_idx"] == 2) { 
+	   Time64 = fFmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
+	   //std::cout<<" Time64 " << Time64 << " (ns) -->    " << Time64/1.e+9 << " (sec) " << std::endl;
+	 }
+	 else { 
+	   Time64 = fFmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
+					      iBitShift) + channel_time); // in ns
+	   }
+	
 	// Get the CHUNK and decide if this event also goes into a PRE/POST file
 	u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
 	u_int64_t chunk_id = u_int64_t(Time64/fFullChunkLength);
