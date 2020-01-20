@@ -70,8 +70,8 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
     fLog->Entry(MongoLog::Error, "StraxInserter::Initialize tried to create output directory but failed. Check that you have permission to write here.");
     return -1;
   }
-  std::cout<<"Strax output initialized with "<<fChunkLength<<" ns chunks and "<<
-    fChunkOverlap<<" ns overlap time. Fragments are "<<fFragmentLength<<" bytes."<<std::endl;
+  fLog->Entry(MongoLog::Local, "Strax output initialized with %li ns chunks and %li ns overlap time",
+    fChunkLength, fChunkOverlap);
 
   return 0;
 }
