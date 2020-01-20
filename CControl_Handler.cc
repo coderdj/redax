@@ -83,8 +83,8 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   }
 
  
-  // Getting options for the V1495 board for the Muon Veto
-  // Init V1495_MV only when included config - Muon Veto only
+  // Getting options for the Muon Veto V1495 board
+  // Init V1495_MV only when included in config - Muon Veto only
   std::vector<BoardType> mv = fOptions->GetBoards("V1495", fProcname);
   BoardType mv_def = mv[0];
   fBID = mv_def.board;
@@ -200,7 +200,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
              << "delay" << fDDC10->GetHEVOptions().delay
              << bsoncxx::builder::stream::close_document;
   }
-  // Setrings for the XENONnT Muon Veto V1495 board 
+  // Write the settings for the Muon Veto V1495 board into status doc 
   if(fV1495 != NULL){
      in_array << bsoncxx::builder::stream::open_document
 	      << "type" << "V1495"
