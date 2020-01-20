@@ -40,20 +40,18 @@ public:
   
   int ReadAndInsertData();
   bool CheckError(){ return fErrorBit; }
-  long GetBufferSize() {return std::accumulate(fFragmentSize.begin(), fFragmentSize.end(),
-      0, [&](long tot, std::pair<std::string, std::atomic_long>& iter){
-      return tot + iter->second.load();});}
-  
+  long GetBufferSize();
+
 private:
   void ParseDocuments(data_packet dp);
   void WriteOutFiles(int smallest_index_seen, bool end=false);
-  
+
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
   std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
   std::string GetStringFormat(int id);
   void CreateMissing(u_int32_t back_from_id);
   int fMissingVerified;
-  
+
   u_int64_t fChunkLength; // ns
   u_int32_t fChunkOverlap; // ns
   u_int16_t fFragmentLength; // This is in BYTES
@@ -72,6 +70,7 @@ private:
   int fBoardFailCount;
   std::map<std::string, int>fFmt;
   std::map<int, int> fFailCounter;
+  std::mutex fMutex;
 };
 
 #endif

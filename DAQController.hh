@@ -56,6 +56,7 @@ public:
   bool CheckErrors();
   int OpenProcessingThreads();
   void CloseProcessingThreads();
+  long GetStraxBufferSize();
 
   std::map<std::string, int> GetDataFormat();
   
