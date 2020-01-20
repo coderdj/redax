@@ -270,6 +270,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	      fFragments[chunk_index] = new std::string();
 	    }
 	    fFragments[chunk_index]->append(fragment);
+            fFragmentSize[chunk+index] += fragment.size();
 	    fragments_inserted++;
 	  }
 	  else{// if(nextpre){
@@ -281,11 +282,13 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	      fFragments[nextchunk_index+"_pre"] = new std::string();
 	    }
 	    fFragments[nextchunk_index+"_pre"]->append(fragment);
+            fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
 
 	    if(fFragments.find(chunk_index+"_post") == fFragments.end()){
 	      fFragments[chunk_index+"_post"] = new std::string();
 	    }
 	    fFragments[chunk_index+"_post"]->append(fragment);
+            fFragmentSize[chunk_index+"_post"] += fragment.size();
 	  }
 	  fragment_index++;
 	  index_in_sample = max_sample;	  
@@ -371,8 +374,10 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
       out_buffer = new char[max_compressed_size];
       wsize = LZ4F_compressFrame(out_buffer, max_compressed_size,
 				 &((*iter->second)[0]), uncompressed_size, &kPrefs);
-    }    
+    }
     delete iter->second;
+    fFragmentSize[chunk_index] = 0;
+    fFragmentSize.erase(chunk_index);
     
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
     writefile.write(out_buffer, wsize);
@@ -394,6 +399,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 
   if(end){
     fFragments.clear();
+    fFragmentSize.clear();
     std::experimental::filesystem::path write_path(fOutputPath);
     std::string filename = fHostname;
     write_path /= "THE_END";

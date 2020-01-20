@@ -10,6 +10,7 @@
 #include <map>
 #include <mutex>
 #include <experimental/filesystem>
+#include <numeric>
 
 class DAQController;
 class Options;
@@ -38,7 +39,10 @@ public:
   void Close(std::map<int,int>& ret);
   
   int ReadAndInsertData();
-  bool CheckError(){ return fErrorBit; };
+  bool CheckError(){ return fErrorBit; }
+  long GetBufferSize() {return std::accumulate(fFragmentSize.begin(), fFragmentSize.end(),
+      0, [&](long tot, std::pair<std::string, std::atomic_long>& iter){
+      return tot + iter->second.load();});}
   
 private:
   void ParseDocuments(data_packet dp);
@@ -64,6 +68,7 @@ private:
   bool fErrorBit;
   std::string fCompressor;
   std::map<std::string, std::string*> fFragments;
+  std::map<std::string, std::atomic_long> fFragmentSize;
   int fBoardFailCount;
   std::map<std::string, int>fFmt;
   std::map<int, int> fFailCounter;
