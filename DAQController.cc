@@ -42,7 +42,7 @@ std::string DAQController::run_mode(){
   if(fOptions == NULL)
     return "None";
   try{
-    return fOptions->GetString("name");
+    return fOptions->GetString("name", "None");
   }
   catch(const std::exception &e){
     return "None";
