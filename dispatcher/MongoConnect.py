@@ -323,8 +323,15 @@ class MongoConnect():
         Set's the 'end' field of the run doc to the current time if not done yet
         '''
         self.log.info("Updating run %i with end time"%number)
+        doc = list(self.collections['outgoing_commands'].find({'command' : 'stop'}).sort([('_id',-1)]).limit(1))[0]
+        stoptime = 0
+        for k in doc['acknowledged']:
+            if 'controller' in k:
+                stoptime = doc['controller'][k]
+                stoptime = (datetime.datetime.utcfromtimestamp(stoptime//1000) +
+                            datetime.time.timedelta(milliseconds=stoptime%1000))
         self.collections['run'].update_one({"number": int(number), "end": {"$exists": False}},
-                                          {"$set": {"end": datetime.datetime.utcnow()}})
+                                          {"$set": {"end": stoptime}})
 
     def SendCommand(self, command, host_list, user, detector, mode="", delay=0):
         '''
