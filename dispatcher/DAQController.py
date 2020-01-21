@@ -285,6 +285,7 @@ class DAQController():
         self.mongo.SendCommand("stop", readers, self.goal_state[detector]['user'],
                                detector, self.goal_state[detector]['mode'], 5)
         try:
+            time.sleep(2)
             self.mongo.SetStopTime(self.latest_status[detector]['number'])
         except Exception as E:
             self.log.warning("Wanted to stop run but no associated number, got %s exception: %s" % (type(E), E))

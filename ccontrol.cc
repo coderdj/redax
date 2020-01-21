@@ -5,9 +5,20 @@
 #include <iostream>
 #include <limits.h>
 #include <unistd.h>
+#include <csignal>
+#include <atomic>
+#include <chrono>
+
+std::atomic_bool b_run = true;
+
+void SignalHandler(int signum) {
+    std::cout << "Received signal "<<signum<<std::endl;
+    b_run = false;
+    return;
+}
 
 int main(int argc, char** argv){
-  
+
   mongocxx::instance instance{};
   // Parse arguments
   if(argc < 3){
@@ -52,29 +63,32 @@ int main(int argc, char** argv){
   Options *options = NULL;
   
   // Holds session data
-  CControl_Handler *fHandler = new CControl_Handler(logger, hostname);  
+  CControl_Handler *fHandler = new CControl_Handler(logger, hostname);
+  std::chrono::system_clock::time_point ack_time;
 
-  while(1){
+  while(b_run){
 
     auto order = bsoncxx::builder::stream::document{} <<
       "_id" << 1 <<bsoncxx::builder::stream::finalize;
     auto opts = mongocxx::options::find{};
     opts.sort(order.view());
-    mongocxx::cursor cursor = control.find
-      (
-       bsoncxx::builder::stream::document{}<< "host" << hostname <<"acknowledged" <<
-       bsoncxx::builder::stream::open_document << "$ne" << hostname <<
+    mongocxx::cursor cursor = control.find(
+       bsoncxx::builder::stream::document{}<< "host" << hostname <<
+       "acknowledged." + hostname <<
+       bsoncxx::builder::stream::open_document << "$exists" << 0 <<
        bsoncxx::builder::stream::close_document << bsoncxx::builder::stream::finalize,
        opts
        );
+    ack_time = std::chrono::system_clock::now();
     
     for (auto doc : cursor) {
       // Acknowledge the commands
-      control.update_one
-        (bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
+      control.update_one(
+         bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
          bsoncxx::builder::stream::finalize,
-         bsoncxx::builder::stream::document{} << "$push" <<
-         bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
+         bsoncxx::builder::stream::document{} << "$set" <<
+         bsoncxx::builder::stream::open_document << "acknowledged."+ hostname <<
+         (long)std::chrono::duration_cast<std::chrono::milliseconds>(ack_time.time_since_epoch()).count() <<
          bsoncxx::builder::stream::close_document <<
          bsoncxx::builder::stream::finalize
          );
@@ -102,7 +116,7 @@ int main(int argc, char** argv){
        catch(const std::exception E){
 	 logger->Entry(MongoLog::Warning, "ccontrol: Received an arm document with no run mode");
        }
-                                     
+
        // Get an override doc from the 'options_override' field if it exists
        std::string override_json = "";
        try{
@@ -111,22 +125,22 @@ int main(int argc, char** argv){
        } 
        catch(const std::exception E){
 	 logger->Entry(MongoLog::Debug, "No override options provided");
-       }	  
-              
+       }
+
        //Here are our options
        if(options != NULL) {
 	 delete options;
 	 options = NULL;
        }
        options = new Options(logger, mode, options_collection, dac_collection, override_json);
-	 
-       // Initialise the V2178, V1495 and DDC10...etc.      
+
+       // Initialise the V2178, V1495 and DDC10...etc.
        if(fHandler->DeviceArm(run, options) != 0){
 	 logger->Entry(MongoLog::Error, "Failed to initialize devices");
        }
 
      } // end if "arm" command
-     
+
 
     else if(command == "start"){
        if((fHandler->DeviceStart()) != 0){

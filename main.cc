@@ -8,8 +8,10 @@
 #include "MongoLog.hh"
 #include "Options.hh"
 #include <limits.h>
+#include <atomic>
+#include <chrono>
 
-bool b_run = true;
+std::atomic_bool b_run = true;
 
 void SignalHandler(int signum) {
     std::cout << "Received signal "<<signum<<std::endl;
@@ -74,6 +76,7 @@ int main(int argc, char** argv){
   // boards and tracking the status
   DAQController *controller = new DAQController(logger, hostname);  
   std::vector<std::thread*> readoutThreads;
+  std::chrono::system_clock::time_point ack_time;
   
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
@@ -90,27 +93,27 @@ int main(int argc, char** argv){
       auto opts = mongocxx::options::find{};
       opts.sort(order.view());
       
-      mongocxx::cursor cursor = control.find 
-	(
-	 bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged" <<
-	 bsoncxx::builder::stream::open_document << "$ne" << hostname <<       
-	 bsoncxx::builder::stream::close_document << 
+      mongocxx::cursor cursor = control.find(
+	 bsoncxx::builder::stream::document{} << "host" << hostname <<
+         "acknowledged." + hostname <<
+	 bsoncxx::builder::stream::open_document << "$exists" << 0 <<
+	 bsoncxx::builder::stream::close_document <<
 	 bsoncxx::builder::stream::finalize, opts
 	 );
-      
-      
+      ack_time = std::chrono::system_clock:now();
+
       for(auto doc : cursor) {
-	
+
 	std::cout<<"Found a doc with command "<<
 	  doc["command"].get_utf8().value.to_string()<<std::endl;
 	// Very first thing: acknowledge we've seen the command. If the command
 	// fails then we still acknowledge it because we tried
-	control.update_one
-	  (
+	control.update_one(
 	   bsoncxx::builder::stream::document{} << "_id" << (doc)["_id"].get_oid() <<
 	   bsoncxx::builder::stream::finalize,
-	   bsoncxx::builder::stream::document{} << "$push" <<
-	   bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
+	   bsoncxx::builder::stream::document{} << "$set" <<
+	   bsoncxx::builder::stream::open_document << "acknowledged." + hostname <<
+           (long)std::chrono::duration_cast<std::chrono::milliseconds>(ack_time.time_since_epoch()).count() <<
 	   bsoncxx::builder::stream::close_document <<
 	   bsoncxx::builder::stream::finalize
 	   );
