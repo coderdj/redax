@@ -10,6 +10,7 @@
 #include <map>
 #include <mutex>
 #include <experimental/filesystem>
+#include <atomic>
 
 class DAQController;
 class Options;
@@ -38,7 +39,8 @@ public:
   void Close(std::map<int,int>& ret);
   
   int ReadAndInsertData();
-  bool CheckError(){ return fErrorBit; };
+  bool CheckError(){ return fErrorBit; }
+  void GetDataPerChan(std::map<int, long>& ret);
   
 private:
   void ParseDocuments(data_packet dp);
@@ -67,6 +69,7 @@ private:
   int fBoardFailCount;
   std::map<std::string, int>fFmt;
   std::map<int, int> fFailCounter;
+  std::map<int, std::atomic_long> fDataPerChan;
 };
 
 #endif

@@ -28,7 +28,7 @@ StraxInserter::StraxInserter(){
 
 }
 
-StraxInserter::~StraxInserter(){  
+StraxInserter::~StraxInserter(){
 }
 
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
@@ -81,6 +81,13 @@ void StraxInserter::Close(std::map<int,int>& ret){
   fActive = false;
 }
 
+void GetDataPerChan(std::map<int, long>& ret) {
+  for (auto& pair : fDataPerChan) {
+    ret[pair.first] += pair.second;
+    pair.second = 0;
+  }
+  return;
+}
 
 void StraxInserter::ParseDocuments(data_packet dp){
   
@@ -208,6 +215,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 
 	  // Cast everything to char so we can put it in our buffer.
 	  int16_t cl = int16_t(fOptions->GetChannel(dp.bid, channel));
+          fDataPerChan[cl] += samples_in_channel<<1;
 
 	  // Failing to discern which channel we're getting data from seems serious enough to throw
 	  if(cl==-1)
@@ -244,7 +252,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  u_int8_t rl = 0;
 	  char *reductionLevel = reinterpret_cast<char*> (&rl);
 	  fragment.append(reductionLevel, 1);
-	  
+
 	  // Copy the raw buffer
 	  if(samples_this_channel>fFragmentLength/2){
 	    std::cout<<samples_this_channel<<"!"<<std::endl;
