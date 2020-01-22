@@ -83,10 +83,8 @@ void StraxInserter::Close(std::map<int,int>& ret){
 
 long StraxInserter::GetBufferSize() {
   long ret = 0;
-  fMutex.lock();
-  ret = std::accumulate(fFragmentSize.begin(), fFragmentSize.end(), 0,
-      [=](long tot, std::pair<std::string, long> iter) {return tot + iter.second;});
-  fMutex.unlock();
+  ret = std::accumulate(fFragmentSize.begin(), fFragmentSize.end(), 0L,
+      [&](long tot, auto& iter) {return tot + iter.second;});
   return ret;
 }
 
@@ -277,9 +275,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	      fFragments[chunk_index] = new std::string();
 	    }
 	    fFragments[chunk_index]->append(fragment);
-            fMutex.lock();
             fFragmentSize[chunk_index] += fragment.size();
-            fMutex.unlock();
 	  }
 	  else{// if(nextpre){
 	    std::string nextchunk_index = std::to_string(chunk_id+1);
@@ -290,17 +286,13 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	      fFragments[nextchunk_index+"_pre"] = new std::string();
 	    }
 	    fFragments[nextchunk_index+"_pre"]->append(fragment);
-            fMutex.lock();
             fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
-            fMutex.lock();
 
 	    if(fFragments.find(chunk_index+"_post") == fFragments.end()){
 	      fFragments[chunk_index+"_post"] = new std::string();
 	    }
 	    fFragments[chunk_index+"_post"]->append(fragment);
-            fMutex.lock();
             fFragmentSize[chunk_index+"_post"] += fragment.size();
-            fMutex.unlock();
 	  }
 	  fragment_index++;
 	  index_in_sample = max_sample;
@@ -388,10 +380,8 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 				 &((*iter->second)[0]), uncompressed_size, &kPrefs);
     }
     delete iter->second;
-    fMutex.lock();
     fFragmentSize[chunk_index] = 0;
     fFragmentSize.erase(chunk_index);
-    fMutex.unlock();
     
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
     writefile.write(out_buffer, wsize);
