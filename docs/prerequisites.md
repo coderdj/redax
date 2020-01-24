@@ -14,14 +14,15 @@ This section lists all the prerequisites needed. We're assuming an Ubuntu 18.04 
 
 The most basic system will consist of a CAEN V1724 connected via optical link to a CAEN A3818 or A2818 PCI(e) card installed in the same PC where the software will run. More complex setups, for example using a V2718 crate controller to facilitate synchronized starting of multiple V1724, are of course also possible.
 
-**Note:** the V1724 can be either used with the XENON1T custom DPP firmware or with the default firmware without 'zero-length-encoding' enabled. ZLE support may be included in a future release if it is needed.
+**Note:** the V1724 can be either used with the DPP_DAQ firmware or with the default firmware without 'zero-length-encoding' enabled. ZLE support may be included in a future release if it is needed.
 
 ## Libraries from the package repo
 
-  * [Blosc](http://blosc.org/) is needed for compression. 
+  * [LZ4](http://lz4.org) is needed as the primary compression algorithm.
+  * [Blosc](http://blosc.org/) is the secondary for compression algorithm.
   * Normal build libraries required. Note that we're using C++17 so require a relatively recent gcc, in case you're on an older OS.
   
-Install with: `sudo apt-get install build-essential libblosc-dev`
+Install with: `sudo apt-get install build-essential libblosc-dev liblz4`
 
 ## CAEN Libraries
 
@@ -38,7 +39,7 @@ This is a condensation of the instructions found [here](https://mongodb.github.i
 ### Step 1: Build mongo C driver
 The CXX driver depends on the C driver now.
 
-1. Get with: `wget https://github.com/mongodb/mongo-c-driver/releases/download/1.9.2/mongo-c-driver-1.9.2.tar.gz`
+1. Get with: `wget https://github.com/mongodb/mongo-c-driver/releases/download/1.9.2/mongo-c-driver-1.9.2.tar.gz` (or whichever version you choose)
 2. untar `tar -xvzf mongo-c-driver-1.9.2.tar.gz`
 3. See instructions [here](http://mongoc.org/libmongoc/current/installing.html). We're not gonna mess with the package repo versions but will compile from source.
 4. prerequisites: `sudo apt-get install pkg-config libssl-dev libsasl2-dev`
@@ -64,44 +65,12 @@ deployment sitting anywhere provided you have the proper credentials. However, i
 you need to install a database there are a few options.
 
 1. Use a cloud-hosted DB. [Mlab](https://www.mlab.com) and [MongoDB Atlas](https://www.mongodb.com/cloud/atlas) are popular choices and feature a free tier, which is enough for testing. Note that MLab has been acquired by MongoDB.
-2. Use your running cloud service. If you happen to be XENON1T we use a mongo cloud deployment that allows us to deploy new databases to our own servers at the click of a button. It is a service from MongoDB and costs a fee per data-bearing machine. Our production systems are managed in this way.
+2. Use your running cloud service. If you happen to be XENONnT we use a mongo cloud deployment that allows us to deploy new databases to our own servers at the click of a button. It is a service from MongoDB and costs a fee per data-bearing machine. Our production systems are managed in this way.
 3. Install your own standalone database. This is easy to do and gives you full freedom to use your own hardware. Additionally, a cloud-based solution may not be fully appropriate for a DAQ deployment that is inexorably tied to specific physical hardware (i.e. the detector and electronics readout). Instructions for this follow.
 
 ### Local Installtion
 
-Note: the easiest way to do this is to google it. At time of writing 
-[this](https://www.digitalocean.com/community/tutorials/how-to-install-mongodb-on-ubuntu-16-04) was the top result from
-google and is reproduced here in condensed form.
-
-**Also note that you absolutely must set a password for the database, so do not skip the final steps.**
-
-The most up to date version is found in a repository maintained by the mongo devs. Add the key:
-```
-sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv EA312927 `
-```
-Create a list:
-```
-echo "deb http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.2 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-3.2.list
-```
-Get update:
-```
-sudo apt-get update
-```
-Install:
-```
-sudo apt-get install -y mongodb-org
-```
-There may be other steps in production if you want your server visible from the outside world, for example. But for local access you don't need to change anything else. Note that if you want your sever available within your subnet and not just via localhost you may need to change the address in your mongo configuration file from 'localhost' (or 127.0.0.1) to your server's fixed IP. Do the password step first though.
-
-**Start the process**
-
-Not just now but any time you want to control the process you just use systemctl like any other process. Namely to start:
-
-`sudo systemctl start mongod`
-
-To stop: `sudo systemctl stop mongod` 
-
-To restart: `sudo systemctl restart mongod`
+The easiest way to do this is to google it.
 
 **Enable authentication**
 
@@ -155,18 +124,15 @@ Or using a connection string like so:
 
 ```mongo mongodb://user:password@127.0.0.1:27017/admin```
 
-Another note on security. A database isn't really meant to be a public-facing thing like an api. So try to avoid any unnecessary exposure to the internet (certainly) or public/semipublic subnets. There's a simple eve API included in 
-the redax repo for access to the database (in our case by the slow control system). It is easy to expand this
+Another note on security. A database isn't really meant to be a public-facing thing like an api. So try to avoid any unnecessary exposure to the internet (certainly) or public/semipublic subnets. An API is recommended for for access to the database (in our case by the slow control system). It is easy to expand this
 to do whatever you want. 
 
-## Anaconda Environment for the broker and system monitor
+## Anaconda Environment for the dispatcher and system monitor
 
-If you use the broker, system monitor, and API functionalities you need python3 and some libraries. If you're installing this on a test or shared system you might consider installing everything in an [anaconda](https://www.anaconda.com/) environment.
+If you use the dispatcher, system monitor, and API functionalities you need python3 and some libraries. If you're installing this on a test or shared system you might consider installing everything in an [anaconda](https://www.anaconda.com/) environment.
 
 Here are the required packages via pip (you may need to install it):
 ```
 pip install psutil pymongo 
-# for API
-pip install eve bcrypt
 ```
 

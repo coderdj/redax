@@ -1,5 +1,5 @@
 # REDAX
-D. Coderre, 2018. Please see license in LICENSE file.
+D. Coderre, 2018, D. Masson, 2020. Please see license in LICENSE file.
 
 See documentation here: [link](https://coderdj.github.io/redax)
 ## Prerequisites
@@ -7,6 +7,7 @@ See documentation here: [link](https://coderdj.github.io/redax)
 * mongodb cxx driver
 * CAENVMElib v2.5+
 * libblosc-dev (on ubuntu)
+* liblz4-dev
 * C++17-compatible compiler. Tested on gcc 7.3.0
 * Driver for your CAEN PCI card
 * A DAQ hardware setup (docs coming on xenon wiki)
@@ -25,35 +26,34 @@ make ccontrol
 
 ## Starting the Reader Process
 
-./main {ID} mongodb://localhost:27017/database
+./main {ID} mongo_uri [database_name]
 
 The first argument is a unique ID that will identify your reader. This is important since your physical hardware setup needs to be associated with the software programs that will read the things out. So you probably want to map out ahead of time which reader processes will read out which optical links.
 
-Note: this is designed to be able to run multiple times on one PC. You should make sure that optical links are not shared between readers, since the CAEN optical interface is not thread safe at the stage of a single link. Also, give each process its own ID. Within a single process the code will assign one dedicated readout thread per optical link in order to maximize read speeds. 
+Note: while this can run multiple times on a given host (one readout instance per link), it also works fine with all links in one instance.
 
 The ID number will create a unique process identifier for this instance of redax which appears as so: HOSTNAME_reader_ID. So if you run on host daq00 with ID 1 your process ID will be daq00_reader_1. This is the ID you use to address commands to this host.
 
+Optionally, you can also specify the name of the database the program should look in for the various collections.
 
-## Starting the Broker (optional)
+## Starting the Dispatcher (optional)
 
-If you run with more than one readout process you should configure a broker. The broker handles communication with the user interface and translates human-level commands to the readout nodes. The broker is a python script stored in the 'broker' subdirectory. 
+If you run with more than one readout process (this includes a crate controller) you should configure a dispatcher. The dispatcher handles communication with the user interface and translates human-level commands to the readout nodes. The provided example is a python script stored in the 'dispatcher' subdirectory, but is written for XENONnT, so YMMV.
 
-At the moment the broker is just a script, not an executable. So it can be run with:
-`python broker.py --config=options.ini`
+At the moment the dispatcher is just a script, not an executable. So it can be run with:
+`python dispatcher.py --config=options.ini`
 
-The config option points to an ini file for the broker. See the subdirectory for a readme detailing the options herein.
+The config option points to an ini file for the dispatcher. See the subdirectory for a readme detailing the options herein.
 
 ## Database Setup
 
 You need to provide connectivity to a mongodb database using the URI.
 This database should have the following collections.
 
-**control:** is where commands go. The storage requirements are basically
-zero since commands are deleted after all addressees have acknowledged
-them.
+**control:** is where commands go. Configure this as a capped collection, size approx 1MB (really not much needed). If you have no dispatcher you'll write directly to this collection, otherwise the dispatcher handles it.
 
 **status:** should be configured as a capped collection. Each readout
-node will write it's status here every second or so.
+node will write its status here every second or so.
 
 **log:** The DAQ will log here.
 
@@ -62,17 +62,17 @@ the name of the options file should be embedded in the command doc.
 If the reader can't find an options doc with that name it won't be
 able to arm the DAQ.
 
-If you run with the broker you additionally need a collection called **detector_control**, which will supercede control as the top-level user interface. The **control** collection will still be used by the broker to control the readout nodes but the user should not use it in this case. If there is just one readout node you may want to skip the broker and just directly control that node for simplicity.
+If you run with the dispatcher you additionally need a collection called **detector_control**, which will supercede control as the top-level user interface. The **control** collection will still be used by the dispatcher to control the readout nodes but the user should not use it in this case. If there is just one readout node you may want to skip the dispatcher and just directly control that node for simplicity.
 
 ## First steps: from nothing to starting a run
 
 Install all prerequisites, a mongodb database, and the redax software as described above. If you have XENON wiki access there are some build notes on the DAQ page [here](https://xe1t-wiki.lngs.infn.it/doku.php?id=xenon:xenonnt:dsg:daq#reader wiki), however if you don't have access don't worry too much since everything is straight off google searches.
 
-If you want to configure your status collection as capped (as well as the 'aggregate_status', which stored broker state history and 'system_monitor' for use with the optional monitor script) you can run helpers/initialize_databases.py.
+If you want to configure your status collection as capped (as well as the 'aggregate_status', which stored dispatcher state history and 'system_monitor' for use with the optional monitor script) you can run helpers/initialize_databases.py.
 
 Hook your digitizer up via optical link to your PC. Hopefully you're using our self-triggering firmware, if not you'll have to deal with configuring an external trigger for your digitizer yourself. This example will use just one digitizer.
 
-Start the reader process with ./main 0 {MONGO_URI}, with mongo uri pointing to your mongo DB.
+Start the reader process with ./main 0 {MONGO_URI} [database_name], with mongo uri pointing to your mongo DB.
 
 Use the script helpers/set_run_mode.py to put some settings into the 'options' collection of your database. You'll need to modify the script to put in your database connectivity parameters. The given register settings should work fine if you're using our self-trigger firmware. Otherwise adjust accordingly. Also be sure to change the optical link address at `boards[0].link` in case you're not plugged into link 0. Note the value in the 'name' field of the document you are inserting. One more thing, you probably want to look at data so set strax_output_path to some place you can write and read from. Your data will go there.
 
