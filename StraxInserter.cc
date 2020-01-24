@@ -194,10 +194,15 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// bit because we want to allow also odd numbers of samples
 	// as FragmentLength
 	u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff);
-	u_int32_t samples_in_channel = (channel_words)*2;
+	u_int32_t samples_in_channel = channel_words<<1;
 	u_int32_t index_in_sample = 0;
 	u_int32_t offset = idx*2;
 	u_int16_t fragment_index = 0;
+	int16_t cl = int16_t(fOptions->GetChannel(dp.bid, channel));
+        fDataPerChan[cl] += samples_in_channel<<1;
+	// Failing to discern which channel we're getting data from seems serious enough to throw
+	if(cl==-1)
+	  throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
 	
 	while(index_in_sample < samples_in_channel){
 	  std::string fragment;
@@ -211,15 +216,6 @@ void StraxInserter::ParseDocuments(data_packet dp){
 					    (fragment_index*fFragmentLength/2));
 	    samples_this_channel = max_sample-index_in_sample;
 	  }
-	  
-
-	  // Cast everything to char so we can put it in our buffer.
-	  int16_t cl = int16_t(fOptions->GetChannel(dp.bid, channel));
-          fDataPerChan[cl] += samples_in_channel<<1;
-
-	  // Failing to discern which channel we're getting data from seems serious enough to throw
-	  if(cl==-1)
-	    throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
 
 	  char *channelLoc = reinterpret_cast<char*> (&cl);
 	  fragment.append(channelLoc, 2);
