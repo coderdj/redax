@@ -7,16 +7,16 @@
 * [Example operation](how_to_run.md)
 
 # redax Docs
-D. Coderre, 3. January 2019
+D. Coderre, D. Masson, 24. January 2020
 
 ## Brief
 
-Redax is a DAQ readout code based on CAEN electronics. It is designed to be used with V1724 digitizers
+Redax is a DAQ readout code based on CAEN electronics. It is designed to be used with V1724 and V1730 digitizers
 connected via their front optical ports to A3818 PCIe cards, but it can also be used for other similar
 setups, for example with different digitizer models or configuration strategies (some modification 
 could be required in some cases). Output is into the [strax](https://github.com/axfoundation/strax) 
 input format. This documentation should get you up and running with redax. At the 
-time of writing the software is still in heavy development so if there are any issues with this 
+time of writing the software is still in development so if there are any issues with this 
 documentation please file an issue on GitHub.
 
 ## Use Case
@@ -48,8 +48,8 @@ A brief overview of the complete system follows. Please refer to Figure 1.
 The system is based around a central MongoDB database (green box "DAQ Database" in the middle) containing several
 subcollections and facilitating communcation between each component. Each readout node (red boxes on left) is 
 an independent process responsible for readout of a certain number of channels on one or more PCI card optical links, 
-where each link can support up to 8 daisy-chained digitizers or, if a slower readout speed can be tolerated, en 
-entire crate full of digitizers connected via a V2718 crate controller. 
+where each link can support up to 8 daisy-chained digitizers or, if a slower readout speed can be tolerated, an 
+entire crate full of digitizers connected via a V2718 crate controller (this feature is not yet supported). 
 
 The readout nodes are constantly polling the database looking for new commands addressed to them. Commands are 
 limited to **arm**, **start** (always in conjunction) and **stop**. Additionally the readout nodes report their
@@ -65,10 +65,10 @@ from its own internal buffers, frees all reserved memory, resets all objects, an
 at which point it is ready for further acquisition.
 
 In a full-scale system, the **arm**, **start**, and **stop** commands do not come to the readout process
-directly from the user but via the **broker** (blue box on the right in figure 1). However it should be noted 
-that in small-scale lab-sized systems the broker can be omitted, or greatly simplified and the user could control a 
+directly from the user but via the **dispatcher** (aka "broker", blue box on the right in figure 1). However it should be noted 
+that in small-scale lab-sized systems the dispatcher can be omitted, or greatly simplified and the user could control a 
 single readout process directly. In the case of the full-scale system, however, several readout processes must be operated
-in parallel and kept in synchronization. This is facilitated by the broker. The broker reads a **state document** set by
+in parallel and kept in synchronization. This is facilitated by the dispatcher. The dispatcher reads a **state document** set by
 the user that defines one or more **detectors** to operate in parallel. This document also defines what each detector should
 be doing (running or not), in what operational mode, and a few other parameters such as the length of runs. The dispatcher
 then reads the status of all readout nodes and performs a logic similar to the following:
@@ -78,12 +78,11 @@ then reads the status of all readout nodes and performs a logic similar to the f
   3. If I have all the components to implement the user's goal state then issue commands to do so
   4. If I don't have all the components to implement the user's goal state report this to the user
 
-The broker then continues to monitor the state document for changes and implements them as appropriate. It also reports 
+The dispatcher then continues to monitor the state document for changes and implements them as appropriate. It also reports 
 aggregate information back to the database for display in the frontend. The idea of this is that the user can set something
-like "run the TPC in background mode with 60 minute runs" and the broker will make sure this happens for an unlimited
-amount of time, until the desired state command changes.
+like "run the TPC in background mode with 60 minute runs" and the dispatcher will make sure this happens, until the desired state command changes.
 
 The user interface is left blank here. It should consist of at least functionality to display the current state of the 
-DAQ as well as to control the **state documents** read by the broker. An example implementation of a nodejs web frontend
+DAQ as well as to control the **state documents** read by the dispatcher. An example implementation of a nodejs web frontend
 is found [here](https://github.com/coderdj/nodiaq). 
 

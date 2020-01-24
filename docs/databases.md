@@ -24,18 +24,23 @@ fields can be present as well. This is especially pertinent to run documents.
 
 ### db.status
 
-The status collection should be configured as a capped collection (see the 'helpers' directory for a script to set up the necessary capped collections). Each readout client report's it's status to this DB every few seconds. The broker 
+The status collection should be configured as a capped collection (see the 'helpers' directory for a script to set up the necessary capped collections). Each readout client report's it's status to this DB every few seconds. The dispatcher 
 queries the newest document from each node (considering also the time stamp of the document) to determine the aggregate 
 DAQ state.
 
 The form of the document is the following:
 ```python
 {
-    "host":   "xedaq00_reader_0", // DAQ name of client
-    "status": 0,         // status enum
-    "rate":  2343319,    // data rate in bytes/s since last update
-    "blt": 9182,         // number of block transfers per second since last update
-    "digitizers": 8,     // number of digitizers connected
+    "host":   "xedaq00_reader_0", # DAQ name of client
+    "status": 0,         # status enum
+    "rate":  23,         # data rate in MB since last update
+    "buffer_length" : 4,  # current buffer utilization in MB
+    "run_mode" : "background_stable", # current run mode
+    "current_run_id" : "006363",    # current run number
+    "channels" : {0 : 67,       # Rate per channel on this host in kB since last update
+                  19 : 16,
+                  ...
+    },
 }
 ```
 The status enum has the following values:
@@ -54,7 +59,7 @@ These values are valid throughout the entire DAQ.
 
 ### db.aggregate_status
 
-This collection should also be configured as **capped**. It is written to by the broker only and provides the 
+This collection should also be configured as **capped**. It is written to by the dispatcher only and provides the 
 status history of the system on a detector level, which is a more palatable thing for operators to deal with. It is 
 mostly redundant compared to status, except that it depends also on the state document given to the dispatcher. 
 
@@ -76,7 +81,7 @@ The document format is similar to status:
 
 This is the state document set by the user. There is exactly one document in this collection per detector, so in XENONnT 
 there should be 3 documents in this collection (TPC, MV, NV). When a new state is configured, the document for the 
-corresponding detector is *updated*. Upon update the broker will attempt to recitfy the current actual state of the DAQ 
+corresponding detector is *updated*. Upon update the dispatcher will attempt to recitfy the current actual state of the DAQ 
 with the goal state provided in this document.
 
 Because some of these fields require slightly more explanation a table has been included below in lieu of inline comments.
@@ -100,16 +105,16 @@ Because some of these fields require slightly more explanation a table has been 
 | ----- | ----- |
 |detector	|Either 'tpc', 'muon_veto', or 'neutron_veto'. Or whatever funny thing you've got in your lab. |
 |active	|The user can set whether this detector is 'active' or not. If it's not active then we don't care about it's status. In fact we can't care since some readers will be reused when running in combined modes and may not longer belong to their original detectors.|
-|stop_after	|How many minutes (or seconds? check code) until the run automatically restarts. This is a global DAQ state setting, not the setting for a single run. So if you want to run for an hour you set this to 60 minutes, put the detector active, and the broker should handle giving you the 1 hour runs. |
+|stop_after	|How many minutes (or seconds? check code) until the run automatically restarts. This is a global DAQ state setting, not the setting for a single run. So if you want to run for an hour you set this to 60 minutes, put the detector active, and the dispatcher should handle giving you the 1 hour runs. |
 |mode	|The options mode we're running the DAQ in. Should correspond to the 'name' field of one of the documents in the options collection. |
 |user	|Who gets credit/blame for starting these runs? This is the user who last changed this command doc and it will be recorded in the run documents of all runs recorded while this command is active. |
 |Comment	|You can automatically connect a comment to all runs started with this setting by setting this field. The comment is put in the run doc for all runs started while the command is active. |
 |link_mv, link_nv	|These are used by the frontend for detector=tpc only. They simply indicate if the neutron or muon veto are included as part of 'tpc' for this run (for running in combined mode). To the backend this makes no difference. A reader is a reader. To the frontend it can limit the options modes given to the user or help in setting visual cues in the web interface so the operator can figure out what's going on. |
-|diagnosis	|The broker's take on what's going on. It's 'goal' if the program thinks everything is OK. It's 'error' if there's an error. It's 'processing' if the broker issued a command and is waiting for this to be implemented. In case the command takes too long the broker can set this field to 'timeout'. |
+|diagnosis	|The dispatcher's take on what's going on. It's 'goal' if the program thinks everything is OK. It's 'error' if there's an error. It's 'processing' if the dispatcher issued a command and is waiting for this to be implemented. In case the command takes too long the dispatcher can set this field to 'timeout'. |
 |human_readable_status	|Just translates the status enum to something people can read. Useful if displaying on a web page or someone calling the API who doesn't want to learn the codes. |
 
 ### db.control
-The control database is used to propagate commands from the broker to the reader and crate controller nodes. It is used purely internally by the broker. Users wanting to set the DAQ state should set the detector control doc instead (preferably using the web interface). The exception to this is if you're running a small setup with a custom broker and want to issue commands to your readout nodes manually. 
+The control database is used to propagate commands from the dispatcher to the reader and crate controller nodes. It is used purely internally by the dispatcher. Users wanting to set the DAQ state should set the detector control doc instead (preferably using the web interface). The exception to this is if you're running a small setup with a custom dispatcher and want to issue commands to your readout nodes manually. 
 ```python
 {
     "options_override" : {
@@ -131,12 +136,12 @@ The control database is used to propagate commands from the broker to the reader
 |mode	|Options file to use for this run. Corresponds to the 'name' field of the options doc. |
 |user	|Who started the run? Corresponds to the last person to change the detector_status doc during normal operation. Exceptional stop commands can be automatically issued by various subsystems as well in case of errors.
 |host	|List of all hosts to which this command is directed. Readers and crate controllers will only process commands addressed to them. |
-|acknowledged	|Before attempting to process a command all reader and crate controller processes will first acknowledge the command as received. This does not indicate that processing the command was successful! It just indicates the thing tried. The broker has to watch for the appropriate state change of the slave nodes in order to determine if the command achieved its goal. |
+|acknowledged	|Before attempting to process a command all reader and crate controller processes will first acknowledge the command as received. This does not indicate that processing the command was successful! It just indicates the thing tried. The dispatcher has to watch for the appropriate state change of the slave nodes in order to determine if the command achieved its goal. |
 |command	|This is the actual command. 'arm' gets the DAQ ready to start. 'start' starts readout by sending the S-in signal. 'send_stop_signal' puts the s-in to zero. 'stop' resets readout processes. |
 
 ### db.options
 
-This is where the DAQ options are stored. There's a lot here to it got it's own chapter. Please see [here](daq_options.md).
+This is where the DAQ options are stored. It got its own chapter. Please see [here](daq_options.md).
 
 ### db.log
 
