@@ -49,7 +49,7 @@ while(1):
 
     # Decision time. Are we actually in our goal state? If not what should we do?
     DAQControl.SolveProblem(latest_status, goal_state)
-    MongoConnector.ProcessCommands()
+    #MongoConnector.ProcessCommands()
 
     # Time to report back
     MongoConnector.UpdateAggregateStatus()

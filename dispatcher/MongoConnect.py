@@ -2,6 +2,7 @@ from pymongo import MongoClient
 import datetime
 import os
 import json
+import threading
 '''
 MongoDB Connectivity Class for XENONnT DAQ Dispatcher
 D. Coderre, 12. Mar. 2019
@@ -32,8 +33,6 @@ class MongoConnect():
         print("Initializing with DB name %s"%dbn)
         self.dax_db = MongoClient(
             config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])[dbn]
-        self.log_db = MongoClient(
-            config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])[dbn]
         self.runs_db = MongoClient(
             config['DEFAULT']['RunsDatabaseURI']%os.environ['RUNS_MONGO_PASSWORD'])[rdbn]
 
@@ -51,7 +50,8 @@ class MongoConnect():
             'outgoing_commands': self.dax_db['control'],
             'log': self.dax_db['log'],
             'options': self.dax_db['options'],
-            'run': self.runs_db[config['DEFAULT']['RunsDatabaseCollection']]
+            'run': self.runs_db[config['DEFAULT']['RunsDatabaseCollection']],
+            'command_queue' : self.dax_db['dispatcher_queue'],
         }
 
         self.outgoing_commands = []
@@ -98,6 +98,14 @@ class MongoConnect():
                 self.latest_status[detector]['controller'][controller] = {}
 
         self.log = log
+        self.event = threading.Event()
+        self.bufferer_thread = threading.Thread(target=self.CommandBufferer)
+        self.bufferer_thread.start()
+
+    def __del__(self):
+        self.quit = True
+        self.event.set()
+        self.bufferer_thread.join()
 
     def GetUpdate(self):
 
@@ -344,7 +352,7 @@ class MongoConnect():
             number = self.GetNextRunNumber()
             n_id = (str(number)).zfill(6)
             self.latest_status[detector]['number'] = number
-        self.outgoing_commands.append({
+        self.collections['command_queue'].insert_one({
             "command": command,
             "user": user,
             "detector": detector,
@@ -354,7 +362,41 @@ class MongoConnect():
             "host": host_list,
             "createdAt": datetime.datetime.utcnow() + datetime.timedelta(seconds=delay)
         })
+        self.event.set()
         return
+
+    def GetNextCommand(self, command=None, host=None):
+        query = {}
+        sort=[('createdAt', 1)]
+        if command is not None:
+            query['command'] = command
+        if host is not None:
+            if isinstance(host, str):
+                query['host'] = host
+            elif isinstance(host, (list, tuple)):
+                pass
+        for doc in self.collections['command_queue'].find(query).sort(sort).limit(1):
+            return doc
+        return None
+
+    def CommandBufferer(self):
+        while True:
+            next_cmd = self.GetNextCommand()
+            if next_cmd is None:
+                dt = 10
+            else:
+                dt= (next_cmd['createdAt']-datetime.datetime.utcnow()).total_seconds()
+                if dt < 0.1:
+                    oid = next_cmd['_id']
+                    del next_cmd['_id']
+                    self.collections['outgoing_commands'].insert_one(next_cmd)
+                    self.collections['command_queue'].delete_one({'_id': oid})
+                    continue
+
+            self.event.wait(dt)
+            self.event.clear()
+            if hasattr(self, 'quit') and self.quit == True:
+                return
 
     def ProcessCommands(self):
         '''
