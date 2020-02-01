@@ -16,14 +16,15 @@ public:
   int SendStopSignal(bool end=true); 
   
   CrateOptions GetCrateOptions(){ return fCopts;};
-  
+  int GetHandle(){return fBoardHandle;};
+
+protected:
+  int fBoardHandle;
+
 private:
   
   CrateOptions fCopts;
-  
-  int fBoardHandle;
   int fCrate, fLink;
-  
   MongoLog *fLog;
 
 };

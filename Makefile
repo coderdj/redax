@@ -13,7 +13,7 @@ DEPS_SLAVE = $(OBJECTS_SLAVE:%.o=%.d)
 EXEC_SLAVE = main
 
 SOURCES_CC = ccontrol.cc Options.cc V2718.cc \
-    CControl_Handler.cc DDC10.cc MongoLog.cc
+    CControl_Handler.cc DDC10.cc V1495.cc MongoLog.cc
 OBJECTS_CC = $(SOURCES_CC:%.cc=%.o)
 DEPS_CC = $(OBJECTS_CC:%.o=%.d)
 EXEC_CC = ccontrol

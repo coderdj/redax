@@ -9,8 +9,6 @@ public:
   V1724_MV(MongoLog *log, Options *options);
   virtual ~V1724_MV();
 
-private:
-
 };
 
 #endif
