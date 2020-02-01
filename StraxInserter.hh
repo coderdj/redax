@@ -11,6 +11,7 @@
 #include <mutex>
 #include <experimental/filesystem>
 #include <numeric>
+#include <atomic>
 
 class DAQController;
 class Options;
