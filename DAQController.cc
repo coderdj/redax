@@ -293,7 +293,7 @@ void DAQController::ReadData(int link){
 }
 
 
-std::map<int, std::atomic_long> DAQController::GetDataPerChan(){
+std::map<int, long> DAQController::GetDataPerChan(){
   // Return a map of data transferred per channel since last update
   // Clears the private maps in the StraxInserters
   std::map <int, long> retmap;

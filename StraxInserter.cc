@@ -81,7 +81,7 @@ void StraxInserter::Close(std::map<int,int>& ret){
   fActive = false;
 }
 
-void GetDataPerChan(std::map<int, long>& ret) {
+void StraxInserter::GetDataPerChan(std::map<int, long>& ret) {
   for (auto& pair : fDataPerChan) {
     ret[pair.first] += pair.second;
     pair.second = 0;
