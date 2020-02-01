@@ -98,10 +98,9 @@ int main(int argc, char** argv){
 	 bsoncxx::builder::stream::finalize, opts
 	 );
 
-      for(auto doc : cursor) {
-
-	std::cout<<"Found a doc with command "<<
-	  doc["command"].get_utf8().value.to_string()<<std::endl;
+      for(auto doc : cursor) {	
+	logger->Entry(MongoLog::Debug, "Found a doc with command %s",
+	  doc["command"].get_utf8().value.to_string().c_str());
 	// Very first thing: acknowledge we've seen the command. If the command
 	// fails then we still acknowledge it because we tried
 	control.update_one
@@ -228,7 +227,7 @@ int main(int argc, char** argv){
 			    "Cannot start DAQ while readout thread from previous run active. Please perform a reset");
 	    }
 	    else if(!initialized){
-	      std::cout<<"Skipping readout configuration since init failed"<<std::endl;
+	      logger->Entry(MongoLog::Warning, "Skipping readout configuration since init failed");
 	    }
 	    else{
 	      controller->CloseProcessingThreads();
@@ -272,10 +271,10 @@ int main(int argc, char** argv){
         "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
 	"run_mode" << controller->run_mode() <<
 	"current_run_id" << current_run_id <<
-	"boards" << bsoncxx::builder::stream::open_document <<
+	"channels" << bsoncxx::builder::stream::open_document <<
 	[&](bsoncxx::builder::stream::key_context<> doc){
-	for( auto const& kPair : controller->GetDataPerDigi() )
-	  doc << std::to_string(kPair.first) << kPair.second/1e6;
+	for( auto const& pair : controller->GetDataPerChan() )
+	  doc << std::to_string(pair.first) << (pair.second>>10); // KB not MB
 	} << bsoncxx::builder::stream::close_document;
 	status.insert_one(insert_doc << bsoncxx::builder::stream::finalize);
     }catch(const std::exception &e){

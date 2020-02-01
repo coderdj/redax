@@ -2,7 +2,7 @@
 #include <functional>
 #include "V1724.hh"
 #include "V1724_MV.hh"
-//#include "V1730.hh"
+#include "V1730.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
 #include "StraxInserter.hh"
@@ -42,7 +42,7 @@ std::string DAQController::run_mode(){
   if(fOptions == NULL)
     return "None";
   try{
-    return fOptions->GetString("name");
+    return fOptions->GetString("name", "None");
   }
   catch(const std::exception &e){
     return "None";
@@ -67,15 +67,14 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     V1724 *digi;
     if(d.type == "V1724_MV")
       digi = new V1724_MV(fLog, fOptions);
-    // else if(d.type == "V1730")
-    // digi = new V1730(fLog, fOptions);
+    else if(d.type == "V1730")
+      digi = new V1730(fLog, fOptions);
     else
       digi = new V1724(fLog, fOptions);
 
-    
+
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
 	fDigitizers[d.link].push_back(digi);
-	fDataPerDigi[digi->bid()] = 0;
         BIDs.push_back(digi->bid());
 
 	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){
@@ -96,6 +95,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	}
     }
     else{
+      delete digi;
       fLog->Entry(MongoLog::Warning, "Failed to initialize digitizer %i", d.board);
       fStatus = DAXHelpers::Idle;
       return -1;
@@ -281,7 +281,6 @@ void DAQController::ReadData(int link){
 	d.header_time = fDigitizers[link][x]->GetHeaderTime(d.buff, d.size);
 	d.clock_counter = fDigitizers[link][x]->GetClockCounter(d.header_time);
 	fDatasize += d.size;
-	fDataPerDigi[d.bid] += d.size;
 	local_buffer.push_back(d);
       }
     }
@@ -295,14 +294,12 @@ void DAQController::ReadData(int link){
 }
 
 
-std::map<int, u_int64_t> DAQController::GetDataPerDigi(){
-  // Return a map of data transferred per digitizer since last update
-  // and clear the private map
-  std::map <int, u_int64_t>retmap;
-  for(auto const &kPair : fDataPerDigi){
-    retmap[kPair.first] = (u_int64_t)(fDataPerDigi[kPair.first]);
-    fDataPerDigi[kPair.first] = 0;
-  }
+std::map<int, long> DAQController::GetDataPerChan(){
+  // Return a map of data transferred per channel since last update
+  // Clears the private maps in the StraxInserters
+  std::map <int, long> retmap;
+  for (const auto& pt : fProcessingThreads)
+    pt.inserter->GetDataPerChan(retmap);
   return retmap;
 }
 
@@ -312,7 +309,7 @@ long DAQController::GetStraxBufferSize() {
 }
 
 std::map<std::string, int> DAQController::GetDataFormat(){
-  for( auto const& link : fDigitizers )    
+  for( auto const& link : fDigitizers )
     for(auto digi : link.second)
       return digi->DataFormatDefinition;
   return std::map<std::string, int>();
@@ -396,6 +393,7 @@ void DAQController::CloseProcessingThreads(){
 
     delete fProcessingThreads[i].pthread;
     delete fProcessingThreads[i].inserter;
+   
   }
   fProcessingThreads.clear();
   if (std::accumulate(board_fails.begin(), board_fails.end(), 0,
@@ -424,10 +422,10 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
 
     // Multiple options here
     int bid = digi->bid(), success(0);
-    fMapMutex.lock();
-    auto board_dac_cal = cal_values.count(bid) ? cal_values[bid] : cal_values[-1];
-    fMapMutex.unlock();
     if(BL_MODE == "cached") {
+      fMapMutex.lock();
+      auto board_dac_cal = cal_values.count(bid) ? cal_values[bid] : cal_values[-1];
+      fMapMutex.unlock();
       dac_values[bid] = std::vector<u_int16_t>(digi->GetNumChannels());
       fLog->Entry(MongoLog::Local, "Board %i using cached baselines", bid);
       for (unsigned ch = 0; ch < digi->GetNumChannels(); ch++)
@@ -469,6 +467,8 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
 
     // Load the baselines you just configured
     success += digi->LoadDAC(dac_values[bid]);
+    // Load all the other fancy stuff
+    success += digi->SetThresholds(fOptions->GetThresholds(bid));
 
     fLog->Entry(MongoLog::Local,
 	"DAC finished for %i. Assuming not directly followed by an error, that's a wrap.",
@@ -478,7 +478,7 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
       fLog->Entry(MongoLog::Warning, "Failed to configure digitizers.");
       ret = -1;
       return;
-      }
+    }
   } // loop over digis per link
 
   ret = 0;
@@ -626,15 +626,15 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               continue;
             }
             channel_mask = buffers[d][idx+1]&0xFF;
-            if (digis[d]->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
-              // V1730 stuff here
-            }
+	    if (digis[d]->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
+	      channel_mask = ( ((buffers[d][idx+2]>>24)&0xFF)<<8 ) | (buffers[d][idx+1]&0xFF); 
+	    }
             if (channel_mask == 0) { // should be impossible?
               idx += 4;
               continue;
             }
             channels_in_event = std::bitset<16>(channel_mask).count();
-            words_per_channel = (words_in_event - 4)/channels_in_event;
+	    words_per_channel = (words_in_event - 4)/channels_in_event;
             words_per_channel -= digis[d]->DataFormatDefinition["channel_header_words"];
 
             idx += 4;

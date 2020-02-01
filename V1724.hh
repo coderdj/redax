@@ -28,6 +28,7 @@ class V1724{
   int LoadDAC(std::vector<u_int16_t> &dac_values);
   void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
   unsigned GetNumChannels() {return fNChannels;}
+  int SetThresholds(std::vector<u_int16_t> vals);
 
   // Acquisition Control
   int SINStart();
@@ -40,7 +41,6 @@ class V1724{
   u_int32_t GetAcquisitionStatus();
   u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
 
-  int fNsPerSample;
   std::map<std::string, int> DataFormatDefinition;
 
 protected:
@@ -51,9 +51,10 @@ protected:
   unsigned int fResetRegister;
   unsigned int fChStatusRegister;
   unsigned int fChDACRegister;
+  unsigned int fChTrigRegister;
   unsigned int fNChannels;
-
-private:
+  unsigned int fSNRegisterMSB;
+  unsigned int fSNRegisterLSB;
 
   bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
 		       int sleep, u_int32_t val=1);

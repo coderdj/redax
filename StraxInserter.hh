@@ -42,7 +42,8 @@ public:
   int ReadAndInsertData();
   bool CheckError(){ return fErrorBit; }
   long GetBufferSize();
-
+  void GetDataPerChan(std::map<int, long>& ret);
+  
 private:
   void ParseDocuments(data_packet dp);
   void WriteOutFiles(int smallest_index_seen, bool end=false);
@@ -71,6 +72,7 @@ private:
   int fBoardFailCount;
   std::map<std::string, int>fFmt;
   std::map<int, int> fFailCounter;
+  std::map<int, std::atomic_long> fDataPerChan;
 };
 
 #endif

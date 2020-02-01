@@ -51,8 +51,8 @@ public:
   void ReadThreadWrapper(void* data, int link);
   void ProcessingThreadWrapper(void* data);
 
-  u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;};
-  std::map<int, u_int64_t> GetDataPerDigi();
+  u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;}
+  std::map<int, long> GetDataPerChan();
   bool CheckErrors();
   int OpenProcessingThreads();
   void CloseProcessingThreads();
@@ -83,7 +83,6 @@ private:
   // For reporting to frontend
   std::atomic_uint64_t fBufferLength;
   u_int64_t fDatasize;
-  std::map<int, std::atomic_ulong> fDataPerDigi;
 
 };
 

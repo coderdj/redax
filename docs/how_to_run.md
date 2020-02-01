@@ -29,10 +29,9 @@ run_mode = {
     "user": "you",
     "description": "Initial test mode",
     "run_start": 1,
-    "strax_chunk_overlap": 500000000,
-    "strax_header_size": 31,
+    "strax_chunk_overlap": 0.5,
     "strax_output_path": "/output_path",
-    "strax_chunk_length": 5000000000,
+    "strax_chunk_length": 5,
     "strax_fragment_length": 220,
     "baseline_dac_mode": "fit",
     "baseline_value": 16000,
@@ -152,4 +151,4 @@ The daq should cease acquisition in window (2) and go idle. You can also update 
 
 ## 5. Just for fun, check you runs DB
 
-You must have defined a runs DB in your broker settings. Have a look at the run collection and make sure you see entries for the data that was just taken.
+You must have defined a runs DB in your dispatcher settings. Have a look at the run collection and make sure you see entries for the data that was just taken.

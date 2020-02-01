@@ -6,7 +6,7 @@ command = sys.argv[1]
 
 #client = MongoClient("mongodb://reader:%s@127.0.0.1:27017/dax"%os.environ["MONGO_PASSWORD"])
 #client = MongoClient("mongodb://dax:%s@ds129770.mlab.com:29770/dax"%os.environ["MONGO_PASSWORD"])
-client = MongoClient("mongodb://daq:WIMPfinder@xenon1t-daq:27020,old-gw:27020/daq")
+client = MongoClient("mongodb://daq:%s@xenon1t-daq:27020/admin" % os.environ['MONGO_PASSWORD_DAQ'])
 
 db = client['daq']
 collection = db['control']

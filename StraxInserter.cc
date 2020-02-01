@@ -28,20 +28,19 @@ StraxInserter::StraxInserter(){
 
 }
 
-StraxInserter::~StraxInserter(){  
+StraxInserter::~StraxInserter(){
 }
 
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
 			      std::string hostname){
   fOptions = options;
-  fChunkLength = fOptions->GetLongInt("strax_chunk_length", 20e9); // default 20s
-  fChunkOverlap = fOptions->GetInt("strax_chunk_overlap", 5e8); // default 0.5s
+  fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
+  fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
-  fCompressor = fOptions->GetString("compressor", "lz4");
+  fCompressor = fOptions->GetString("compressor", "lz4");  
   fHostname = hostname;
   fBoardFailCount = 0;
   std::string run_name = fOptions->GetString("run_identifier", "run");
-  
   // To start we do not know which FW version we're dealing with (for data parsing)
   fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
   if(fFirmwareVersion == -1){
@@ -52,12 +51,14 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 	std::cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<std::endl;
 	return -1;
   }
-
+  
   fMissingVerified = 0;
   fDataSource = dataSource;
   fFmt = dataSource->GetDataFormat();
   fLog = log;
   fErrorBit = false;
+
+  std::cout<<"fFmt[channel_header_words] " << fFmt["channel_header_words"] << std::endl;
 
   std::string output_path = fOptions->GetString("strax_output_path", "./");
   try{    
@@ -70,8 +71,8 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
     fLog->Entry(MongoLog::Error, "StraxInserter::Initialize tried to create output directory but failed. Check that you have permission to write here.");
     return -1;
   }
-  std::cout<<"Strax output initialized with "<<fChunkLength<<" ns chunks and "<<
-    fChunkOverlap<<" ns overlap time. Fragments are "<<fFragmentLength<<" bytes."<<std::endl;
+  fLog->Entry(MongoLog::Local, "Strax output initialized with %li ns chunks and %li ns overlap time",
+    fChunkLength, fChunkOverlap);
 
   return 0;
 }
@@ -88,6 +89,14 @@ long StraxInserter::GetBufferSize() {
   return ret;
 }
 
+void StraxInserter::GetDataPerChan(std::map<int, long>& ret) {
+  for (auto& pair : fDataPerChan) {
+    ret[pair.first] += pair.second;
+    pair.second = 0;
+  }
+  return;
+}
+
 void StraxInserter::ParseDocuments(data_packet dp){
   
   // Take a buffer and break it up into one document per channel
@@ -102,24 +111,26 @@ void StraxInserter::ParseDocuments(data_packet dp){
   int smallest_latest_index_seen = -1;
   
   u_int32_t idx = 0;
-  while(idx < size/sizeof(u_int32_t) &&
-	buff[idx] != 0xFFFFFFFF){
+  while(idx < size/sizeof(u_int32_t) && buff[idx] != 0xFFFFFFFF){
     
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
 
       // Get data from main header
-      u_int32_t words_in_event = buff[idx]&0xFFFFFFF; 
-      u_int32_t channel_mask = buff[idx+1]&0xFF;
+      u_int32_t words_in_event = buff[idx]&0xFFFFFFF;
+      u_int32_t channel_mask = (buff[idx+1]&0xFF);
+
+      if (fFmt["channel_mask_msb_idx"] != -1) {
+	channel_mask = ( ((buff[idx+2]>>24)&0xFF)<<8 ) | (buff[idx+1]&0xFF); 
+      }
+      
       // Exercise for the reader: if you're modifying for V1730 add in the rest of the bits here!
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
       bool board_fail = buff[idx+1]&0x4000000; // & (buff[idx+1]>>27)
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
-      
+
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
       if(board_fail){
-	//std::cout<<"Oh no your board failed"<<std::endl; //do something reasonable
-        //fLog->Entry(MongoLog::Local, "Board %i failed? %x", buff[idx+1]>>27, buff[idx+1]);
 	fFailCounter[dp.bid]++;
         idx += 4;
         continue;
@@ -134,17 +145,23 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// These defaults are valid for 'default' firmware where all channels same size
 	u_int32_t channel_words = (words_in_event - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
+	u_int32_t channel_timeMSB; 
+	//u_int32_t baseline_ch;     
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
 	if(fFmt["channel_header_words"] > 0){
 	  channel_words = (buff[idx]&0x7FFFFF)-fFmt["channel_header_words"];
 	  channel_time = buff[idx+1]&0xFFFFFFFF;
-	  // Another exercise for reader to add the msb for the V1730
+
+	  if (fFmt["channel_time_msb_idx"] == 2) { 
+	    channel_timeMSB = buff[idx+2]&0xFFFF; 
+	    //baseline_ch = (buff[idx+2]>>16)&0x3FFF;  
+	  }
 	  
 	  idx += fFmt["channel_header_words"];
 
 	  // V1724 only. 1730 has a **26-day** clock counter. 
-	  if(fFmt["channel_header_words"] <= 2){
+	  if(fFmt["channel_header_words"] <= 2){    
 	    // OK. Here's the logic for the clock reset, and I realize this is the
 	    // second place in the code where such weird logic is needed but that's it
 	    // First, on the first instance of a channel we gotta check if
@@ -164,17 +181,28 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	    if(channel_time < last_times_seen[channel] &&
 	       last_times_seen[channel]!=0xFFFFFFFF)
 	      clock_counters[channel]++;
-	    
+
 	    last_times_seen[channel] = channel_time;
+	    
 	  }
+	 
+	                                               
 	}
 
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
 	// 48 bits this line would be different
 	int iBitShift = 31;
-	int64_t Time64 = fFmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
-					      iBitShift) + channel_time); // in ns
+	int64_t Time64 ;
 
+	 if (fFmt["channel_time_msb_idx"] == 2) { 
+	   Time64 = fFmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
+	   //std::cout<<" Time64 " << Time64 << " (ns) -->    " << Time64/1.e+9 << " (sec) " << std::endl;
+	 }
+	 else { 
+	   Time64 = fFmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
+					      iBitShift) + channel_time); // in ns
+	   }
+	
 	// Get the CHUNK and decide if this event also goes into a PRE/POST file
 	u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
 	u_int64_t chunk_id = u_int64_t(Time64/fFullChunkLength);
@@ -192,10 +220,15 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// bit because we want to allow also odd numbers of samples
 	// as FragmentLength
 	u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff);
-	u_int32_t samples_in_channel = (channel_words)*2;
+	u_int32_t samples_in_channel = channel_words<<1;
 	u_int32_t index_in_sample = 0;
 	u_int32_t offset = idx*2;
 	u_int16_t fragment_index = 0;
+	int16_t cl = int16_t(fOptions->GetChannel(dp.bid, channel));
+        fDataPerChan[cl] += samples_in_channel<<1;
+	// Failing to discern which channel we're getting data from seems serious enough to throw
+	if(cl==-1)
+	  throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
 	
 	while(index_in_sample < samples_in_channel){
 	  std::string fragment;
@@ -209,14 +242,6 @@ void StraxInserter::ParseDocuments(data_packet dp){
 					    (fragment_index*fFragmentLength/2));
 	    samples_this_channel = max_sample-index_in_sample;
 	  }
-	  
-
-	  // Cast everything to char so we can put it in our buffer.
-	  int16_t cl = int16_t(fOptions->GetChannel(dp.bid, channel));
-
-	  // Failing to discern which channel we're getting data from seems serious enough to throw
-	  if(cl==-1)
-	    throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
 
 	  char *channelLoc = reinterpret_cast<char*> (&cl);
 	  fragment.append(channelLoc, 2);
@@ -224,8 +249,8 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  u_int16_t sw = fFmt["ns_per_sample"];
 	  char *sampleWidth = reinterpret_cast<char*> (&sw);
 	  fragment.append(sampleWidth, 2);
-	  
-	  u_int64_t time_this_fragment = Time64+((fFragmentLength/2)*sw*fragment_index);
+
+	  u_int64_t time_this_fragment = Time64 + (fFragmentLength>>1)*sw*fragment_index;
 	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
 	  fragment.append(pulseTime, 8);
 
@@ -249,7 +274,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  u_int8_t rl = 0;
 	  char *reductionLevel = reinterpret_cast<char*> (&rl);
 	  fragment.append(reductionLevel, 1);
-	  
+
 	  // Copy the raw buffer
 	  if(samples_this_channel>fFragmentLength/2){
 	    std::cout<<samples_this_channel<<"!"<<std::endl;
@@ -316,7 +341,6 @@ int StraxInserter::ReadAndInsertData(){
   fActive = true;
   bool haddata=false;
   while(fActive || read_length>0){
-    //std::cout<<"Factive: "<<fActive<<" read length: "<<read_length<<std::endl;
     if(readVector != NULL){
       haddata=true;
       for(unsigned int i=0; i<readVector->size(); i++){
@@ -346,6 +370,7 @@ static const LZ4F_preferences_t kPrefs = {
 
 void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
+  namespace fs=std::experimental::filesystem;
 
   std::map<std::string, std::string*>::iterator iter;
   for(iter=fFragments.begin();
@@ -356,8 +381,8 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     if(!(idnrint < smallest_index_seen-1 || end))    
       continue;
     
-    if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, true)))
-      std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, true));
+    if(!fs::exists(GetDirectoryPath(chunk_index, true)))
+      fs::create_directory(GetDirectoryPath(chunk_index, true));
 
     size_t uncompressed_size = iter->second->size();
 
@@ -389,10 +414,10 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     writefile.close();
 
     // Move this chunk from *_TEMP to the same path without TEMP
-    if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
-      std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
-    std::experimental::filesystem::rename(GetFilePath(chunk_index, true),
-					  GetFilePath(chunk_index, false));
+    if(!fs::exists(GetDirectoryPath(chunk_index, false)))
+      fs::create_directory(GetDirectoryPath(chunk_index, false));
+    fs::rename(GetFilePath(chunk_index, true),
+	       GetFilePath(chunk_index, false));
     iter = fFragments.erase(iter);
     
     CreateMissing(idnrint);
@@ -404,13 +429,13 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   if(end){
     fFragments.clear();
     fFragmentSize.clear();
-    std::experimental::filesystem::path write_path(fOutputPath);
+    fs::path write_path(fOutputPath);
     std::string filename = fHostname;
     write_path /= "THE_END";
-    if(!std::experimental::filesystem::exists(write_path)){
-      fLog->Entry(MongoLog::Local,"Creating END directory at %s",write_path);
+    if(!fs::exists(write_path)){
+      fLog->Entry(MongoLog::Local,"Creating END directory at %s",write_path.c_str());
       try{
-	std::experimental::filesystem::create_directory(write_path);
+        fs::create_directory(write_path);
       }
       catch(...){};
     }

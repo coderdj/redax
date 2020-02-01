@@ -27,7 +27,7 @@ The following fields are required for organizational purposes:
 
 Note that only 'name' is actually used by redax. The other options are used by the web frontend and only included here for completion.
 
-## The 'include' field
+## The 'includes' field
 
 Sometimes we re-use configuration between many run modes. For example, the electronics are defined once and, provided the 
 physical cabling doesn't change, this definition is valid for all run modes for the entire experiment. So it doesn't make 
@@ -35,13 +35,13 @@ sense to copy-paste this definition into each and every mode document. This is w
 
 Include documents are given detector 'include', which is simply to ensure they don't appear in the mode list for a shifter 
 trying to start a run for that detector, since they are by definition incomplete. They can then be included by appending the 
-name of the include document to the 'include' field of the parent doc. 
+name of the include document to the 'includes' field of the parent doc. 
 
 For example the document 'background_stable' might look like:
 ```python
 {
     "name": "background_stable",
-    "include": ["tpc_channel_definition", "muon_veto_channel_definition", "neutron_veto_channel_definition",
+    "includes": ["tpc_channel_definition", "muon_veto_channel_definition", "neutron_veto_channel_definition",
                 "default_registers_tpc", "default_registers_muon_veto", "default_registers_neutron_veto", 
                 "master_channel_map", "strax_output_ceph"],
     # ALL OTHER OPTIONS
@@ -106,9 +106,9 @@ setup given in the [previous chapter](installation.md). Each subdocument contain
 |board |A unique identifier for this board. The best thing is to just use the digitizer serial number. |
 |crate |The 'crate' as defined in CAEN lingo. Namely, if multiple boards are connected to one optical link they get crate numbers zero to seven (max) defining their order in the daisy chain. The first board in the daisy chain is zero. The order is defined by the direction of the optical link propagation, which you can deduce by the little lights on the board that light when they receive an input. |
 |vme_address |It is planned to support readout via a V2718 crate controller over the VME backplane. In this case board addressing is via VME address only and crate would refer to the location of the crate controller in the daisy chain. This feature is not yet implemented so the option is placeholder (but must be included). |
-|link |Defines the optical link index this board is connected to. This is simple in case of one optical link, though like plugging in USB-A there's always a 50-50 chance to guesss it backwards. It becomes a bit more complicated when you include many A3818 on one server. There's a good diagram in CAEN's A3818 documentation. |
+|link |Defines the optical link index this board is connected to. This is simple in case of one optical link, though like plugging in USB-A there's always a 50-50 chance to guesss it backwards. It becomes a bit more complicated when you include multiple A3818s on one server. There's a good diagram in CAEN's A3818 documentation. |
 |host |This is the DAQ name of the process that should control the board. Remember this process must be on the same physical machine as the board is connected to. Also, multiple processes cannot share one optical link (but one process can control one optical link). |
-|type |Either V1724 for digitizers or V2718 for crate controllers. If more board types are supported they will be added. |
+|type |Either V1724, V1724_MV, or V1730 for digitizers or V2718 for crate controllers. If more board types are supported they will be added. FPGA support (V1495) is pending. |
 
 ## Register Definitions
 
@@ -184,7 +184,7 @@ Various options that tell redax how to run.
 |baseline_reference_run | If 'baseline_dac_mode' is set to 'cached' it will use the values from the run number defined here. |
 |baseline_value | If 'baseline_dac_mode' is set to 'fit' it will attempt to adjust the baselines until they hit the decimal value defined here, which must lie between 0 and 16386 for a 14-bit ADC. |
 |baseline_fixed_value |Use this to set the DAC offset register directly with this value. See CAEN documentation for more details. |
-|processing_threads |The number of threads working on converting data between CAEN and strax format. Should be larger for processes responsible for more channels and can be smaller for processes only reading a few channels. |
+|processing_threads |The number of threads per link working on converting data between CAEN and strax format. Should be larger for processes responsible for more channels and can be smaller for processes only reading a few channels. |
 
 ## Strax Output Options
 
@@ -192,19 +192,17 @@ There are various configuration options for the strax output that must be set.
 
 ```python
 {
-  "strax_chunk_overlap": 500000000,
-  "strax_header_size": 31,
+  "strax_chunk_overlap": 0.5,
   "strax_output_path": "/data/xenon/raw/xenonnt",
-  "strax_chunk_length": 5000000000,
+  "strax_chunk_length": 5,
   "strax_fragment_length": 220
 }
 ```
 
 |Option | Description |
 | ---- | ---- | 
-| strax_chunk_overlap | Defines the overlap period between strax chunks in ns. Make is at least some few times larger than your typical event length. In any case it should be larger than your largest expected event. |
-| strax_chunk_length | Length of each strax chunk in ns. There's some balance required here. It should be short enough that strax can process reasonably online, as it waits for each chunk to finish then loads it at once (the size should be digestable). But it shouldn't be so short that it needlessly micro-segments the data. Order of 5-15 seconds seems reasonable at the time of writing. |
-|strax_header_size | Total size of the strax header in bytes. Barring any changes to the software this is 31. |
+| strax_chunk_overlap | Defines the overlap period between strax chunks in seconds. Make is at least some few times larger than your typical event length. In any case it should be larger than your largest expected event. |
+| strax_chunk_length | Length of each strax chunk in seconds. There's some balance required here. It should be short enough that strax can process reasonably online, as it waits for each chunk to finish then loads it at once (the size should be digestable). But it shouldn't be so short that it needlessly micro-segments the data. Order of 5-15 seconds seems reasonable at the time of writing. |
 |strax_fragment_length | How long are the fragments? In general this should be long enough that it definitely covers the vast majority of your SPE pulses. Our SPE pulses are ~100 samples, so the default value of 220 bytes (2 bytes per sample) provides a small amount of overhead. |
 |strax_output_path | Where should we write data? This must be a locally mounted data store. Redax will handle sub-directories so just provide the top-level directory where all the live data should go. |
 
@@ -240,4 +238,10 @@ This is in a quite simple format:
 }
 ```
 
-Here 'channels' is a dictionary where each key is the string value of a board's ID number as defined in the 'boards' field (typically the serial number). Each value is an array of 8 values giving the PMT position of each channel of that digitizer. This PMT position absolutely must match the PMT map assumed by the data processor.
+Here 'channels' is a dictionary where each key is the string value of a board's ID number as defined in the 'boards' field (typically the serial number). Each value is an array of 8 values (or 16, if appropriate) giving the PMT position of each channel of that digitizer. This PMT position absolutely must match the PMT map assumed by the data processor.
+
+Note that if there are any skipped channels (for instance, if you are using input channels 0, 1, and 3, but not 2), a "blank" or placeholder value should be inserted.
+
+## Trigger thresholds
+
+Redax assigns trigger thresholds using a syntax identical to that of the channel map (above).

@@ -78,6 +78,7 @@ public:
   
   int GetInt(std::string key, int default_value=-1);
   long int GetLongInt(std::string key, long int default_value=-1);
+  double GetDouble(std::string key, double default_value=-1);
   std::string GetString(std::string key, std::string default_value="");
 
   std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
@@ -87,6 +88,7 @@ public:
   int GetHEVOpt(HEVOptions &ret);
   int GetChannel(int bid, int cid);
   int GetNestedInt(std::string path, int default_value);
+  std::vector<u_int16_t> GetThresholds(int board);
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
 private:
