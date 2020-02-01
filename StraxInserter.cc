@@ -82,6 +82,13 @@ void StraxInserter::Close(std::map<int,int>& ret){
   fActive = false;
 }
 
+long StraxInserter::GetBufferSize() {
+  long ret = 0;
+  ret = std::accumulate(fFragmentSize.begin(), fFragmentSize.end(), 0L,
+      [&](long tot, auto& iter) {return tot + iter.second;});
+  return ret;
+}
+
 void StraxInserter::GetDataPerChan(std::map<int, long>& ret) {
   for (auto& pair : fDataPerChan) {
     ret[pair.first] += pair.second;
@@ -93,7 +100,6 @@ void StraxInserter::GetDataPerChan(std::map<int, long>& ret) {
 void StraxInserter::ParseDocuments(data_packet dp){
   
   // Take a buffer and break it up into one document per channel
-  int fragments_inserted = 0;
   unsigned int max_channels = 16; // hardcoded to accomodate V1730
   
   // Unpack the things from the data packet
@@ -294,7 +300,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	      fFragments[chunk_index] = new std::string();
 	    }
 	    fFragments[chunk_index]->append(fragment);
-	    fragments_inserted++;
+            fFragmentSize[chunk_index] += fragment.size();
 	  }
 	  else{// if(nextpre){
 	    std::string nextchunk_index = std::to_string(chunk_id+1);
@@ -305,14 +311,16 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	      fFragments[nextchunk_index+"_pre"] = new std::string();
 	    }
 	    fFragments[nextchunk_index+"_pre"]->append(fragment);
+            fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
 
 	    if(fFragments.find(chunk_index+"_post") == fFragments.end()){
 	      fFragments[chunk_index+"_post"] = new std::string();
 	    }
 	    fFragments[chunk_index+"_post"]->append(fragment);
+            fFragmentSize[chunk_index+"_post"] += fragment.size();
 	  }
 	  fragment_index++;
-	  index_in_sample = max_sample;	  
+	  index_in_sample = max_sample;
 	}
 	// Go to next channel
 	idx+=channel_words;
@@ -395,8 +403,10 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
       out_buffer = new char[max_compressed_size];
       wsize = LZ4F_compressFrame(out_buffer, max_compressed_size,
 				 &((*iter->second)[0]), uncompressed_size, &kPrefs);
-    }    
+    }
     delete iter->second;
+    fFragmentSize[chunk_index] = 0;
+    fFragmentSize.erase(chunk_index);
     
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
     writefile.write(out_buffer, wsize);
@@ -418,6 +428,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 
   if(end){
     fFragments.clear();
+    fFragmentSize.clear();
     fs::path write_path(fOutputPath);
     std::string filename = fHostname;
     write_path /= "THE_END";

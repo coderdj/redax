@@ -303,6 +303,11 @@ std::map<int, long> DAQController::GetDataPerChan(){
   return retmap;
 }
 
+long DAQController::GetStraxBufferSize() {
+  return std::accumulate(fProcessingThreads.begin(), fProcessingThreads.end(), 0,
+      [=](long tot, processingThread pt) {return tot + pt.inserter->GetBufferSize();});
+}
+
 std::map<std::string, int> DAQController::GetDataFormat(){
   for( auto const& link : fDigitizers )
     for(auto digi : link.second)

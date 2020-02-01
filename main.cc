@@ -93,14 +93,12 @@ int main(int argc, char** argv){
       mongocxx::cursor cursor = control.find 
 	(
 	 bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged" <<
-	 bsoncxx::builder::stream::open_document << "$ne" << hostname <<       
+	 bsoncxx::builder::stream::open_document << "$ne" << hostname <<
 	 bsoncxx::builder::stream::close_document << 
 	 bsoncxx::builder::stream::finalize, opts
 	 );
-      
-      
-      for(auto doc : cursor) {
-	
+
+      for(auto doc : cursor) {	
 	logger->Entry(MongoLog::Debug, "Found a doc with command %s",
 	  doc["command"].get_utf8().value.to_string().c_str());
 	// Very first thing: acknowledge we've seen the command. If the command
@@ -115,7 +113,7 @@ int main(int argc, char** argv){
 	   bsoncxx::builder::stream::finalize
 	   );
 	std::cout<<"Updated doc"<<std::endl;
-	
+
 	// Get the command out of the doc
 	std::string command = "";
 	std::string user = "";
@@ -128,20 +126,19 @@ int main(int argc, char** argv){
 	  logger->Entry(MongoLog::Warning, "Received malformed command %s",
 			bsoncxx::to_json(doc).c_str());
 	}
-	
-	
+
 	// Process commands
 	if(command == "start"){
-	  
+
 	  if(controller->status() == 2) {
-	    
-	    if(controller->Start()!=0){	   
+
+	    if(controller->Start()!=0){
 	      continue;
 	    }
-	    
+
 	    // Nested tried cause of nice C++ typing
 	    try{
-	      current_run_id = (doc)["run_identifier"].get_utf8().value.to_string();	    
+	      current_run_id = (doc)["run_identifier"].get_utf8().value.to_string();
 	    }
 	    catch(const std::exception &e){
 	      try{
@@ -151,7 +148,7 @@ int main(int argc, char** argv){
 		current_run_id = "na";
 	      }
 	    }
-	    
+
 	    logger->Entry(MongoLog::Message, "Received start command from user %s",
 			  user.c_str());
 	  }
@@ -165,18 +162,18 @@ int main(int argc, char** argv){
 	  if(controller->Stop()!=0)
 	    logger->Entry(MongoLog::Error,
 			  "DAQ failed to stop. Will continue clearing program memory.");
-	  
+
 	  current_run_id = "none";
 	  if(readoutThreads.size()!=0){
 	    for(auto t : readoutThreads){
 	      t->join();
 	      delete t;
 	    }
-	    readoutThreads.clear();	
+	    readoutThreads.clear();
 	  }
 	  controller->End();
 	}
-	else if(command == "arm"){	
+	else if(command == "arm"){
 	  
 	  // Can only arm if we're in the idle, arming, or armed state
 	  if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
@@ -191,11 +188,11 @@ int main(int argc, char** argv){
 	      }
 	      readoutThreads.clear();
 	    }
-	    
+
 	    // Clear up any previously failed things
 	    if(controller->status() != 0)
 	      controller->End();
-	    
+
 	    // Get an override doc from the 'options_override' field if it exists
 	    std::string override_json = "";
 	    try{
@@ -205,9 +202,9 @@ int main(int argc, char** argv){
 	    catch(const std::exception &e){
 	      logger->Entry(MongoLog::Debug, "No override options provided, continue without.");
 	    }
-	    
+
 	    bool initialized = false;
-	    
+
 	    // Mongocxx types confusing so passing json strings around
 	    if(fOptions != NULL) {
 	      delete fOptions;
@@ -249,10 +246,10 @@ int main(int argc, char** argv){
 		readoutThreads.push_back(readoutThread);
 	      }
 	    }
-	  }	  	
+	  }
 	  else
 	    logger->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
-	}      
+	}
       }
     }
     catch(const std::exception &e){
@@ -271,6 +268,7 @@ int main(int argc, char** argv){
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
 	"buffer_length" << controller->buffer_length()/1e6 <<
+        "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
 	"run_mode" << controller->run_mode() <<
 	"current_run_id" << current_run_id <<
 	"channels" << bsoncxx::builder::stream::open_document <<
