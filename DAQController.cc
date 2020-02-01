@@ -75,7 +75,6 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
 	fDigitizers[d.link].push_back(digi);
-	fDataPerDigi[digi->bid()] = 0;
         BIDs.push_back(digi->bid());
 
 	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){
@@ -282,7 +281,6 @@ void DAQController::ReadData(int link){
 	d.header_time = fDigitizers[link][x]->GetHeaderTime(d.buff, d.size);
 	d.clock_counter = fDigitizers[link][x]->GetClockCounter(d.header_time);
 	fDatasize += d.size;
-	fDataPerDigi[d.bid] += d.size;
 	local_buffer.push_back(d);
       }
     }
@@ -296,19 +294,17 @@ void DAQController::ReadData(int link){
 }
 
 
-std::map<int, u_int64_t> DAQController::GetDataPerDigi(){
-  // Return a map of data transferred per digitizer since last update
-  // and clear the private map
-  std::map <int, u_int64_t>retmap;
-  for(auto const &kPair : fDataPerDigi){
-    retmap[kPair.first] = (u_int64_t)(fDataPerDigi[kPair.first]);
-    fDataPerDigi[kPair.first] = 0;
-  }
+std::map<int, long> DAQController::GetDataPerChan(){
+  // Return a map of data transferred per channel since last update
+  // Clears the private maps in the StraxInserters
+  std::map <int, long> retmap;
+  for (const auto& pt : fProcessingThreads)
+    pt.inserter->GetDataPerChan(retmap);
   return retmap;
 }
 
 std::map<std::string, int> DAQController::GetDataFormat(){
-  for( auto const& link : fDigitizers )    
+  for( auto const& link : fDigitizers )
     for(auto digi : link.second)
       return digi->DataFormatDefinition;
   return std::map<std::string, int>();
