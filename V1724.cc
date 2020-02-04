@@ -103,11 +103,10 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
     fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBoardHandle);
     return -1;
   }
-  my_bid |= (word&0xFF)<<8;
+  my_bid |= ((word&0xFF)<<8);
   if (my_bid != fBID) {
-    fLog->Entry(MongoLog::Message, "Link %i crate %i should be SN %i but is actually %i",
+    fLog->Entry(MongoLog::Local, "Link %i crate %i should be SN %i but is actually %i",
         link, crate, fBID, my_bid);
-    return 0;
   }
   return 0;
 }
