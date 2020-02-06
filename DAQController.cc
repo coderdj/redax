@@ -308,11 +308,10 @@ long DAQController::GetStraxBufferSize() {
       [=](long tot, processingThread pt) {return tot + pt.inserter->GetBufferSize();});
 }
 
-std::map<std::string, int> DAQController::GetDataFormat(){
+void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& retmap){
   for( auto const& link : fDigitizers )
     for(auto digi : link.second)
-      return digi->DataFormatDefinition;
-  return std::map<std::string, int>();
+      retmap[digi->bid()] = digi->DataFormatDefinition;
 }
 
 void DAQController::AppendData(std::vector<data_packet> &d){
