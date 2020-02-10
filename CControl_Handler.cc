@@ -80,15 +80,15 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
      }else{
 	fLog->Entry(MongoLog::Error, "Failed to pull DDC10 options from file");
      }
-  }
+  } else std::cout<<"No HEV\n";
 
  
   // Getting options for the Muon Veto V1495 board
   // Init V1495_MV only when included in config - Muon Veto only
   std::vector<BoardType> mv = fOptions->GetBoards("V1495", fProcname);
-  BoardType mv_def = mv[0];
-  fBID = mv_def.board;
   if (mv.size() == 1){
+    BoardType mv_def = mv[0];
+    fBID = mv_def.board;
      	fV1495 = new V1495(fLog, fOptions, mv_def.board, fBoardHandle, mv_def.vme_address);
 	// Writing registers to the V1495 board
 	for(auto regi : fOptions->GetRegisters(fBID)){
@@ -103,8 +103,6 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 		}
 	}
   }else{
-        fLog->Entry(MongoLog::Error, "Failed to pull V1495 options from file"); 
-	return -1;
   }
 
   fStatus = DAXHelpers::Armed;

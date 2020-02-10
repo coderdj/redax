@@ -266,8 +266,8 @@ class MongoConnect():
                 retnodes.append(r)
             for r in self.latest_status['muon_veto']['controller'].keys():
                 retcc.append(r)
-        #self.log.debug("Nodes: %s" % retnodes)
-        #self.log.debug("CCs: %s" % retcc)
+        self.log.debug("Nodes: %s" % retnodes)
+        self.log.debug("CCs: %s" % retcc)
         return retnodes, retcc
 
     def GetRunMode(self, mode):
@@ -308,7 +308,7 @@ class MongoConnect():
                 hostlist.append(b['host'])
             elif b['type'] == 'V2718':
                 cc.append(b['host'])
-        self.log.debug(hostlist)
+        self.log.debug("Hosts %s, cc %s" % (hostlist, cc))
         return hostlist, cc
 
     def GetNextRunNumber(self):

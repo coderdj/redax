@@ -12,3 +12,4 @@ ccontrol
 
 # DAQ logs
 *.log
+log_*
