@@ -131,6 +131,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
       // I've never seen this happen but afraid to put it into the mongo log
       // since this call is in a loop
       if(board_fail){
+        fDataSource->CheckError(dp.bid);
 	fFailCounter[dp.bid]++;
         idx += 4;
         continue;

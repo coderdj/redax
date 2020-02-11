@@ -27,7 +27,9 @@ V1724::V1724(MongoLog  *log, Options *options){
   fNChannels = 8;
   fChTrigRegister = 0x1060;
   fSNRegisterMSB = 0xF080;
-  fSNRegisterLSB = 0xF040;
+  fSNRegisterLSB = 0xF084;
+  fBoardFailStatRegister = 0x8178;
+  fReadoutStatusRegister = 0xEF04;
 
   DataFormatDefinition = {
     {"channel_mask_msb_idx", -1},
@@ -70,6 +72,17 @@ bool V1724::EnsureStopped(int ntries, int tsleep){
 }
 u_int32_t V1724::GetAcquisitionStatus(){
   return ReadRegister(fAqStatusRegister);
+}
+
+int V1724::CheckErrors(){
+  auto pll = ReadRegister(fBoardFailStatRegister);
+  auto ros = ReadRegister(fReadoutStatusRegister);
+  unsigned ERR = 0xFFFFFFFF;
+  if ((pll == ERR) || (ros == ERR)) return -1;
+  int ret = 0;
+  if (pll & (1 << 4)) ret |= 0x1;
+  if (ros & (1 << 2)) ret |= 0x2;
+  return ret;
 }
 
 
