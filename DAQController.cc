@@ -269,6 +269,7 @@ void DAQController::ReadData(int link){
       if (fCheckFails[digi->bid()]) {
         fCheckFails[digi->bid()] = false;
         err_val = fBoardMap[digi->bid()]->CheckErrors();
+	fLog->Entry(MongoLog::Local, "Error %i from board %i", err_val, digi->bid());
         if (err_val == -1) {
 
         } else {
