@@ -23,7 +23,6 @@ StraxInserter::StraxInserter(){
   fStraxHeaderSize=31;
   fLog = NULL;
   fErrorBit = false;
-  fFirmwareVersion = -1;
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
