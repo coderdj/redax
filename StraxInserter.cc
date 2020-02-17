@@ -10,6 +10,8 @@
 #include <numeric>
 #include <sstream>
 
+namespace fs=std::experimental::filesystem;
+
 StraxInserter::StraxInserter(){
   fOptions = NULL;
   fDataSource = NULL;
@@ -50,10 +52,10 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 
   std::string output_path = fOptions->GetString("strax_output_path", "./");
   try{    
-    std::experimental::filesystem::path op(output_path);
+    fs::path op(output_path);
     op /= run_name;
     fOutputPath = op;
-    std::experimental::filesystem::create_directory(op);
+    fs::create_directory(op);
   }
   catch(...){
     fLog->Entry(MongoLog::Error, "StraxInserter::Initialize tried to create output directory but failed. Check that you have permission to write here.");
@@ -357,7 +359,6 @@ static const LZ4F_preferences_t kPrefs = {
 
 void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
-  namespace fs=std::experimental::filesystem;
 
   std::map<std::string, std::string*>::iterator iter;
   for(iter=fFragments.begin();
@@ -444,17 +445,16 @@ std::string StraxInserter::GetStringFormat(int id){
   return chunk_index;
 }
 
-std::experimental::filesystem::path StraxInserter::GetDirectoryPath(std::string id,
-								       bool temp){
-  std::experimental::filesystem::path write_path(fOutputPath);
+fs::path StraxInserter::GetDirectoryPath(std::string id, bool temp){
+  fs::path write_path(fOutputPath);
   write_path /= id;
   if(temp)
     write_path+="_temp";
   return write_path;
 }
 
-std::experimental::filesystem::path StraxInserter::GetFilePath(std::string id, bool temp){
-  std::experimental::filesystem::path write_path = GetDirectoryPath(id, temp);
+fs::path StraxInserter::GetFilePath(std::string id, bool temp){
+  fs::path write_path = GetDirectoryPath(id, temp);
   std::string filename = fHostname;
   std::stringstream ss;
   ss<<std::this_thread::get_id();
@@ -470,23 +470,23 @@ void StraxInserter::CreateMissing(u_int32_t back_from_id){
     std::string chunk_index = GetStringFormat(x);
     std::string chunk_index_pre = chunk_index+"_pre";
     std::string chunk_index_post = chunk_index+"_post";
-    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index, false))){
-      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
-	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
+    if(!fs::exists(GetFilePath(chunk_index, false))){
+      if(!fs::exists(GetDirectoryPath(chunk_index, false)))
+	fs::create_directory(GetDirectoryPath(chunk_index, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index, false));
       o.close();
     }
-    if(x!=0 && !std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, false))){
-      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
-	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_pre, false));
+    if(x!=0 && !fs::exists(GetFilePath(chunk_index_pre, false))){
+      if(!fs::exists(GetDirectoryPath(chunk_index_pre, false)))
+	fs::create_directory(GetDirectoryPath(chunk_index_pre, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index_pre, false));
       o.close();
     }
-    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_post, false))){
-      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_post, false)))
-	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
+    if(!fs::exists(GetFilePath(chunk_index_post, false))){
+      if(!fs::exists(GetDirectoryPath(chunk_index_post, false)))
+	fs::create_directory(GetDirectoryPath(chunk_index_post, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index_post, false));
       o.close();
