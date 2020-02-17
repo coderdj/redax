@@ -54,6 +54,7 @@ public:
   u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;}
   std::map<int, long> GetDataPerChan();
   bool CheckErrors();
+  void CheckError(int bid) {fCheckFails[bid] = true;}
   int OpenProcessingThreads();
   void CloseProcessingThreads();
   long GetStraxBufferSize();
@@ -83,6 +84,8 @@ private:
   // For reporting to frontend
   std::atomic_uint64_t fBufferLength;
   u_int64_t fDatasize;
+  std::map<int, V1724*> fBoardMap;
+  std::map<int, std::atomic_bool> fCheckFails;
 
 };
 

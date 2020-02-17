@@ -39,6 +39,7 @@ class V1724{
   bool EnsureReady(int ntries, int sleep);
   bool EnsureStarted(int ntries, int sleep);
   bool EnsureStopped(int ntries, int sleep);
+  int CheckErrors();
   u_int32_t GetAcquisitionStatus();
   u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
 
@@ -56,6 +57,8 @@ protected:
   unsigned int fNChannels;
   unsigned int fSNRegisterMSB;
   unsigned int fSNRegisterLSB;
+  unsigned int fBoardFailStatRegister;
+  unsigned int fReadoutStatusRegister;
   unsigned int fVMEAlignmentRegister;
   unsigned int fBoardErrRegister;
 

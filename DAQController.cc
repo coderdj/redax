@@ -78,11 +78,13 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
 	fDigitizers[d.link].push_back(digi);
         BIDs.push_back(digi->bid());
+        fBoardMap[digi->bid()] = digi;
+        fCheckFails[digi->bid()] = false;
 
 	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){
 	  fLog->Entry(MongoLog::Local, "Defining a new optical link at %i", d.link);
 	  keys.push_back(d.link);
-	}    
+	}
 	fLog->Entry(MongoLog::Debug, "Initialized digitizer %i", d.board);
 	
 	if(digi->Reset()!=0){
@@ -198,12 +200,13 @@ int DAQController::Stop(){
   fStatus = DAXHelpers::Idle;
   return 0;
 }
+
 void DAQController::End(){
   Stop();
   fLog->Entry(MongoLog::Local, "Closing Processing Threads");
   CloseProcessingThreads();
   fLog->Entry(MongoLog::Local, "Closing Digitizers");
-  for( auto const& link : fDigitizers ){    
+  for( auto const& link : fDigitizers ){
     for(auto digi : link.second){
       digi->End();
       delete digi;
@@ -244,24 +247,39 @@ void DAQController::ReadData(int link){
   fBufferMutex.unlock();
   
   u_int32_t lastRead = 0; // bytes read in last cycle. make sure we clear digitizers at run stop
+  u_int32_t board_status = 0;
   long int readcycler = 0;
+  int err_val = 0;
+  std::vector<data_packet> local_buffer;
   while(fReadLoop){
     
-    std::vector<data_packet> local_buffer;
-    for(unsigned int x=0; x<fDigitizers[link].size(); x++){
+    for(auto digi : fDigitizers[link]) {
 
       // Every 1k reads check board status
       if(readcycler%10000==0){
 	readcycler=0;
-	u_int32_t data = fDigitizers[link][x]->GetAcquisitionStatus();
+        board_status = digi->GetAcquisitionStatus();
         fLog->Entry(MongoLog::Local, "Board %i has status 0x%04x",
-            fDigitizers[link][x]->bid(), data);
+            digi->bid(), board_status);
+      }
+      if (fCheckFails[digi->bid()]) {
+        fCheckFails[digi->bid()] = false;
+        err_val = fBoardMap[digi->bid()]->CheckErrors();
+	fLog->Entry(MongoLog::Local, "Error %i from board %i", err_val, digi->bid());
+        if (err_val == -1) {
+
+        } else {
+          if (err_val & 0x1) fLog->Entry(MongoLog::Local, "Board %i has PLL unlock",
+                                         digi->bid());
+          if (err_val & 0x2) fLog->Entry(MongoLog::Local, "Board %i has VME bus error",
+                                         digi->bid());
+        }
       }
       data_packet d;
       d.buff=NULL;
       d.size=0;
-      d.bid = fDigitizers[link][x]->bid();
-      d.size = fDigitizers[link][x]->ReadMBLT(d.buff);
+      d.bid = digi->bid();
+      d.size = digi->ReadMBLT(d.buff);
 
       lastRead += d.size;
       
@@ -274,21 +292,20 @@ void DAQController::ReadData(int link){
 	break;
       }
       if(d.size>0){
-	d.header_time = fDigitizers[link][x]->GetHeaderTime(d.buff, d.size);
-	d.clock_counter = fDigitizers[link][x]->GetClockCounter(d.header_time);
+	d.header_time = digi->GetHeaderTime(d.buff, d.size);
+	d.clock_counter = digi->GetClockCounter(d.header_time);
 	fDatasize += d.size;
 	local_buffer.push_back(d);
       }
-    }
+    } // for digi in digitizers
     if(local_buffer.size()!=0)
       AppendData(local_buffer);
     local_buffer.clear();
     readcycler++;
     usleep(1);
-  }
+  } // while run
 
 }
-
 
 std::map<int, long> DAQController::GetDataPerChan(){
   // Return a map of data transferred per channel since last update

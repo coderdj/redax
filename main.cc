@@ -231,15 +231,14 @@ int main(int argc, char** argv){
 	    }
 	    else{
 	      controller->CloseProcessingThreads();
+	      // open nprocessingthreads
+	      if (controller->OpenProcessingThreads()) {
+		logger->Entry(MongoLog::Warning, "Could not open processing threads!");
+		controller->CloseProcessingThreads();
+		throw std::runtime_error("Error while arming");
+	      }
 	      for(unsigned int i=0; i<links.size(); i++){
 		std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
-		if (controller->OpenProcessingThreads()) {
-		  // open nprocessingthreads per link
-		  logger->Entry(MongoLog::Warning, "Could not open processing threads!");
-		  // fail somehow?
-		  controller->CloseProcessingThreads();
-		  throw std::runtime_error("Error while arming");
-		}
 		std:: thread *readoutThread = new std::thread
 		  (
 		   &DAQController::ReadData, controller, links[i]);

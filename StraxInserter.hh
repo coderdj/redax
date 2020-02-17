@@ -43,6 +43,7 @@ public:
   bool CheckError(){ return fErrorBit; }
   long GetBufferSize();
   void GetDataPerChan(std::map<int, long>& ret);
+  void CheckError(int bid);
   
 private:
   void ParseDocuments(data_packet dp);
