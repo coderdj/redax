@@ -58,7 +58,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
     return -1;
   }else{
      fBoardHandle = fV2718->GetHandle();
-     std::cout << "V2718 Initialised" << std::endl;
+     fLog->Entry(MongoLog::Local, "V2718 Initialised");
   }
 
 // ----------------------------------------------
@@ -75,25 +75,27 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 	   fStatus = DAXHelpers::Idle;
 	   return -1;
 	}else{
-	   std::cout << "DDC10 Initialised" << std::endl;
+	   fLog->Entry(MongoLog::Local, "DDC10 Initialised");
 	}
      }else{
 	fLog->Entry(MongoLog::Error, "Failed to pull DDC10 options from file");
      }
+  } else {
+    fLog->Entry(MongoLog::Debug, "No HEV");
   }
 
- 
+
   // Getting options for the Muon Veto V1495 board
   // Init V1495_MV only when included in config - Muon Veto only
   std::vector<BoardType> mv = fOptions->GetBoards("V1495", fProcname);
-  BoardType mv_def = mv[0];
-  fBID = mv_def.board;
   if (mv.size() == 1){
-     	fV1495 = new V1495(fLog, fOptions, mv_def.board, fBoardHandle, mv_def.vme_address);
+    BoardType mv_def = mv[0];
+    fBID = mv_def.board;
+    fV1495 = new V1495(fLog, fOptions, mv_def.board, fBoardHandle, mv_def.vme_address);
 	// Writing registers to the V1495 board
 	for(auto regi : fOptions->GetRegisters(fBID)){
 		if(regi.board != fBID)
-		       continue;	
+		       continue;
 		unsigned int reg = DAXHelpers::StringToHex(regi.reg);
 		unsigned int val = DAXHelpers::StringToHex(regi.val);
 		if(fV1495->WriteReg(reg, val)!=0){
@@ -101,10 +103,9 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 			fStatus = DAXHelpers::Idle;
 			return -1;
 		}
-	}
+    }
   }else{
-        fLog->Entry(MongoLog::Error, "Failed to pull V1495 options from file"); 
-	return -1;
+    fLog->Entry(MongoLog::Debug, "No V1495");
   }
 
   fStatus = DAXHelpers::Armed;

@@ -61,7 +61,6 @@ private:
   u_int16_t fStraxHeaderSize; // in BYTES too
   u_int32_t fChunkNameLength;
   std::string fOutputPath, fHostname;
-  int fFirmwareVersion;
   Options *fOptions;
   MongoLog *fLog;
   DAQController *fDataSource;
@@ -71,7 +70,7 @@ private:
   std::map<std::string, std::string*> fFragments;
   std::map<std::string, std::atomic_long> fFragmentSize;
   int fBoardFailCount;
-  std::map<std::string, int>fFmt;
+  std::map<int, std::map<std::string, int>> fFmt;
   std::map<int, int> fFailCounter;
   std::map<int, std::atomic_long> fDataPerChan;
 };

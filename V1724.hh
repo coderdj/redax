@@ -35,6 +35,7 @@ class V1724{
   int SoftwareStart();
   int AcquisitionStop();
   int SWTrigger();
+  int Reset();
   bool EnsureReady(int ntries, int sleep);
   bool EnsureStarted(int ntries, int sleep);
   bool EnsureStopped(int ntries, int sleep);
@@ -58,6 +59,8 @@ protected:
   unsigned int fSNRegisterLSB;
   unsigned int fBoardFailStatRegister;
   unsigned int fReadoutStatusRegister;
+  unsigned int fVMEAlignmentRegister;
+  unsigned int fBoardErrRegister;
 
   bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
 		       int sleep, u_int32_t val=1);
