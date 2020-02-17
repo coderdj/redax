@@ -57,6 +57,7 @@ protected:
   unsigned int fSNRegisterMSB;
   unsigned int fSNRegisterLSB;
   unsigned int fVMEAlignmentRegister;
+  unsigned int fBoardErrRegister;
 
   bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
 		       int sleep, u_int32_t val=1);

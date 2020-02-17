@@ -140,7 +140,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	//u_int32_t baseline_ch;     
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
-	if(Fmt["channel_header_words"] > 0){
+	if(fmt["channel_header_words"] > 0){
 	  channel_words = (buff[idx]&0x7FFFFF)-fmt["channel_header_words"];
 	  channel_time = buff[idx+1]&0xFFFFFFFF;
 
