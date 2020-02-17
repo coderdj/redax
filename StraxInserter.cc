@@ -10,6 +10,8 @@
 #include <numeric>
 #include <sstream>
 
+namespace fs=std::experimental::filesystem;
+
 StraxInserter::StraxInserter(){
   fOptions = NULL;
   fDataSource = NULL;
@@ -21,7 +23,6 @@ StraxInserter::StraxInserter(){
   fStraxHeaderSize=31;
   fLog = NULL;
   fErrorBit = false;
-  fFirmwareVersion = -1;
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
@@ -37,35 +38,23 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
-  fCompressor = fOptions->GetString("compressor", "lz4");  
+  fCompressor = fOptions->GetString("compressor", "lz4");
   fHostname = hostname;
   fBoardFailCount = 0;
   std::string run_name = fOptions->GetString("run_identifier", "run");
-  // To start we do not know which FW version we're dealing with (for data parsing)
-  fFirmwareVersion = fOptions->GetInt("firmware_version", -1);
-  if(fFirmwareVersion == -1){
-	std::cout<<"Firmware version unspecified in options"<<std::endl;
-	return -1;
-  }
-  if((fFirmwareVersion != 0) && (fFirmwareVersion != 1)){
-	std::cout<<"Firmware version unidentified, accepted versions are {0, 1}"<<std::endl;
-	return -1;
-  }
-  
+
   fMissingVerified = 0;
   fDataSource = dataSource;
-  fFmt = dataSource->GetDataFormat();
+  dataSource->GetDataFormat(fFmt);
   fLog = log;
   fErrorBit = false;
 
-  std::cout<<"fFmt[channel_header_words] " << fFmt["channel_header_words"] << std::endl;
-
   std::string output_path = fOptions->GetString("strax_output_path", "./");
   try{    
-    std::experimental::filesystem::path op(output_path);
+    fs::path op(output_path);
     op /= run_name;
     fOutputPath = op;
-    std::experimental::filesystem::create_directory(op);
+    fs::create_directory(op);
   }
   catch(...){
     fLog->Entry(MongoLog::Error, "StraxInserter::Initialize tried to create output directory but failed. Check that you have permission to write here.");
@@ -111,6 +100,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
   int smallest_latest_index_seen = -1;
   
   u_int32_t idx = 0;
+  std::map<std::string, int> fmt = fFmt[dp.bid];
   while(idx < size/sizeof(u_int32_t) && buff[idx] != 0xFFFFFFFF){
     
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
@@ -119,7 +109,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
       u_int32_t words_in_event = buff[idx]&0xFFFFFFF;
       u_int32_t channel_mask = (buff[idx+1]&0xFF);
 
-      if (fFmt["channel_mask_msb_idx"] != -1) {
+      if (fmt["channel_mask_msb_idx"] != -1) {
 	channel_mask = ( ((buff[idx+2]>>24)&0xFF)<<8 ) | (buff[idx+1]&0xFF); 
       }
       
@@ -149,19 +139,19 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	//u_int32_t baseline_ch;     
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
-	if(fFmt["channel_header_words"] > 0){
-	  channel_words = (buff[idx]&0x7FFFFF)-fFmt["channel_header_words"];
+	if(fmt["channel_header_words"] > 0){
+	  channel_words = (buff[idx]&0x7FFFFF)-fmt["channel_header_words"];
 	  channel_time = buff[idx+1]&0xFFFFFFFF;
 
-	  if (fFmt["channel_time_msb_idx"] == 2) { 
+	  if (fmt["channel_time_msb_idx"] == 2) { 
 	    channel_timeMSB = buff[idx+2]&0xFFFF; 
 	    //baseline_ch = (buff[idx+2]>>16)&0x3FFF;  
 	  }
 	  
-	  idx += fFmt["channel_header_words"];
+	  idx += fmt["channel_header_words"];
 
 	  // V1724 only. 1730 has a **26-day** clock counter. 
-	  if(fFmt["channel_header_words"] <= 2){    
+	  if(fmt["channel_header_words"] <= 2){    
 	    // OK. Here's the logic for the clock reset, and I realize this is the
 	    // second place in the code where such weird logic is needed but that's it
 	    // First, on the first instance of a channel we gotta check if
@@ -185,8 +175,6 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	    last_times_seen[channel] = channel_time;
 	    
 	  }
-	 
-	                                               
 	}
 
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
@@ -194,12 +182,12 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	int iBitShift = 31;
 	int64_t Time64 ;
 
-	 if (fFmt["channel_time_msb_idx"] == 2) { 
-	   Time64 = fFmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
+	 if (fmt["channel_time_msb_idx"] == 2) { 
+	   Time64 = fmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
 	   //std::cout<<" Time64 " << Time64 << " (ns) -->    " << Time64/1.e+9 << " (sec) " << std::endl;
 	 }
 	 else { 
-	   Time64 = fFmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
+	   Time64 = fmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
 					      iBitShift) + channel_time); // in ns
 	   }
 	
@@ -246,7 +234,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  char *channelLoc = reinterpret_cast<char*> (&cl);
 	  fragment.append(channelLoc, 2);
 
-	  u_int16_t sw = fFmt["ns_per_sample"];
+	  u_int16_t sw = fmt["ns_per_sample"];
 	  char *sampleWidth = reinterpret_cast<char*> (&sw);
 	  fragment.append(sampleWidth, 2);
 
@@ -370,7 +358,6 @@ static const LZ4F_preferences_t kPrefs = {
 
 void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
-  namespace fs=std::experimental::filesystem;
 
   std::map<std::string, std::string*>::iterator iter;
   for(iter=fFragments.begin();
@@ -457,17 +444,16 @@ std::string StraxInserter::GetStringFormat(int id){
   return chunk_index;
 }
 
-std::experimental::filesystem::path StraxInserter::GetDirectoryPath(std::string id,
-								       bool temp){
-  std::experimental::filesystem::path write_path(fOutputPath);
+fs::path StraxInserter::GetDirectoryPath(std::string id, bool temp){
+  fs::path write_path(fOutputPath);
   write_path /= id;
   if(temp)
     write_path+="_temp";
   return write_path;
 }
 
-std::experimental::filesystem::path StraxInserter::GetFilePath(std::string id, bool temp){
-  std::experimental::filesystem::path write_path = GetDirectoryPath(id, temp);
+fs::path StraxInserter::GetFilePath(std::string id, bool temp){
+  fs::path write_path = GetDirectoryPath(id, temp);
   std::string filename = fHostname;
   std::stringstream ss;
   ss<<std::this_thread::get_id();
@@ -483,23 +469,23 @@ void StraxInserter::CreateMissing(u_int32_t back_from_id){
     std::string chunk_index = GetStringFormat(x);
     std::string chunk_index_pre = chunk_index+"_pre";
     std::string chunk_index_post = chunk_index+"_post";
-    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index, false))){
-      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index, false)))
-	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index, false));
+    if(!fs::exists(GetFilePath(chunk_index, false))){
+      if(!fs::exists(GetDirectoryPath(chunk_index, false)))
+	fs::create_directory(GetDirectoryPath(chunk_index, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index, false));
       o.close();
     }
-    if(x!=0 && !std::experimental::filesystem::exists(GetFilePath(chunk_index_pre, false))){
-      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_pre, false)))
-	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_pre, false));
+    if(x!=0 && !fs::exists(GetFilePath(chunk_index_pre, false))){
+      if(!fs::exists(GetDirectoryPath(chunk_index_pre, false)))
+	fs::create_directory(GetDirectoryPath(chunk_index_pre, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index_pre, false));
       o.close();
     }
-    if(!std::experimental::filesystem::exists(GetFilePath(chunk_index_post, false))){
-      if(!std::experimental::filesystem::exists(GetDirectoryPath(chunk_index_post, false)))
-	std::experimental::filesystem::create_directory(GetDirectoryPath(chunk_index_post, false));
+    if(!fs::exists(GetFilePath(chunk_index_post, false))){
+      if(!fs::exists(GetDirectoryPath(chunk_index_post, false)))
+	fs::create_directory(GetDirectoryPath(chunk_index_post, false));
       std::ofstream o;
       o.open(GetFilePath(chunk_index_post, false));
       o.close();

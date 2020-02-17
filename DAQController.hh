@@ -58,7 +58,7 @@ public:
   void CloseProcessingThreads();
   long GetStraxBufferSize();
 
-  std::map<std::string, int> GetDataFormat();
+  void GetDataFormat(std::map<int, std::map<std::string, int>>&);
   
 private:
 

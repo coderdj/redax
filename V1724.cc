@@ -28,6 +28,7 @@ V1724::V1724(MongoLog  *log, Options *options){
   fChTrigRegister = 0x1060;
   fSNRegisterMSB = 0xF080;
   fSNRegisterLSB = 0xF040;
+  fBoardErrRegister = 0xEF00;
 
   DataFormatDefinition = {
     {"channel_mask_msb_idx", -1},
@@ -94,12 +95,12 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   seen_under_5 = true; // starts run as true
   u_int32_t word(0);
   int my_bid(0);
-  if (CAENVME_ReadCycle(fBoardHandle, fSNRegisterLSB, &word, cvA32_U_DATA, cvD32) != cvSuccess) {
+  if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
     fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBoardHandle);
     return -1;
   }
   my_bid |= word&0xFF;
-  if (CAENVME_ReadCycle(fBoardHandle, fSNRegisterMSB, &word, cvA32_U_DATA, cvD32) != cvSuccess) {
+  if ((word = ReadRegister(fSNRegisterMSB)) == 0xFFFFFFFF) {
     fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBoardHandle);
     return -1;
   }
@@ -109,6 +110,12 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
         link, crate, fBID, my_bid);
   }
   return 0;
+}
+
+int V1724::Reset() {
+  int ret = WriteRegister(fResetRegister, 0x1);
+  ret += WriteRegister(fBoardErrRegister, 0x30);
+  return ret;
 }
 
 u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
