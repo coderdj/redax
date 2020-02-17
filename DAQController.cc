@@ -112,19 +112,16 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
     fOptions->GetDAC(dac_values, BIDs);
   std::vector<std::thread*> init_threads;
 
-  init_threads.reserve(fDigitizers.size());
   std::map<int,int> rets;
-  rets.reserve(fDigitizers.size());
   // Parallel digitizer programming to speed baselining
   for( auto& link : fDigitizers ) {
     rets[link.first] = 1;
     init_threads.push_back(new std::thread(&DAQController::InitLink, this,
 	  std::ref(link.second), std::ref(dac_values), std::ref(rets[link.first])));
   }
-  for (unsigned i = 0; i < init_threads.size(); i++) {
-    init_threads[i]->join();
-    delete init_threads[i];
-  }
+  std::for_each(init_threads.begin(), init_threads.end(),
+      [](std::thread* t) {t->join(); delete t;});
+
   if (std::any_of(rets.begin(), rets.end(), [](auto& p) {return p.second != 0;})) {
     fLog->Entry(MongoLog::Warning, "Encountered errors during digitizer programming");
     if (std::any_of(rets.begin(), rets.end(), [](auto& p) {return p.second == -2;}))
