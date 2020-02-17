@@ -112,7 +112,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   return 0;
 }
 
-void V1724::Reset() {
+int V1724::Reset() {
   int ret = WriteRegister(fResetRegister, 0x1);
   ret += WriteRegister(fBoardErrRegister, 0x30);
   return ret;

@@ -577,7 +577,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
 
       // send triggers
       for (int trig = 0; trig < triggers_per_step; trig++) {
-        for (auto d : digis) digi->SWTrigger();
+        for (auto d : digis) d->SWTrigger();
         std::this_thread::sleep_for(ms_between_triggers);
       }
       // stop
@@ -618,13 +618,12 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       }
 
       // analyze
-      //for (unsigned d = 0; d < digis.size(); d++) {
       for (auto d : digis) {
         bid = d->bid();
         idx = 0;
         while ((idx * sizeof(u_int32_t) < bytes_read[bid]) && (idx >= 0)) {
-          if ((buffers[d][idx]>>28) == 0xA) {
-            words_in_event = buffers[d][idx]&0xFFFFFFF;
+          if ((buffers[bid][idx]>>28) == 0xA) {
+            words_in_event = buffers[bid][idx]&0xFFFFFFF;
             if (words_in_event == 4) {
               idx += 4;
               continue;
@@ -642,7 +641,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
             words_per_channel -= d->DataFormatDefinition["channel_header_words"];
 
             idx += 4;
-            for (unsigned ch = 0; ch < ch_per_digi; ch++) {
+            for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
               if (!(channel_mask & (1 << ch))) continue;
               idx += d->DataFormatDefinition["channel_header_words"];
               hist.assign(hist.size(), 0);
@@ -654,7 +653,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
                 hist[val1 >> rebin_factor]++;
               }
               idx += words_per_channel;
-              for (auto it = beg_it; it < end_it; it++) if (*it > *max_it) max_it = it;
+              max_it = std::max_element(beg_it, end_it);
               max_start = std::max(max_it - bins_around_max, beg_it);
               max_end = std::min(max_it + bins_around_max+1, end_it);
               counts_total = std::accumulate(beg_it, end_it, 0.);
@@ -699,10 +698,10 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
           bid = d->bid();
           fMapMutex.lock();
           cal_values[bid] = std::map<std::string, vector<double>>(
-              {{"slope", vector<double>(ch_per_digi)},
-               {"yint", vector<double>(ch_per_digi)}});
+              {{"slope", vector<double>(d->GetNumChannels())},
+               {"yint", vector<double>(d->GetNumChannels())}});
           fMapMutex.unlock();
-          for (unsigned ch = 0; ch < ch_per_digi; ch++) {
+          for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
             B = C = D = E = F = 0;
             for (unsigned i = 0; i < DAC_cal_points.size(); i++) {
               B += DAC_cal_points[i]*DAC_cal_points[i];

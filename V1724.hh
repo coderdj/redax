@@ -35,7 +35,7 @@ class V1724{
   int SoftwareStart();
   int AcquisitionStop();
   int SWTrigger();
-  void Reset();
+  int Reset();
   bool EnsureReady(int ntries, int sleep);
   bool EnsureStarted(int ntries, int sleep);
   bool EnsureStopped(int ntries, int sleep);
