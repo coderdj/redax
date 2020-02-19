@@ -109,12 +109,12 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   u_int32_t word(0);
   int my_bid(0);
   if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
-    fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBoardHandle);
+    fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBID);
     return -1;
   }
   my_bid |= word&0xFF;
   if ((word = ReadRegister(fSNRegisterMSB)) == 0xFFFFFFFF) {
-    fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBoardHandle);
+    fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBID);
     return -1;
   }
   my_bid |= ((word&0xFF)<<8);
