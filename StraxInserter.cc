@@ -20,13 +20,14 @@ StraxInserter::StraxInserter(){
   fChunkNameLength=6;
   fChunkOverlap = 0x2FAF080;
   fFragmentLength=110*2;
-  fStraxHeaderSize=31;
+  fStraxHeaderSize=22;
   fLog = NULL;
   fErrorBit = false;
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
-
+  fChunkAllocSize = 1<<27; // 128 MiB alloc/thread seems reasonable for high rates
+  fOverlapAllocSize = 1<<20; // 1 MiB overlap
 }
 
 StraxInserter::~StraxInserter(){
@@ -37,6 +38,15 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fOptions = options;
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
+
+  // let's decide how much memory to pre-alloc for the readout buffers
+  // 128 MiB/thread for chunks and 1 MiB for overlap should work
+  // for high-rate modes, and for normal modes the memory just sits idle
+  int bitshift = fOptions->GetInt("strax_chunk_prealloc", 27);
+  fChunkAllocSize = 1 << bitshift;
+  bitshift = fOptions->GetInt("strax_overlap_prealloc", 20);
+  fChunkOverlapSize = 1 << bitshift;
+
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
   fCompressor = fOptions->GetString("compressor", "lz4");
   fHostname = hostname;
@@ -200,9 +210,9 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	if(smallest_latest_index_seen == -1 || int(chunk_id) < smallest_latest_index_seen)
 	  smallest_latest_index_seen = chunk_id;
 	
-	bool nextpre=false;//, prevpost=false;
-	if(((chunk_id+1)*fFullChunkLength)-Time64 < fChunkOverlap)
-	  nextpre=true;
+        bool nextpre = (chunk_id+1)* fFullChunkLength - Time64 < fChunkOverlap;
+	//if(((chunk_id+1)*fFullChunkLength)-Time64 < fChunkOverlap)
+	//  nextpre=true;
 
 	// We're now at the first sample of the channel's waveform. This
 	// will be beautiful. First we reinterpret the channel as 16
@@ -247,22 +257,11 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  char *fragmenttime = reinterpret_cast<char*> (&samples_this_channel);
 	  fragment.append(fragmenttime, 4);
 
-	  u_int32_t tii0 = 0; // pulse area
-	  char *thisoneiszero = reinterpret_cast<char*>(&tii0);
-	  fragment.append(thisoneiszero, 4);
-
 	  char *samplesthischannel = reinterpret_cast<char*> (&samples_in_channel);
 	  fragment.append(samplesthischannel, 4);
 
 	  char *fragmentindex = reinterpret_cast<char*> (&fragment_index);
 	  fragment.append(fragmentindex, 2);
-
-	  char *anotherzero = reinterpret_cast<char*> (&tii0); // baseline
-	  fragment.append(anotherzero, 4);
-
-	  u_int8_t rl = 0;
-	  char *reductionLevel = reinterpret_cast<char*> (&rl);
-	  fragment.append(reductionLevel, 1);
 
 	  // Copy the raw buffer
 	  if(samples_this_channel>fFragmentLength/2){
@@ -272,8 +271,10 @@ void StraxInserter::ParseDocuments(data_packet dp){
 
 	  const char *data_loc = reinterpret_cast<const char*>(&(payload[offset+index_in_sample]));
 	  fragment.append(data_loc, samples_this_channel*2);
+          uint8_t zero_filler = 0;
+          char *zero = reinterpret_cast<char*> (&zero_filler);
 	  while(fragment.size()<fFragmentLength+fStraxHeaderSize)
-	    fragment.append(reductionLevel, 1); // int(0) != int("0")
+	    fragment.append(zero, 1); // int(0) != int("0")
 
 	  //copy(data_loc, data_loc+(samples_this_channel*2),&(fragment[31]));
 
@@ -287,6 +288,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  if(!nextpre){// && !prevpost){	      
 	    if(fFragments.find(chunk_index) == fFragments.end()){
 	      fFragments[chunk_index] = new std::string();
+              fragments[chunk_index]->reserve(fChunkAllocSize);
 	    }
 	    fFragments[chunk_index]->append(fragment);
             fFragmentSize[chunk_index] += fragment.size();
@@ -298,12 +300,14 @@ void StraxInserter::ParseDocuments(data_packet dp){
 
 	    if(fFragments.find(nextchunk_index+"_pre") == fFragments.end()){
 	      fFragments[nextchunk_index+"_pre"] = new std::string();
+              fFragments[nextchunk_index+"_pre"]->reserve(fOverlapAllocSize);
 	    }
 	    fFragments[nextchunk_index+"_pre"]->append(fragment);
             fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
 
 	    if(fFragments.find(chunk_index+"_post") == fFragments.end()){
 	      fFragments[chunk_index+"_post"] = new std::string();
+              fFragments[chunk_index+"_post"]->reserve(fOverlapAllocSize);
 	    }
 	    fFragments[chunk_index+"_post"]->append(fragment);
             fFragmentSize[chunk_index+"_post"] += fragment.size();
@@ -361,8 +365,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
 
   std::map<std::string, std::string*>::iterator iter;
-  for(iter=fFragments.begin();
-      iter!=fFragments.end(); iter++){
+  for(iter=fFragments.begin(); iter!=fFragments.end(); iter++){
     std::string chunk_index = iter->first;
     std::string idnr = chunk_index.substr(0, fChunkNameLength);
     int idnrint = std::stoi(idnr);

@@ -60,6 +60,8 @@ private:
   u_int16_t fFragmentLength; // This is in BYTES
   u_int16_t fStraxHeaderSize; // in BYTES too
   u_int32_t fChunkNameLength;
+  int fChunkAllocSize; // bytes
+  int fOverlapAllocSize; // bytes
   std::string fOutputPath, fHostname;
   Options *fOptions;
   MongoLog *fLog;
