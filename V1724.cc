@@ -110,8 +110,8 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   int my_bid(0);
   
   if (Reset()) {
-    fLog->Entry("Board %i unable to pre-load registers", fBID);
-    return -1
+    fLog->Entry(MongoLog::Error, "Board %i unable to pre-load registers", fBID);
+    return -1;
   }
   if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
     fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBID);
