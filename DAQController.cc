@@ -87,13 +87,6 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	}
 	fLog->Entry(MongoLog::Debug, "Initialized digitizer %i", d.board);
 	
-	if(digi->Reset()!=0){
-	  fLog->Entry(MongoLog::Error,
-		      "Digitizer %i unable to load pre-registers",
-		      digi->bid());
-	  fStatus = DAXHelpers::Idle;
-	  return -1;
-	}
     }
     else{
       delete digi;
