@@ -26,6 +26,8 @@ StraxInserter::StraxInserter(){
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
+  fChunkAlloc = 1 << 27;
+  fOverlapAlloc = 1 << 20;
 
 }
 
@@ -42,6 +44,12 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fHostname = hostname;
   fBoardFailCount = 0;
   std::string run_name = fOptions->GetString("run_identifier", "run");
+
+  // How much memory we pre-allocate for chunks
+  // 1<<27 = 128 MiB/thread, which should be fine
+  // for high-rate modes
+  fChunkAlloc = 1 << fOptions->GetInt("strax_chunk_alloc", 27);
+  fOverlapAlloc = 1 << fOptions->GetInt("strax_overlap_alloc", 20);
 
   fMissingVerified = 0;
   fDataSource = dataSource;
@@ -136,7 +144,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// These defaults are valid for 'default' firmware where all channels same size
 	u_int32_t channel_words = (words_in_event - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
-	u_int32_t channel_timeMSB; 
+	u_int32_t channel_timeMSB = 0; 
 	//u_int32_t baseline_ch;     
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
@@ -221,6 +229,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	
 	while(index_in_sample < samples_in_channel){
 	  std::string fragment;
+          fragment.reserve(fStraxHeaderSize + fFragmentLength);
 	  
 	  // How long is this fragment?
 	  u_int32_t max_sample = index_in_sample + fFragmentLength/2;
@@ -287,6 +296,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  if(!nextpre){// && !prevpost){	      
 	    if(fFragments.find(chunk_index) == fFragments.end()){
 	      fFragments[chunk_index] = new std::string();
+              fFragments[chunk_index]->reserve(fChunkAlloc);
 	    }
 	    fFragments[chunk_index]->append(fragment);
             fFragmentSize[chunk_index] += fragment.size();
@@ -298,12 +308,14 @@ void StraxInserter::ParseDocuments(data_packet dp){
 
 	    if(fFragments.find(nextchunk_index+"_pre") == fFragments.end()){
 	      fFragments[nextchunk_index+"_pre"] = new std::string();
+              fFragments[nextchunk_index+"_pre"]->reserve(fOverlapAlloc);
 	    }
 	    fFragments[nextchunk_index+"_pre"]->append(fragment);
             fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
 
 	    if(fFragments.find(chunk_index+"_post") == fFragments.end()){
 	      fFragments[chunk_index+"_post"] = new std::string();
+              fFragments[chunk_index+"_post"]->reserve(fOverlapAlloc);
 	    }
 	    fFragments[chunk_index+"_post"]->append(fragment);
             fFragmentSize[chunk_index+"_post"] += fragment.size();
