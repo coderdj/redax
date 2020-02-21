@@ -10,6 +10,7 @@
 #include "MongoLog.hh"
 #include "Options.hh"
 #include <CAENVMElib.h>
+#include <chrono>
 
 
 V1724::V1724(MongoLog  *log, Options *options){
@@ -91,7 +92,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
     fLog->Entry(MongoLog::Warning, "Board %i failed to init, error %i handle %i link %i bdnum %i",
-            fBID, a, fBoardHandle, link, crate);
+            bid, a, fBoardHandle, link, crate);
     fBoardHandle = -1;
     return -1;
   }
@@ -112,7 +113,10 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   if (Reset()) {
     fLog->Entry(MongoLog::Error, "Board %i unable to pre-load registers", fBID);
     return -1;
+  } else {
+    fLog->Entry(MongoLog::Local, "Board %i reset", fBID);
   }
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
   if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
     fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBID);
     return -1;
