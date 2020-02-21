@@ -26,8 +26,6 @@ StraxInserter::StraxInserter(){
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
-  fChunkAllocSize = 1<<27; // 128 MiB alloc/thread seems reasonable for high rates
-  fOverlapAllocSize = 1<<20; // 1 MiB overlap
 }
 
 StraxInserter::~StraxInserter(){
@@ -43,9 +41,9 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   // 128 MiB/thread for chunks and 1 MiB for overlap should work
   // for high-rate modes, and for normal modes the memory just sits idle
   int bitshift = fOptions->GetInt("strax_chunk_prealloc", 27);
-  fChunkAllocSize = 1 << bitshift;
+  fChunkAlloc = 1 << bitshift;
   bitshift = fOptions->GetInt("strax_overlap_prealloc", 20);
-  fChunkOverlapSize = 1 << bitshift;
+  fOverlapAlloc = 1 << bitshift;
 
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
   fCompressor = fOptions->GetString("compressor", "lz4");
@@ -288,7 +286,7 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  if(!nextpre){// && !prevpost){	      
 	    if(fFragments.find(chunk_index) == fFragments.end()){
 	      fFragments[chunk_index] = new std::string();
-              fragments[chunk_index]->reserve(fChunkAllocSize);
+              fFragments[chunk_index]->reserve(fChunkAlloc);
 	    }
 	    fFragments[chunk_index]->append(fragment);
             fFragmentSize[chunk_index] += fragment.size();
@@ -300,14 +298,14 @@ void StraxInserter::ParseDocuments(data_packet dp){
 
 	    if(fFragments.find(nextchunk_index+"_pre") == fFragments.end()){
 	      fFragments[nextchunk_index+"_pre"] = new std::string();
-              fFragments[nextchunk_index+"_pre"]->reserve(fOverlapAllocSize);
+              fFragments[nextchunk_index+"_pre"]->reserve(fOverlapAlloc);
 	    }
 	    fFragments[nextchunk_index+"_pre"]->append(fragment);
             fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
 
 	    if(fFragments.find(chunk_index+"_post") == fFragments.end()){
 	      fFragments[chunk_index+"_post"] = new std::string();
-              fFragments[chunk_index+"_post"]->reserve(fOverlapAllocSize);
+              fFragments[chunk_index+"_post"]->reserve(fOverlapAlloc);
 	    }
 	    fFragments[chunk_index+"_post"]->append(fragment);
             fFragmentSize[chunk_index+"_post"] += fragment.size();
