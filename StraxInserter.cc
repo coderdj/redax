@@ -228,8 +228,8 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
 	
 	while(index_in_sample < samples_in_channel){
-	  std::string fragment;
-          fragment.reserve(fStraxHeaderSize + fFragmentLength);
+	  std::string fragment(fStraxHeaderSize + fFragmentLength*2, 0);
+          fragment.clear();
 	  
 	  // How long is this fragment?
 	  u_int32_t max_sample = index_in_sample + fFragmentLength/2;

@@ -117,6 +117,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
     fLog->Entry(MongoLog::Local, "Board %i reset", fBID);
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  if (false) {
   if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
     fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBID);
     return -1;
@@ -131,6 +132,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
     fLog->Entry(MongoLog::Local, "Link %i crate %i should be SN %i but is actually %i",
         link, crate, fBID, my_bid);
   }
+}
   return 0;
 }
 
@@ -252,6 +254,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   // the other, V1724G, has 512 MS/channel = 1MB/channel
   //unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
   unsigned int BLT_SIZE=524288;
+  int fudge_factor = 2;
   std::vector<u_int32_t*> transferred_buffers;
   std::vector<u_int32_t> transferred_bytes;
 
@@ -259,7 +262,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   do{
 
     // Reserve space for this block transfer
-    u_int32_t* thisBLT = new u_int32_t[BLT_SIZE/sizeof(u_int32_t)];
+    u_int32_t* thisBLT = new u_int32_t[BLT_SIZE/sizeof(u_int32_t)*fudge_factor];
     
     try{
       ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
@@ -302,9 +305,9 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   // data and free up the rest of the memory reserved as buffer.
   // In tests this does not seem to impact our ability to read out the V1724 at the
   // maximum bandwidth of the link.
+  u_int32_t bytes_copied = 0;
   if(blt_bytes>0){
     buffer = new u_int32_t[blt_bytes/sizeof(u_int32_t)];
-    u_int32_t bytes_copied = 0;
     for(unsigned int x=0; x<transferred_buffers.size(); x++){
       std::memcpy(((unsigned char*)buffer)+bytes_copied,
 		  transferred_buffers[x], transferred_bytes[x]);
