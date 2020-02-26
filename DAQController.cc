@@ -235,6 +235,8 @@ void DAQController::ReadData(int link){
   u_int32_t board_status = 0;
   long int readcycler = 0;
   int err_val = 0;
+  std::list<data_packet> local_buffer;
+  int local_size;
   while(fReadLoop){
     
     for(auto digi : fDigitizers[link]) {
@@ -276,14 +278,18 @@ void DAQController::ReadData(int link){
       if(d.size>0){
 	d.header_time = digi->GetHeaderTime(d.buff, d.size);
 	d.clock_counter = digi->GetClockCounter(d.header_time);
-        fBufferMutex.lock();
-	fBuffer.push_back(d);
-        fBufferSize += d.size;
-        fDataRate += d.size;
-        fBufferLength++;
-        fBufferMutex.unlock();
+        local_buffer.push_back(d);
+        local_size += d.size;
       }
     } // for digi in digitizers
+    if (local_buffer.size() > 0) {
+      fBufferMutex.lock();
+      fBuffer.splice(fBuffer.end(), local_buffer); // clears local_buffer
+      fBufferLength += local_buffer.size();
+      fBufferMutex.unlock();
+      fBufferSize += local_size;
+      fDataRate += local_size;
+    }
     readcycler++;
     usleep(1);
   } // while run
