@@ -8,6 +8,7 @@
 #include <vector>
 #include <cstdint>
 #include <mutex>
+#include <list>
 
 class StraxInserter;
 class MongoLog;
@@ -45,7 +46,7 @@ public:
   void ReadData(int link);
   void End();
 
-  int GetData(std::vector <data_packet> *&retVec);
+  int GetData(data_packet &retVec);
     
   // Static wrapper so we can call ReadData in a std::thread
   void ReadThreadWrapper(void* data, int link);
@@ -70,11 +71,11 @@ private:
   
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;
+  std::list<data_packet> fBuffer;
   std::mutex fBufferMutex;
   std::mutex fMapMutex;
 
   bool fReadLoop;
-  std::vector<data_packet> *fRawDataBuffer;
   int fStatus;
   int fNProcessingThreads;
   std::string fHostname;
@@ -82,11 +83,10 @@ private:
   Options *fOptions;
 
   // For reporting to frontend
-  std::atomic_uint64_t fBufferLength;
-  u_int64_t fDatasize;
+  std::atomic_uint64_t fBufferSize;
+  std::atomic_int fBufferLength;
   std::map<int, V1724*> fBoardMap;
   std::map<int, std::atomic_bool> fCheckFails;
-
 };
 
 #endif

@@ -208,15 +208,11 @@ void DAQController::End(){
   fDigitizers.clear();
   fStatus = DAXHelpers::Idle;
 
-  if(fRawDataBuffer != NULL){
+  if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
-		fRawDataBuffer->size());
-    for(unsigned int i=0; i<fRawDataBuffer->size(); i++){
-      delete[] (*fRawDataBuffer)[i].buff;
-      (*fRawDataBuffer)[i].buff = NULL;
-    }
-    delete fRawDataBuffer;
-    fRawDataBuffer = NULL;
+		fBuffer.size());
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto& dp){delete dp.buff;});
+    fBuffer.clear();
   }
 
   std::cout<<"Finished end"<<std::endl;
@@ -227,23 +223,18 @@ void DAQController::ReadData(int link){
   
   // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
   fBufferMutex.lock();
-  if(fRawDataBuffer != NULL){
+  if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
-    for(unsigned int x=0;x<fRawDataBuffer->size(); x++){
-      delete[] (*fRawDataBuffer)[x].buff;
-      (*fRawDataBuffer)[x].buff = NULL;
-    }
-    delete fRawDataBuffer;
-    fBufferLength=0;
-    fRawDataBuffer = NULL;
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto& dp){delete[] dp.buff;});
+    fBuffer.clear();
+    fBufferLength = 0;
+    fBufferSize = 0;
   }
   fBufferMutex.unlock();
   
-  u_int32_t lastRead = 0; // bytes read in last cycle. make sure we clear digitizers at run stop
   u_int32_t board_status = 0;
   long int readcycler = 0;
   int err_val = 0;
-  std::vector<data_packet> local_buffer;
   while(fReadLoop){
     
     for(auto digi : fDigitizers[link]) {
@@ -274,8 +265,6 @@ void DAQController::ReadData(int link){
       d.bid = digi->bid();
       d.size = digi->ReadMBLT(d.buff);
 
-      lastRead += d.size;
-      
       if(d.size<0){
 	//LOG ERROR
 	if(d.buff!=NULL){
@@ -287,13 +276,13 @@ void DAQController::ReadData(int link){
       if(d.size>0){
 	d.header_time = digi->GetHeaderTime(d.buff, d.size);
 	d.clock_counter = digi->GetClockCounter(d.header_time);
-	fDatasize += d.size;
-	local_buffer.push_back(d);
+        fBufferMutex.lock();
+	fBuffer.push_back(d);
+        fBufferSize += d.size;
+        fBufferLength++;
+        fBufferMutex.unlock();
       }
     } // for digi in digitizers
-    if(local_buffer.size()!=0)
-      AppendData(local_buffer);
-    local_buffer.clear();
     readcycler++;
     usleep(1);
   } // while run
@@ -320,41 +309,15 @@ void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& ret
       retmap[digi->bid()] = digi->DataFormatDefinition;
 }
 
-void DAQController::AppendData(std::vector<data_packet> &d){
-  // Blocks!
+int DAQController::GetData(data_packet &dp){
+  if (fBufferLength == 0) return 0;
   fBufferMutex.lock();
-  if(fRawDataBuffer==NULL)
-    fRawDataBuffer = new std::vector<data_packet>();
-  fRawDataBuffer->insert( fRawDataBuffer->end(), d.begin(), d.end() );
-  u_int64_t bl = 0;
-  for(unsigned int x=0; x<fRawDataBuffer->size(); x++){
-    bl += (*fRawDataBuffer)[x].size;
-  }
-  fBufferLength = bl; 
-  fBufferMutex.unlock();  
-}
-
-int DAQController::GetData(std::vector <data_packet> *&retVec){
-  // Check once, is it worth locking mutex?
-  retVec=NULL;
-  if(fBufferLength==0)
-    return 0;
-  if(!fBufferMutex.try_lock())
-    return 0;
-
-  int ret = 0;
-  // Check again, is there still data?
-  if(fRawDataBuffer != NULL && fRawDataBuffer->size()>0){
-
-    // Pass ownership to calling function
-    retVec = fRawDataBuffer;
-    fRawDataBuffer = NULL;
-
-    ret = retVec->size();
-    fBufferLength = 0;
-  }
-  fBufferMutex.unlock();
-  return ret;
+  dp = *fBuffer.begin();
+  fBuffer.pop_front();
+  fBufferLength--;
+  fBufferSize -= dp.size;
+  fBufferMutex.unlock;
+  return dp.size;
 }
 
 bool DAQController::CheckErrors(){
