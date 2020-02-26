@@ -18,6 +18,24 @@ class Options;
 class MongoLog;
 
 struct data_packet{
+  public:
+    data_packet() {buff = nullptr; size = clock_counter = header_time = bid = 0;}
+    data_packet(const data_packet& rhs) {
+      buff = rhs.buff;
+      size = rhs.size;
+      clock_counter = rhs.clock_counter;
+      header_time = rhs.header_time;
+      bid = rhs.bid;
+    }
+    ~data_packet() {buff = nullptr; size = clock_counter = header_time = bid = 0;}
+    data_packet operator=(const data_packet& rhs) {
+      buff = rhs.buff;
+      size = rhs.size;
+      clock_counter = rhs.clock_counter;
+      header_time = rhs.header_time;
+      bid = rhs.bid;
+      return *this;
+    }
   u_int32_t *buff;
   int32_t size;
   u_int32_t clock_counter;
