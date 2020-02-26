@@ -34,7 +34,7 @@ struct RegisterType{
 };
 
 struct CrateOptions{
-  int pulser_freq;
+  float pulser_freq;
   int neutron_veto;
   int muon_veto;
   int led_trigger;
