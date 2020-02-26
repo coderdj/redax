@@ -313,7 +313,7 @@ void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& ret
 int DAQController::GetData(data_packet &dp){
   if (fBufferLength == 0) return 0;
   fBufferMutex.lock();
-  if (fBufferMutex.size() == 0) {
+  if (fBuffer.size() == 0) {
     fBufferMutex.unlock();
     return 0;
   }
