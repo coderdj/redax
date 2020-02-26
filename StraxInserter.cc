@@ -37,14 +37,6 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
 
-  // let's decide how much memory to pre-alloc for the readout buffers
-  // 128 MiB/thread for chunks and 1 MiB for overlap should work
-  // for high-rate modes, and for normal modes the memory just sits idle
-  int bitshift = fOptions->GetInt("strax_chunk_prealloc", 27);
-  fChunkAlloc = 1 << bitshift;
-  bitshift = fOptions->GetInt("strax_overlap_prealloc", 20);
-  fOverlapAlloc = 1 << bitshift;
-
   fFragmentLength = fOptions->GetInt("strax_fragment_length", 110*2);
   fCompressor = fOptions->GetString("compressor", "lz4");
   fHostname = hostname;
@@ -286,7 +278,6 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	  if(!nextpre){// && !prevpost){	      
 	    if(fFragments.find(chunk_index) == fFragments.end()){
 	      fFragments[chunk_index] = new std::string();
-              fFragments[chunk_index]->reserve(fChunkAlloc);
 	    }
 	    fFragments[chunk_index]->append(fragment);
             fFragmentSize[chunk_index] += fragment.size();
@@ -298,14 +289,12 @@ void StraxInserter::ParseDocuments(data_packet dp){
 
 	    if(fFragments.find(nextchunk_index+"_pre") == fFragments.end()){
 	      fFragments[nextchunk_index+"_pre"] = new std::string();
-              fFragments[nextchunk_index+"_pre"]->reserve(fOverlapAlloc);
 	    }
 	    fFragments[nextchunk_index+"_pre"]->append(fragment);
             fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
 
 	    if(fFragments.find(chunk_index+"_post") == fFragments.end()){
 	      fFragments[chunk_index+"_post"] = new std::string();
-              fFragments[chunk_index+"_post"]->reserve(fOverlapAlloc);
 	    }
 	    fFragments[chunk_index+"_post"]->append(fragment);
             fFragmentSize[chunk_index+"_post"] += fragment.size();
