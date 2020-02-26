@@ -86,7 +86,7 @@ void StraxInserter::GetDataPerChan(std::map<int, long>& ret) {
   return;
 }
 
-void StraxInserter::ParseDocuments(data_packet dp){
+void StraxInserter::ParseDocuments(data_packet &dp){
   
   // Take a buffer and break it up into one document per channel
   unsigned int max_channels = 16; // hardcoded to accomodate V1730
@@ -324,29 +324,20 @@ void StraxInserter::ParseDocuments(data_packet dp){
 
 
 int StraxInserter::ReadAndInsertData(){
-  
-  std::vector <data_packet> *readVector=NULL;
-  int read_length = fDataSource->GetData(readVector);  
+  data_packet dp;
   fActive = true;
   bool haddata=false;
-  while(fActive || read_length>0){
-    if(readVector != NULL){
-      haddata=true;
-      for(unsigned int i=0; i<readVector->size(); i++){
-	ParseDocuments((*readVector)[i]);
-	delete[] (*readVector)[i].buff;
-      }
-      delete readVector;
-      readVector=NULL;
-    }    
-
-    usleep(10); // 10ms sleep
-    read_length = fDataSource->GetData(readVector);
+  while(fActive){
+    if (fDataSource->GetData(dp)) {
+      haddata = true;
+      ParseDocuments(dp);
+      delete[] dp.buff;
+    } else
+      usleep(10); // 10us sleep
   }
-
   if(haddata)
     WriteOutFiles(1000000, true);
-  return 0;  
+  return 0;
 }
 
 // Can tune here as needed, these are defaults from the LZ4 examples

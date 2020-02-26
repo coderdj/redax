@@ -18,6 +18,24 @@ class Options;
 class MongoLog;
 
 struct data_packet{
+  public:
+    data_packet() {buff = nullptr; size = clock_counter = header_time = bid = 0;}
+    data_packet(const data_packet& rhs) {
+      buff = rhs.buff;
+      size = rhs.size;
+      clock_counter = rhs.clock_counter;
+      header_time = rhs.header_time;
+      bid = rhs.bid;
+    }
+    ~data_packet() {buff = nullptr; size = clock_counter = header_time = bid = 0;}
+    data_packet operator=(const data_packet& rhs) {
+      buff = rhs.buff;
+      size = rhs.size;
+      clock_counter = rhs.clock_counter;
+      header_time = rhs.header_time;
+      bid = rhs.bid;
+      return *this;
+    }
   u_int32_t *buff;
   int32_t size;
   u_int32_t clock_counter;
@@ -46,7 +64,7 @@ public:
   void CheckError(int bid);
   
 private:
-  void ParseDocuments(data_packet dp);
+  void ParseDocuments(data_packet &dp);
   void WriteOutFiles(int smallest_index_seen, bool end=false);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
@@ -64,7 +82,7 @@ private:
   Options *fOptions;
   MongoLog *fLog;
   DAQController *fDataSource;
-  bool fActive;
+  std::atomic_bool fActive;
   bool fErrorBit;
   std::string fCompressor;
   std::map<std::string, std::string*> fFragments;
