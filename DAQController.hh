@@ -52,7 +52,7 @@ public:
   void ReadThreadWrapper(void* data, int link);
   void ProcessingThreadWrapper(void* data);
 
-  u_int64_t GetDataSize(){ u_int64_t ds = fDatasize; fDatasize=0; return ds;}
+  u_int64_t GetDataSize(){ u_int64_t ds = fDataRate; fDataRate=0; return ds;}
   std::map<int, long> GetDataPerChan();
   bool CheckErrors();
   void CheckError(int bid) {fCheckFails[bid] = true;}
@@ -85,6 +85,7 @@ private:
   // For reporting to frontend
   std::atomic_uint64_t fBufferSize;
   std::atomic_int fBufferLength;
+  std::atomic_int fDataRate;
   std::map<int, V1724*> fBoardMap;
   std::map<int, std::atomic_bool> fCheckFails;
 };

@@ -30,8 +30,7 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fReadLoop = false;
   fNProcessingThreads=8;
   fBufferLength = 0;
-  fRawDataBuffer = NULL;
-  fDatasize=0.;
+  fDataRate=0.;
   fHostname = hostname;
 }
 
@@ -228,6 +227,7 @@ void DAQController::ReadData(int link){
     std::for_each(fBuffer.begin(), fBuffer.end(), [](auto& dp){delete[] dp.buff;});
     fBuffer.clear();
     fBufferLength = 0;
+    fDataRate = 0;
     fBufferSize = 0;
   }
   fBufferMutex.unlock();
@@ -279,6 +279,7 @@ void DAQController::ReadData(int link){
         fBufferMutex.lock();
 	fBuffer.push_back(d);
         fBufferSize += d.size;
+        fDataRate += d.size;
         fBufferLength++;
         fBufferMutex.unlock();
       }
@@ -316,7 +317,7 @@ int DAQController::GetData(data_packet &dp){
   fBuffer.pop_front();
   fBufferLength--;
   fBufferSize -= dp.size;
-  fBufferMutex.unlock;
+  fBufferMutex.unlock();
   return dp.size;
 }
 
