@@ -577,7 +577,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
 
       // readout
       for (auto d : digis)
-        bytes_read[d->bid()] = d->ReadMBLT(buffers[d->bid()]);
+        bytes_read[d->bid()] = d->ReadMBLT(buffers[d->bid()], idx); // idx unused here
 
       // decode
       if (std::any_of(bytes_read.begin(), bytes_read.end(),
