@@ -325,14 +325,13 @@ void StraxInserter::ParseDocuments(data_packet &dp){
 
 
 int StraxInserter::ReadAndInsertData(){
-  data_packet dp;
   fActive = true;
   bool haddata=false;
   std::list<data_packet> b;
   while(fActive){
     if (fDataSource->GetData(b)) {
       haddata = true;
-      for (auto& db : b) {
+      for (auto& dp : b) {
         ParseDocuments(dp);
         delete[] dp.buff;
       }
