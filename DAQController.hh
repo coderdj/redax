@@ -46,14 +46,14 @@ public:
   void ReadData(int link);
   void End();
 
-  int GetData(data_packet &retVec);
+  int GetData(std::list<data_packet> &ret);
     
   // Static wrapper so we can call ReadData in a std::thread
   void ReadThreadWrapper(void* data, int link);
   void ProcessingThreadWrapper(void* data);
 
-  u_int64_t GetDataSize(){ u_int64_t ds = fDataRate; fDataRate=0; return ds;}
-  std::map<int, long> GetDataPerChan();
+  int GetDataSize(){int ds = fDataRate; fDataRate=0; return ds;}
+  std::map<int, int> GetDataPerChan();
   bool CheckErrors();
   void CheckError(int bid) {fCheckFails[bid] = true;}
   int OpenProcessingThreads();
@@ -75,7 +75,7 @@ private:
   std::mutex fBufferMutex;
   std::mutex fMapMutex;
 
-  bool fReadLoop;
+  std::atomic_bool fReadLoop;
   int fStatus;
   int fNProcessingThreads;
   std::string fHostname;
@@ -83,7 +83,7 @@ private:
   Options *fOptions;
 
   // For reporting to frontend
-  std::atomic_uint64_t fBufferSize;
+  std::atomic_int fBufferSize;
   std::atomic_int fBufferLength;
   std::atomic_int fDataRate;
   std::map<int, V1724*> fBoardMap;

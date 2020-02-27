@@ -60,7 +60,7 @@ public:
   int ReadAndInsertData();
   bool CheckError(){ return fErrorBit; }
   long GetBufferSize();
-  void GetDataPerChan(std::map<int, long>& ret);
+  void GetDataPerChan(std::map<int, int>& ret);
   void CheckError(int bid);
   
 private:
@@ -90,7 +90,7 @@ private:
   int fBoardFailCount;
   std::map<int, std::map<std::string, int>> fFmt;
   std::map<int, int> fFailCounter;
-  std::map<int, std::atomic_long> fDataPerChan;
+  std::map<int, std::atomic_int> fDataPerChan;
 };
 
 #endif

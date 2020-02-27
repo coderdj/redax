@@ -9,6 +9,7 @@
 #include <cstdarg>
 #include <numeric>
 #include <sstream>
+#include <list>
 
 namespace fs=std::experimental::filesystem;
 
@@ -67,8 +68,8 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 }
 
 void StraxInserter::Close(std::map<int,int>& ret){
-  for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
   fActive = false;
+  for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
 }
 
 long StraxInserter::GetBufferSize() {
@@ -78,7 +79,7 @@ long StraxInserter::GetBufferSize() {
   return ret;
 }
 
-void StraxInserter::GetDataPerChan(std::map<int, long>& ret) {
+void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
   for (auto& pair : fDataPerChan) {
     ret[pair.first] += pair.second;
     pair.second = 0;
@@ -327,11 +328,15 @@ int StraxInserter::ReadAndInsertData(){
   data_packet dp;
   fActive = true;
   bool haddata=false;
+  std::list<data_packet> b;
   while(fActive){
-    if (fDataSource->GetData(dp)) {
+    if (fDataSource->GetData(b)) {
       haddata = true;
-      ParseDocuments(dp);
-      delete[] dp.buff;
+      for (auto& db : b) {
+        ParseDocuments(dp);
+        delete[] dp.buff;
+      }
+      b.clear();
     } else
       usleep(10); // 10us sleep
   }

@@ -210,7 +210,7 @@ void DAQController::End(){
   if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
 		fBuffer.size());
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto& dp){delete dp.buff;});
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto& dp){delete[] dp.buff;});
     fBuffer.clear();
   }
 
@@ -233,7 +233,7 @@ void DAQController::ReadData(int link){
   fBufferMutex.unlock();
   
   u_int32_t board_status = 0;
-  long int readcycler = 0;
+  int readcycler = 0;
   int err_val = 0;
   std::list<data_packet> local_buffer;
   int local_size;
@@ -284,11 +284,12 @@ void DAQController::ReadData(int link){
     } // for digi in digitizers
     if (local_buffer.size() > 0) {
       fBufferMutex.lock();
-      fBuffer.splice(fBuffer.end(), local_buffer); // clears local_buffer
       fBufferLength += local_buffer.size();
+      fBuffer.splice(fBuffer.end(), local_buffer); // clears local_buffer
       fBufferMutex.unlock();
       fBufferSize += local_size;
       fDataRate += local_size;
+      local_size = 0;
     }
     readcycler++;
     usleep(1);
@@ -296,10 +297,10 @@ void DAQController::ReadData(int link){
 
 }
 
-std::map<int, long> DAQController::GetDataPerChan(){
+std::map<int, int> DAQController::GetDataPerChan(){
   // Return a map of data transferred per channel since last update
   // Clears the private maps in the StraxInserters
-  std::map <int, long> retmap;
+  std::map <int, int> retmap;
   for (const auto& pt : fProcessingThreads)
     pt.inserter->GetDataPerChan(retmap);
   return retmap;
@@ -316,19 +317,20 @@ void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& ret
       retmap[digi->bid()] = digi->DataFormatDefinition;
 }
 
-int DAQController::GetData(data_packet &dp){
+int DAQController::GetData(std::list<data_packet> &ret){
   if (fBufferLength == 0) return 0;
+  int ret = 0;
   fBufferMutex.lock();
   if (fBuffer.size() == 0) {
     fBufferMutex.unlock();
     return 0;
   }
-  dp = *fBuffer.begin();
-  fBuffer.pop_front();
-  fBufferLength--;
-  fBufferSize -= dp.size;
+  ret.splice(ret.end(), fBuffer);
+  fBufferLength = 0;
+  ret = fBufferSize;
+  fBufferSize = 0;
   fBufferMutex.unlock();
-  return dp.size;
+  return ret;
 }
 
 bool DAQController::CheckErrors(){
