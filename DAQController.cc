@@ -317,7 +317,7 @@ void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& ret
       retmap[digi->bid()] = digi->DataFormatDefinition;
 }
 
-int DAQController::GetData(std::list<data_packet> &ret){
+int DAQController::GetData(std::list<data_packet> &retVec){
   if (fBufferLength == 0) return 0;
   int ret = 0;
   fBufferMutex.lock();
@@ -325,7 +325,7 @@ int DAQController::GetData(std::list<data_packet> &ret){
     fBufferMutex.unlock();
     return 0;
   }
-  ret.splice(ret.end(), fBuffer);
+  retVec.splice(retVec.end(), fBuffer);
   fBufferLength = 0;
   ret = fBufferSize;
   fBufferSize = 0;

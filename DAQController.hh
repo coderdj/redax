@@ -46,7 +46,7 @@ public:
   void ReadData(int link);
   void End();
 
-  int GetData(std::list<data_packet> &ret);
+  int GetData(std::list<data_packet> &retVec);
     
   // Static wrapper so we can call ReadData in a std::thread
   void ReadThreadWrapper(void* data, int link);
