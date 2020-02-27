@@ -19,21 +19,23 @@ class MongoLog;
 
 struct data_packet{
   public:
-    data_packet() {buff = nullptr; size = clock_counter = header_time = bid = 0;}
+    data_packet() {buff = nullptr; size = clock_counter = header_time = bid = blt = 0;}
     data_packet(const data_packet& rhs) {
       buff = rhs.buff;
       size = rhs.size;
       clock_counter = rhs.clock_counter;
       header_time = rhs.header_time;
       bid = rhs.bid;
+      blt = rhs.blt;
     }
-    ~data_packet() {buff = nullptr; size = clock_counter = header_time = bid = 0;}
+    ~data_packet() {buff = nullptr; size = clock_counter = header_time = bid = blt = 0;}
     data_packet operator=(const data_packet& rhs) {
       buff = rhs.buff;
       size = rhs.size;
       clock_counter = rhs.clock_counter;
       header_time = rhs.header_time;
       bid = rhs.bid;
+      blt = rhs.blt;
       return *this;
     }
   u_int32_t *buff;
@@ -41,6 +43,7 @@ struct data_packet{
   u_int32_t clock_counter;
   u_int32_t header_time;
   int bid;
+  int blt;
 };
 
 

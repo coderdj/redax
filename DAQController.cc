@@ -262,10 +262,8 @@ void DAQController::ReadData(int link){
         }
       }
       data_packet d;
-      d.buff=NULL;
-      d.size=0;
       d.bid = digi->bid();
-      d.size = digi->ReadMBLT(d.buff);
+      d.size = digi->ReadMBLT(d.buff, d.blt);
 
       if(d.size<0){
 	//LOG ERROR

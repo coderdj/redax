@@ -244,7 +244,7 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int64_t V1724::ReadMBLT(unsigned int *&buffer){
+int64_t V1724::ReadMBLT(unsigned int *&buffer, int& blts){
   // Initialize
   int64_t blt_bytes=0;
   int nb=0,ret=-5;
@@ -290,8 +290,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
     transferred_bytes.push_back(nb);
 
   }while(ret != cvBusError);
-
-
+  blts = count;
 
   // Now, unfortunately we need to make one copy of the data here or else our memory
   // usage explodes. We declare above a buffer of several MB, which is the maximum capacity
