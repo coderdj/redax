@@ -251,7 +251,7 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer, int& blts){
   // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
   // the other, V1724G, has 512 MS/channel = 1MB/channel
   //unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
-  unsigned int BLT_SIZE=524288;
+  unsigned int BLT_SIZE=524288*8; // full thing
   std::vector<u_int32_t*> transferred_buffers;
   std::vector<u_int32_t> transferred_bytes;
 
@@ -302,8 +302,8 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer, int& blts){
   // In tests this does not seem to impact our ability to read out the V1724 at the
   // maximum bandwidth of the link.
   if(blt_bytes>0){
-    buffer = new u_int32_t[blt_bytes/sizeof(u_int32_t)];
     u_int32_t bytes_copied = 0;
+    buffer = new u_int32_t[int(blt_bytes/sizeof(u_int32_t)*1.2)];
     for(unsigned int x=0; x<transferred_buffers.size(); x++){
       std::memcpy(((unsigned char*)buffer)+bytes_copied,
 		  transferred_buffers[x], transferred_bytes[x]);

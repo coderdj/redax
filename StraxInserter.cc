@@ -388,6 +388,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
 				 &((*iter->second)[0]), uncompressed_size, &kPrefs);
     }
     delete iter->second;
+    iter->second = nullptr;
     fFragmentSize[chunk_index] = 0;
     fFragmentSize.erase(chunk_index);
     
@@ -404,12 +405,11 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     iter = fFragments.erase(iter);
     
     CreateMissing(idnrint);
-    if(iter==fFragments.end())
-      break;
   } // End for through fragments
   
 
   if(end){
+    std::for_each(fFragments.begin(), fFragments.end(), [](auto p){if (p.second != nullptr) delete p.second;});
     fFragments.clear();
     fFragmentSize.clear();
     fs::path write_path(fOutputPath);
