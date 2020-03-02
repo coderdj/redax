@@ -595,20 +595,21 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
 
       // decode
       if (std::any_of(reads.begin(), reads.end(),
-            [=](data_packet* dp) {return dp->size < 0;})) {
+            [=](auto p) {return p.second->size < 0;})) {
         for (auto d : digis) {
-          if (reads[d->bid()].size < 0)
+          if (reads[d->bid()]->size < 0)
             fLog->Entry(MongoLog::Error, "Board %i has readout error in baselines",
                 d->bid());
-          return -2;
         }
+        std::for_each(reads.begin(), reads.end(), [](auto p){delete p.second;});
+        return -2;
       }
-      if (std::any_of(reads.begin(), reads.end(), [=](auto dp) {
-            return (0 <= dp->size) && (dp->size <= 16);})) { // header-only readouts???
+      if (std::any_of(reads.begin(), reads.end(), [=](auto p) {
+            return (0 <= p.second->size) && (p.second->size <= 16);})) { // header-only readouts???
         fLog->Entry(MongoLog::Local, "Undersized readout");
         step--;
         steps_repeated++;
-        for (auto dp : reads) delete dp;
+        std::for_each(reads.begin(), reads.end(), [](auto p){delete p.second;});
         continue;
       }
 
@@ -676,7 +677,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         } // end of while in buffer
       } // process per digi
       // cleanup buffers
-      for (auto dp : reads) delete dp;
+      for (auto p : reads) delete p.second;
       if (redo_iter) {
         redo_iter = false;
         step--;

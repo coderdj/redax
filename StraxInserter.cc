@@ -115,7 +115,7 @@ void StraxInserter::ParseDocuments(data_packet *dp){
       u_int32_t words_in_event = std::min(buff[idx]&0xFFFFFFF, total_words-idx);
       u_int32_t channel_mask = (buff[idx+1]&0xFF);
 
-      if (words_in_event < buff[idx]&0xFFFFFFF) {
+      if (words_in_event < (buff[idx]&0xFFFFFFF)) {
         fLog->Entry(MongoLog::Local, "Board %i garbled event header at idx %i: %u/%u (%i)",
             dp->bid, idx, buff[idx]&0xFFFFFFF, total_words-idx, dp->vBLT.size());
       }
@@ -444,7 +444,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     fs::rename(GetFilePath(chunk_index, true),
 	       GetFilePath(chunk_index, false));
     iter = fFragments.erase(iter);
-    fCompTime += duration<microseconds>(comp_end-comp_start);
+    fCompTime += duration_cast<microseconds>(comp_end-comp_start);
     
     CreateMissing(idnrint);
   } // End for through fragments
