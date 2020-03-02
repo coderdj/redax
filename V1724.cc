@@ -9,6 +9,7 @@
 #include <iostream>
 #include "MongoLog.hh"
 #include "Options.hh"
+#include "StraxInserter.hh"
 #include <CAENVMElib.h>
 #include <chrono>
 #include <sstream>

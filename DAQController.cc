@@ -195,22 +195,22 @@ int DAQController::Stop(){
 
 void DAQController::End(){
   Stop();
-  fLog->Entry(MongoLog::Local, "Closing Processing Threads");
-  CloseProcessingThreads();
   fLog->Entry(MongoLog::Local, "Closing Digitizers");
   for( auto const& link : fDigitizers ){
     for(auto digi : link.second){
       digi->End();
       delete digi;
     }
-  } 
+  }
+  fLog->Entry(MongoLog::Local, "Closing Processing Threads");
+  CloseProcessingThreads();
   fDigitizers.clear();
   fStatus = DAXHelpers::Idle;
 
   if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
 		fBuffer.size());
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto& dp){delete[] dp.buff;});
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
     fBuffer.clear();
   }
 
@@ -224,7 +224,7 @@ void DAQController::ReadData(int link){
   fBufferMutex.lock();
   if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto& dp){delete[] dp.buff;});
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
     fBuffer.clear();
     fBufferLength = 0;
     fDataRate = 0;
@@ -337,7 +337,7 @@ int DAQController::GetData(data_packet* &dp) {
   }
   dp = fBuffer.front();
   fBuffer.pop_front();
-  fBufferSize -= dp->size();
+  fBufferSize -= dp->size;
   fBufferLength--;
   fBufferMutex.unlock();
   return 1;
@@ -490,7 +490,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   vector<int> hist(nbins);
   vector<long> DAC_cal_points = {60000, 30000, 6000}; // arithmetic overflow
   std::map<int, vector<int>> channel_finished;
-  std::map<int, u_int32_t*> buffers;
+  std::map<int, data_packet*> reads;
   std::map<int, int> bytes_read;
   std::map<int, vector<vector<double>>> bl_per_channel;
   std::map<int, vector<int>> diff;
@@ -588,25 +588,27 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       std::this_thread::sleep_for(1ms);
 
       // readout
-      for (auto d : digis)
-        bytes_read[d->bid()] = d->ReadMBLT(buffers[d->bid()], idx); // idx unused here
+      for (auto d : digis) {
+        reads[d->bid()] = new data_packet();
+        d->ReadMBLT(reads[d->bid()]);
+      }
 
       // decode
-      if (std::any_of(bytes_read.begin(), bytes_read.end(),
-            [=](auto p) {return p.second < 0;})) {
+      if (std::any_of(reads.begin(), reads.end(),
+            [=](data_packet* dp) {return dp->size < 0;})) {
         for (auto d : digis) {
-          if (bytes_read[d->bid()] < 0)
+          if (reads[d->bid()].size < 0)
             fLog->Entry(MongoLog::Error, "Board %i has readout error in baselines",
                 d->bid());
           return -2;
         }
       }
-      if (std::any_of(bytes_read.begin(), bytes_read.end(), [=](auto p) {
-            return (0 <= p.second) && (p.second <= 16);})) { // header-only readouts???
+      if (std::any_of(reads.begin(), reads.end(), [=](auto dp) {
+            return (0 <= dp->size) && (dp->size <= 16);})) { // header-only readouts???
         fLog->Entry(MongoLog::Local, "Undersized readout");
         step--;
         steps_repeated++;
-        for (auto& p : buffers) delete[] p.second;
+        for (auto dp : reads) delete dp;
         continue;
       }
 
@@ -614,16 +616,16 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       for (auto d : digis) {
         bid = d->bid();
         idx = 0;
-        while ((idx * sizeof(u_int32_t) < bytes_read[bid]) && (idx >= 0)) {
-          if ((buffers[bid][idx]>>28) == 0xA) {
-            words_in_event = buffers[bid][idx]&0xFFFFFFF;
+        while ((idx * sizeof(u_int32_t) < reads[bid]->size) && (idx >= 0)) {
+          if ((reads[bid]->buff[idx]>>28) == 0xA) {
+            words_in_event = reads[bid]->buff[idx]&0xFFFFFFF;
             if (words_in_event == 4) {
               idx += 4;
               continue;
             }
-            channel_mask = buffers[bid][idx+1]&0xFF;
+            channel_mask = reads[bid]->buff[idx+1]&0xFF;
 	    if (d->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
-	      channel_mask = ( ((buffers[bid][idx+2]>>24)&0xFF)<<8 ) | (buffers[bid][idx+1]&0xFF); 
+	      channel_mask = ( ((reads[bid]->buff[idx+2]>>24)&0xFF)<<8 ) | (reads[bid]->buff[idx+1]&0xFF); 
 	    }
             if (channel_mask == 0) { // should be impossible?
               idx += 4;
@@ -639,8 +641,8 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               idx += d->DataFormatDefinition["channel_header_words"];
               hist.assign(hist.size(), 0);
               for (unsigned w = 0; w < words_per_channel; w++) {
-                val0 = buffers[bid][idx+w]&0xFFFF;
-                val1 = (buffers[bid][idx+w]>>16)&0xFFFF;
+                val0 = reads[bid]->buff[idx+w]&0xFFFF;
+                val1 = (reads[bid]->buff[idx+w]>>16)&0xFFFF;
                 if (val0*val1 == 0) continue;
                 hist[val0 >> rebin_factor]++;
                 hist[val1 >> rebin_factor]++;
@@ -674,7 +676,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         } // end of while in buffer
       } // process per digi
       // cleanup buffers
-      for (auto& b : buffers) delete[] b.second;
+      for (auto dp : reads) delete dp;
       if (redo_iter) {
         redo_iter = false;
         step--;

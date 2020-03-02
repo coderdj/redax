@@ -33,7 +33,7 @@ StraxInserter::StraxInserter(){
 StraxInserter::~StraxInserter(){
   fActive = false;
   fLog->Entry(MongoLog::Local, "Processing time: %.1f ms, compression time: %.1f ms",
-      fProcTime.count()*0.001, fCompTime*0.001);
+      fProcTime.count()*0.001, fCompTime.count()*0.001);
 }
 
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
@@ -117,7 +117,7 @@ void StraxInserter::ParseDocuments(data_packet *dp){
 
       if (words_in_event < buff[idx]&0xFFFFFFF) {
         fLog->Entry(MongoLog::Local, "Board %i garbled event header at idx %i: %u/%u (%i)",
-            dp->bid, idx, buffer[idx]&0xFFFFFFF, total_words-idx, dp->vBLT.size());
+            dp->bid, idx, buff[idx]&0xFFFFFFF, total_words-idx, dp->vBLT.size());
       }
 
       if (fmt["channel_mask_msb_idx"] != -1) {
@@ -349,7 +349,7 @@ int StraxInserter::ReadAndInsertData(){
   std::list<data_packet*> b;
   data_packet* dp = nullptr;
   system_clock::time_point proc_start, proc_end;
-  duration<microseconds> sleep_time = duration<microseconds>(10);
+  microseconds sleep_time(10);
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
     while(fActive){
       if (fDataSource->GetData(b)) {
@@ -359,7 +359,7 @@ int StraxInserter::ReadAndInsertData(){
           ParseDocuments(dp);
           delete dp;
           proc_end = system_clock::now();
-          fProcTime += duration<microseconds>(proc_end - proc_start);
+          fProcTime += duration_cast<microseconds>(proc_end - proc_start);
         }
         b.clear();
       } else
@@ -373,7 +373,7 @@ int StraxInserter::ReadAndInsertData(){
         ParseDocuments(dp);
         delete dp;
         proc_end = system_clock::now();
-        fProcTime += duration<microseconds>(proc_end - proc_start);
+        fProcTime += duration_cast<microseconds>(proc_end - proc_start);
       }
       std::this_thread::sleep_for(sleep_time);
     }

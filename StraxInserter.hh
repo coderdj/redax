@@ -21,10 +21,10 @@ class MongoLog;
 
 struct data_packet{
   public:
-    data_packet(int _s = 0)
-    data_packet(const data_packet& rhs)
-    ~data_packet()
-    data_packet operator=(const data_packet& rhs)
+    data_packet(int _s = 0);
+    data_packet(const data_packet& rhs);
+    ~data_packet();
+    data_packet operator=(const data_packet& rhs);
     u_int32_t *buff;
     int32_t size;
     u_int32_t clock_counter;
@@ -82,8 +82,8 @@ private:
   std::map<int, int> fFailCounter;
   std::map<int, std::atomic_int> fDataPerChan;
 
-  std::chrono::duration<std::chrono::microseconds> fProcTime;
-  std::chrono::duration<std::chrono::microseconds> fCompTime;
+  std::chrono::microseconds fProcTime;
+  std::chrono::microseconds fCompTime;
 };
 
 #endif
