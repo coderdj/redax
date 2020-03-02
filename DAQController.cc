@@ -210,7 +210,7 @@ void DAQController::End(){
   if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
 		fBuffer.size());
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete[] dp.buff;});
     fBuffer.clear();
   }
 
@@ -224,7 +224,7 @@ void DAQController::ReadData(int link){
   fBufferMutex.lock();
   if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete[] dp.buff;});
     fBuffer.clear();
     fBufferLength = 0;
     fDataRate = 0;
@@ -236,7 +236,6 @@ void DAQController::ReadData(int link){
   int readcycler = 0;
   int err_val = 0;
   std::list<data_packet> local_buffer;
-  data_packet dp();
   int local_size;
   while(fReadLoop){
     
@@ -262,6 +261,7 @@ void DAQController::ReadData(int link){
                                          digi->bid());
         }
       }
+      data_packet dp;
       if((dp.size = digi->ReadMBLT(dp.buff, &dp.vBLT))<0){
         if (dp.buff != nullptr)
 	  delete[] dp.buff;
@@ -273,7 +273,6 @@ void DAQController::ReadData(int link){
 	dp.clock_counter = digi->GetClockCounter(dp.header_time);
         local_buffer.push_back(dp);
         local_size += dp.size;
-        dp = data_packet(); // clears
       }
     } // for digi in digitizers
     if (local_buffer.size() > 0) {

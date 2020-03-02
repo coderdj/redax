@@ -355,7 +355,7 @@ int StraxInserter::ReadAndInsertData(){
   fActive = fRunning = true;
   bool haddata=false;
   std::list<data_packet> b;
-  data_packet dp = nullptr;
+  data_packet dp;
   system_clock::time_point proc_start, proc_end;
   microseconds sleep_time(10);
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
