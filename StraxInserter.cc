@@ -544,6 +544,16 @@ data_packet::data_packet(int _s) {
   bid = 0;
 }
 
+data_packet::data_packet(const data_packet& rhs) {
+  if (buff != nullptr) delete[] buff;
+  buff = rhs.buff;
+  size = rhs.size;
+  clock_counter = rhs.clock_counter;
+  header_time = rhs.header_time;
+  bid = rhs.bid;
+  vBLT = rhs.vBLT;
+}
+
 data_packet::~data_packet() {
   if (buff != nullptr) delete[] buff;
   buff = nullptr;
