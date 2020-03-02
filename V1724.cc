@@ -300,7 +300,7 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
 	delete[] transferred_buffers[x];
       return -1;
     }
-    if (nb > BLT_SIZE) fLog->Entry(MongoLog::Info,
+    if (nb > BLT_SIZE) fLog->Entry(MongoLog::Message,
         "Board %i got %i more bytes than asked for", fBID, nb-BLT_SIZE);
 
     count++;
