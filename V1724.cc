@@ -260,7 +260,7 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int V1724::ReadMBLT(data_packet* dp){
+int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
   // Initialize
   int64_t blt_bytes=0;
   int nb=0,ret=-5;
@@ -315,25 +315,24 @@ int V1724::ReadMBLT(data_packet* dp){
   // data and free up the rest of the memory reserved as buffer.
   // In tests this does not seem to impact our ability to read out the V1724 at the
   // maximum bandwidth of the link.
-  float safety_factor = 1.2;
   if(blt_bytes>0){
+    float safety_factor = 1.1; // should handle nonsense
     u_int32_t bytes_copied = 0;
-    dp->bid = fBID;
-    dp->size = blt_bytes*safety_factor;
-    dp->buff = new u_int32_t[dp->size/sizeof(u_int32_t)];
+    int alloc_size = blt_bytes*safety_factor;
+    buffer = new u_int32_t[alloc_size/sizeof(u_int32_t)];
     for(unsigned int x=0; x<transferred_buffers.size(); x++){
-      std::memcpy(((unsigned char*)dp->buff)+bytes_copied,
+      std::memcpy(((unsigned char*)buffer)+bytes_copied,
 		  transferred_buffers[x], transferred_bytes[x]);
       bytes_copied += transferred_bytes[x];
       delete[] transferred_buffers[x];
     }
     blt_counts[count]++;
-    dp->vBLT = transferred_bytes;
+    if (v != nullptr) *v = transferred_bytes;
     if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Local,
-        "Funny buffer accumulation: %i/%i from %i BLTs",
-        bytes_copied, blt_bytes, count);
+        "Board %i funny buffer accumulation: %i/%i from %i BLTs",
+        fBID, bytes_copied, blt_bytes, count);
   }
-  return 1;
+  return blt_bytes;
 }
 
 int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){

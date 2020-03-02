@@ -264,7 +264,7 @@ void DAQController::ReadData(int link){
       }
       if (dp == nullptr)
         dp = new data_packet();
-      if(digi->ReadMBLT(dp)<0){
+      if((dp->size = digi->ReadMBLT(dp->buff, &(dp->vBLT)))<0){
 	delete dp;
         dp = nullptr;
 	break;
@@ -281,9 +281,9 @@ void DAQController::ReadData(int link){
       fBufferMutex.lock();
       fBufferLength += local_buffer.size();
       fBuffer.splice(fBuffer.end(), local_buffer); // clears local_buffer
-      fBufferMutex.unlock();
       fBufferSize += local_size;
       fDataRate += local_size;
+      fBufferMutex.unlock();
       local_size = 0;
     }
     readcycler++;
@@ -490,7 +490,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   vector<int> hist(nbins);
   vector<long> DAC_cal_points = {60000, 30000, 6000}; // arithmetic overflow
   std::map<int, vector<int>> channel_finished;
-  std::map<int, data_packet*> reads;
+  std::map<int, u_int32_t*> buffers;
   std::map<int, int> bytes_read;
   std::map<int, vector<vector<double>>> bl_per_channel;
   std::map<int, vector<int>> diff;
@@ -498,10 +498,10 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   for (auto digi : digis) { // alloc ALL the things!
     bid = digi->bid();
     ch_this_digi = digi->GetNumChannels();
-    dac_values[bid] = vector<u_int16_t>(ch_this_digi);
-    channel_finished[bid] = vector<int>(ch_this_digi);
-    bl_per_channel[bid] = vector<vector<double>>(ch_this_digi, vector<double>(max_steps));
-    diff[bid] = vector<int>(ch_this_digi);
+    dac_values[bid] = vector<u_int16_t>(ch_this_digi, 0);
+    channel_finished[bid] = vector<int>(ch_this_digi, 0);
+    bl_per_channel[bid] = vector<vector<double>>(ch_this_digi, vector<double>(max_steps,0));
+    diff[bid] = vector<int>(ch_this_digi, 0);
   }
 
   bool done(false), redo_iter(false), fail(false), calibrate(true);
@@ -589,27 +589,26 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
 
       // readout
       for (auto d : digis) {
-        reads[d->bid()] = new data_packet();
-        d->ReadMBLT(reads[d->bid()]);
+        bytes_read[d->bid()] = d->ReadMBLT(buffers[d->bid()]);
       }
 
       // decode
-      if (std::any_of(reads.begin(), reads.end(),
-            [=](auto p) {return p.second->size < 0;})) {
+      if (std::any_of(bytes_read.begin(), bytes_read.end(),
+            [=](auto p) {return p.second < 0;})) {
         for (auto d : digis) {
-          if (reads[d->bid()]->size < 0)
+          if (bytes_read[d->bid()] < 0)
             fLog->Entry(MongoLog::Error, "Board %i has readout error in baselines",
                 d->bid());
         }
-        std::for_each(reads.begin(), reads.end(), [](auto p){delete p.second;});
+        std::for_each(buffers.begin(), buffers.end(), [](auto p){delete[] p.second;});
         return -2;
       }
-      if (std::any_of(reads.begin(), reads.end(), [=](auto p) {
+      if (std::any_of(bytes_read.begin(), bytes_read.end(), [=](auto p) {
             return (0 <= p.second->size) && (p.second->size <= 16);})) { // header-only readouts???
         fLog->Entry(MongoLog::Local, "Undersized readout");
         step--;
         steps_repeated++;
-        std::for_each(reads.begin(), reads.end(), [](auto p){delete p.second;});
+        std::for_each(buffers.begin(), buffers.end(), [](auto p){delete[] p.second;});
         continue;
       }
 
@@ -617,16 +616,16 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       for (auto d : digis) {
         bid = d->bid();
         idx = 0;
-        while ((idx * sizeof(u_int32_t) < reads[bid]->size)) {
-          if ((reads[bid]->buff[idx]>>28) == 0xA) {
-            words_in_event = reads[bid]->buff[idx]&0xFFFFFFF;
+        while ((idx * sizeof(u_int32_t) < bytes_read[bid])) {
+          if ((buffers[bid][idx]>>28) == 0xA) {
+            words_in_event = buffers[bid][idx]&0xFFFFFFF;
             if (words_in_event == 4) {
               idx += 4;
               continue;
             }
-            channel_mask = reads[bid]->buff[idx+1]&0xFF;
+            channel_mask = buffers[bid][idx+1]&0xFF;
 	    if (d->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
-	      channel_mask = ( ((reads[bid]->buff[idx+2]>>24)&0xFF)<<8 ) | (reads[bid]->buff[idx+1]&0xFF); 
+	      channel_mask = ( ((buffers[bid][idx+2]>>24)&0xFF)<<8 ) | (buffers[bid][idx+1]&0xFF); 
 	    }
             if (channel_mask == 0) { // should be impossible?
               idx += 4;
@@ -642,8 +641,8 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               idx += d->DataFormatDefinition["channel_header_words"];
               hist.assign(hist.size(), 0);
               for (unsigned w = 0; w < words_per_channel; w++) {
-                val0 = reads[bid]->buff[idx+w]&0xFFFF;
-                val1 = (reads[bid]->buff[idx+w]>>16)&0xFFFF;
+                val0 = buffers[bid][idx+w]&0xFFFF;
+                val1 = (buffers[bid][idx+w]>>16)&0xFFFF;
                 if (val0*val1 == 0) continue;
                 hist[val0 >> rebin_factor]++;
                 hist[val1 >> rebin_factor]++;
@@ -677,7 +676,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         } // end of while in buffer
       } // process per digi
       // cleanup buffers
-      for (auto p : reads) delete p.second;
+      for (auto p : buffers) delete[] p.second;
       if (redo_iter) {
         redo_iter = false;
         step--;

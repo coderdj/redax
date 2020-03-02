@@ -533,12 +533,9 @@ void StraxInserter::CreateMissing(u_int32_t back_from_id){
 }
 
 
-data_packet::data_packet(int _s) {
-  if (_s > 0)
-    buff = new u_int32_t[_s/sizeof(u_int32_t)];
-  else
-    buff = nullptr;
-  size = _s;
+data_packet::data_packet() {
+  buff = nullptr;
+  size = 0;
   clock_counter = 0;
   header_time = 0;
   bid = 0;

@@ -16,7 +16,7 @@ class V1724{
   virtual ~V1724();
 
   int Init(int link, int crate, int bid, unsigned int address=0);
-  int ReadMBLT(data_packet *dp);
+  int ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v=nullptr);
   int WriteRegister(unsigned int reg, unsigned int value);
   unsigned int ReadRegister(unsigned int reg);
   int GetClockCounter(u_int32_t timestamp);
