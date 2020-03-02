@@ -21,7 +21,7 @@ class MongoLog;
 
 struct data_packet{
   public:
-    data_packet(int _s = 0);
+    data_packet();
     data_packet(const data_packet& rhs);
     ~data_packet();
     data_packet operator=(const data_packet& rhs);

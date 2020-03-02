@@ -604,7 +604,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         return -2;
       }
       if (std::any_of(bytes_read.begin(), bytes_read.end(), [=](auto p) {
-            return (0 <= p.second->size) && (p.second->size <= 16);})) { // header-only readouts???
+            return (0 <= p.second) && (p.second <= 16);})) { // header-only readouts???
         fLog->Entry(MongoLog::Local, "Undersized readout");
         step--;
         steps_repeated++;
