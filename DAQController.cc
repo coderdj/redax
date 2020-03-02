@@ -270,7 +270,7 @@ void DAQController::ReadData(int link){
 	break;
       }
       if(dp->size>0){
-        dp->bid = d->bid();
+        dp->bid = digi->bid();
 	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
 	dp->clock_counter = digi->GetClockCounter(dp->header_time);
         local_buffer.push_back(dp);
