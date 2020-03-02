@@ -11,6 +11,7 @@
 #include "Options.hh"
 #include <CAENVMElib.h>
 #include <chrono>
+#include <sstream>
 
 
 V1724::V1724(MongoLog  *log, Options *options){
@@ -45,10 +46,24 @@ V1724::V1724(MongoLog  *log, Options *options){
     {"channel_time_msb_mask", -1},
 
   };
+
+  BLT_SIZE = 512*1024*8; // full V1724 memory
 }
 
 V1724::~V1724(){
   End();
+  std::stringstream msg;
+  msg << "BLT report for board " << fBID << "(BLT " << BLT_SIZE << "): ";
+  for (auto p : blt_counts) {
+    msg << p.first << " (";
+    for (int i = 63; i >= 0; i--) {
+      if (p.second & (1L << i)) { // log2
+        msg << i << ") | ";
+        break;
+      }
+    }
+  }
+  fLog->Entry(MongoLog::Local, msg.str());
 }
 
 int V1724::SINStart(){
@@ -244,14 +259,13 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int64_t V1724::ReadMBLT(unsigned int *&buffer, int& blts){
+int V1724::ReadMBLT(data_packet* dp){
   // Initialize
   int64_t blt_bytes=0;
   int nb=0,ret=-5;
   // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
   // the other, V1724G, has 512 MS/channel = 1MB/channel
-  //unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
-  unsigned int BLT_SIZE=524288*8; // full thing
+  BLT_SIZE=524288*8; // full thing
   std::vector<u_int32_t*> transferred_buffers;
   std::vector<u_int32_t> transferred_bytes;
 
@@ -290,7 +304,6 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer, int& blts){
     transferred_bytes.push_back(nb);
 
   }while(ret != cvBusError);
-  blts = count;
 
   // Now, unfortunately we need to make one copy of the data here or else our memory
   // usage explodes. We declare above a buffer of several MB, which is the maximum capacity
@@ -301,19 +314,25 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer, int& blts){
   // data and free up the rest of the memory reserved as buffer.
   // In tests this does not seem to impact our ability to read out the V1724 at the
   // maximum bandwidth of the link.
+  float safety_factor = 1.2;
   if(blt_bytes>0){
     u_int32_t bytes_copied = 0;
-    buffer = new u_int32_t[int(blt_bytes/sizeof(u_int32_t)*1.2)];
+    dp->bid = fBID;
+    dp->size = blt_bytes*safety_factor;
+    dp->buff = new u_int32_t[dp->size/sizeof(u_int32_t)];
     for(unsigned int x=0; x<transferred_buffers.size(); x++){
-      std::memcpy(((unsigned char*)buffer)+bytes_copied,
+      std::memcpy(((unsigned char*)dp->buff)+bytes_copied,
 		  transferred_buffers[x], transferred_bytes[x]);
       bytes_copied += transferred_bytes[x];
+      delete[] transferred_buffers[x];
     }
+    blt_counts[count]++;
+    dp->vBLT = transferred_bytes;
+    if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Local,
+        "Funny buffer accumulation: %i/%i from %i BLTs",
+        bytes_copied, blt_bytes, count);
   }
-  for(unsigned int x=0;x<transferred_buffers.size(); x++)
-    delete[] transferred_buffers[x];
-  return blt_bytes;
-  
+  return 1;
 }
 
 int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){

@@ -235,7 +235,8 @@ void DAQController::ReadData(int link){
   u_int32_t board_status = 0;
   int readcycler = 0;
   int err_val = 0;
-  std::list<data_packet> local_buffer;
+  std::list<data_packet*> local_buffer;
+  data_packet* dp = nullptr;
   int local_size;
   while(fReadLoop){
     
@@ -261,23 +262,19 @@ void DAQController::ReadData(int link){
                                          digi->bid());
         }
       }
-      data_packet d;
-      d.bid = digi->bid();
-      d.size = digi->ReadMBLT(d.buff, d.blt);
-
-      if(d.size<0){
-	//LOG ERROR
-	if(d.buff!=NULL){
-	  delete[] d.buff;
-          d.buff = NULL;
-        }
+      if (dp == nullptr)
+        dp = new data_packet();
+      if(digi->ReadMBLT(dp)<0){
+	delete dp;
+        dp = nullptr;
 	break;
       }
-      if(d.size>0){
-	d.header_time = digi->GetHeaderTime(d.buff, d.size);
-	d.clock_counter = digi->GetClockCounter(d.header_time);
-        local_buffer.push_back(d);
-        local_size += d.size;
+      if(dp->size>0){
+	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
+	dp->clock_counter = digi->GetClockCounter(dp->header_time);
+        local_buffer.push_back(dp);
+        local_size += dp->size;
+        dp = nullptr;
       }
     } // for digi in digitizers
     if (local_buffer.size() > 0) {
@@ -315,7 +312,7 @@ void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& ret
       retmap[digi->bid()] = digi->DataFormatDefinition;
 }
 
-int DAQController::GetData(std::list<data_packet> &retVec){
+int DAQController::GetData(std::list<data_packet*> &retVec){
   if (fBufferLength == 0) return 0;
   int ret = 0;
   fBufferMutex.lock();
@@ -329,6 +326,21 @@ int DAQController::GetData(std::list<data_packet> &retVec){
   fBufferSize = 0;
   fBufferMutex.unlock();
   return ret;
+}
+
+int DAQController::GetData(data_packet* &dp) {
+  if (fBufferLength == 0) return 0;
+  fBufferMutex.lock();
+  if (fBuffer.size() == 0) {
+    fBufferMutex.unlock();
+    return 0;
+  }
+  dp = fBuffer.front();
+  fBuffer.pop_front();
+  fBufferSize -= dp->size();
+  fBufferLength--;
+  fBufferMutex.unlock();
+  return 1;
 }
 
 bool DAQController::CheckErrors(){
@@ -368,11 +380,11 @@ void DAQController::CloseProcessingThreads(){
 
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
     fProcessingThreads[i].inserter->Close(board_fails);
-    fProcessingThreads[i].pthread->join();
-
-    delete fProcessingThreads[i].pthread;
     delete fProcessingThreads[i].inserter;
-   
+
+    fProcessingThreads[i].pthread->join();
+    delete fProcessingThreads[i].pthread;
+
   }
   fProcessingThreads.clear();
   if (std::accumulate(board_fails.begin(), board_fails.end(), 0,

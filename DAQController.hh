@@ -46,7 +46,8 @@ public:
   void ReadData(int link);
   void End();
 
-  int GetData(std::list<data_packet> &retVec);
+  int GetData(std::list<data_packet*> &retVec);
+  int GetData(data_packet* &dp);
     
   // Static wrapper so we can call ReadData in a std::thread
   void ReadThreadWrapper(void* data, int link);
@@ -64,14 +65,13 @@ public:
   
 private:
 
-  void AppendData(std::vector<data_packet> &d);
   void InitLink(std::vector<V1724*>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
   int FitBaselines(std::vector<V1724*>&, std::map<int, std::vector<u_int16_t>>&, int,
       std::map<int, std::map<std::string, std::vector<double>>>&);
   
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;
-  std::list<data_packet> fBuffer;
+  std::list<data_packet*> fBuffer;
   std::mutex fBufferMutex;
   std::mutex fMapMutex;
 

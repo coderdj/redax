@@ -12,6 +12,8 @@
 #include <experimental/filesystem>
 #include <numeric>
 #include <atomic>
+#include <vector>
+#include <chrono>
 
 class DAQController;
 class Options;
@@ -19,31 +21,16 @@ class MongoLog;
 
 struct data_packet{
   public:
-    data_packet() {buff = nullptr; size = clock_counter = header_time = bid = blt = 0;}
-    data_packet(const data_packet& rhs) {
-      buff = rhs.buff;
-      size = rhs.size;
-      clock_counter = rhs.clock_counter;
-      header_time = rhs.header_time;
-      bid = rhs.bid;
-      blt = rhs.blt;
-    }
-    ~data_packet() {buff = nullptr; size = clock_counter = header_time = bid = blt = 0;}
-    data_packet operator=(const data_packet& rhs) {
-      buff = rhs.buff;
-      size = rhs.size;
-      clock_counter = rhs.clock_counter;
-      header_time = rhs.header_time;
-      bid = rhs.bid;
-      blt = rhs.blt;
-      return *this;
-    }
-  u_int32_t *buff;
-  int32_t size;
-  u_int32_t clock_counter;
-  u_int32_t header_time;
-  int bid;
-  int blt;
+    data_packet(int _s = 0)
+    data_packet(const data_packet& rhs)
+    ~data_packet()
+    data_packet operator=(const data_packet& rhs)
+    u_int32_t *buff;
+    int32_t size;
+    u_int32_t clock_counter;
+    u_int32_t header_time;
+    int bid;
+    std::vector<int> vBLT;
 };
 
 
@@ -67,7 +54,7 @@ public:
   void CheckError(int bid);
   
 private:
-  void ParseDocuments(data_packet &dp);
+  void ParseDocuments(data_packet *dp);
   void WriteOutFiles(int smallest_index_seen, bool end=false);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
@@ -78,7 +65,7 @@ private:
 
   u_int64_t fChunkLength; // ns
   u_int32_t fChunkOverlap; // ns
-  u_int16_t fFragmentLength; // This is in BYTES
+  u_int16_t fFragmentBytes; // This is in BYTES
   u_int16_t fStraxHeaderSize; // in BYTES too
   u_int32_t fChunkNameLength;
   std::string fOutputPath, fHostname;
@@ -94,6 +81,9 @@ private:
   std::map<int, std::map<std::string, int>> fFmt;
   std::map<int, int> fFailCounter;
   std::map<int, std::atomic_int> fDataPerChan;
+
+  std::chrono::duration<std::chrono::microseconds> fProcTime;
+  std::chrono::duration<std::chrono::microseconds> fCompTime;
 };
 
 #endif
