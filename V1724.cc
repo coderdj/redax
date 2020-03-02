@@ -266,15 +266,17 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
   int nb=0,ret=-5;
   // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
   // the other, V1724G, has 512 MS/channel = 1MB/channel
-  BLT_SIZE=524288*8; // full thing
+  BLT_SIZE=524288; // full thing
   std::vector<u_int32_t*> transferred_buffers;
   std::vector<u_int32_t> transferred_bytes;
 
   int count = 0;
+  u_int32_t* thisBLT = nullptr;
+  float safety_factor = 1.1; // should handle nonsense
   do{
 
     // Reserve space for this block transfer
-    u_int32_t* thisBLT = new u_int32_t[BLT_SIZE/sizeof(u_int32_t)];
+    thisBLT = new u_int32_t[int(BLT_SIZE/sizeof(u_int32_t)*safety_factor)];
     
     try{
       ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
@@ -298,6 +300,8 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
 	delete[] transferred_buffers[x];
       return -1;
     }
+    if (nb > BLT_SIZE) fLog->Entry(MongoLog::Info,
+        "Board %i got %i more bytes than asked for", fBID, nb-BLT_SIZE);
 
     count++;
     blt_bytes+=nb;
@@ -316,7 +320,6 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
   // In tests this does not seem to impact our ability to read out the V1724 at the
   // maximum bandwidth of the link.
   if(blt_bytes>0){
-    float safety_factor = 1.1; // should handle nonsense
     u_int32_t bytes_copied = 0;
     int alloc_size = blt_bytes*safety_factor;
     buffer = new u_int32_t[alloc_size/sizeof(u_int32_t)];
