@@ -235,8 +235,8 @@ void DAQController::ReadData(int link){
   u_int32_t board_status = 0;
   int readcycler = 0;
   int err_val = 0;
-  std::list<data_packet*> local_buffer;
-  data_packet* dp = nullptr;
+  std::list<data_packet> local_buffer;
+  data_packet dp();
   int local_size;
   while(fReadLoop){
     
@@ -262,20 +262,18 @@ void DAQController::ReadData(int link){
                                          digi->bid());
         }
       }
-      if (dp == nullptr)
-        dp = new data_packet();
-      if((dp->size = digi->ReadMBLT(dp->buff, &(dp->vBLT)))<0){
-	delete dp;
-        dp = nullptr;
+      if((dp.size = digi->ReadMBLT(dp.buff, &dp.vBLT))<0){
+        if (dp.buff != nullptr)
+	  delete[] dp.buff;
 	break;
       }
-      if(dp->size>0){
-        dp->bid = digi->bid();
-	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
-	dp->clock_counter = digi->GetClockCounter(dp->header_time);
+      if(dp.size>0){
+        dp.bid = digi->bid();
+	dp.header_time = digi->GetHeaderTime(dp.buff, dp.size);
+	dp.clock_counter = digi->GetClockCounter(dp.header_time);
         local_buffer.push_back(dp);
-        local_size += dp->size;
-        dp = nullptr;
+        local_size += dp.size;
+        dp = data_packet(); // clears
       }
     } // for digi in digitizers
     if (local_buffer.size() > 0) {
@@ -313,7 +311,7 @@ void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& ret
       retmap[digi->bid()] = digi->DataFormatDefinition;
 }
 
-int DAQController::GetData(std::list<data_packet*> &retVec){
+int DAQController::GetData(std::list<data_packet> &retVec){
   if (fBufferLength == 0) return 0;
   int ret = 0;
   fBufferMutex.lock();
@@ -329,7 +327,7 @@ int DAQController::GetData(std::list<data_packet*> &retVec){
   return ret;
 }
 
-int DAQController::GetData(data_packet* &dp) {
+int DAQController::GetData(data_packet &dp) {
   if (fBufferLength == 0) return 0;
   fBufferMutex.lock();
   if (fBuffer.size() == 0) {
@@ -338,7 +336,7 @@ int DAQController::GetData(data_packet* &dp) {
   }
   dp = fBuffer.front();
   fBuffer.pop_front();
-  fBufferSize -= dp->size;
+  fBufferSize -= dp.size;
   fBufferLength--;
   fBufferMutex.unlock();
   return 1;

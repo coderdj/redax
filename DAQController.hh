@@ -46,8 +46,8 @@ public:
   void ReadData(int link);
   void End();
 
-  int GetData(std::list<data_packet*> &retVec);
-  int GetData(data_packet* &dp);
+  int GetData(std::list<data_packet> &retVec);
+  int GetData(data_packet &dp);
     
   // Static wrapper so we can call ReadData in a std::thread
   void ReadThreadWrapper(void* data, int link);
@@ -71,7 +71,7 @@ private:
   
   std::vector <processingThread> fProcessingThreads;  
   std::map<int, std::vector <V1724*>> fDigitizers;
-  std::list<data_packet*> fBuffer;
+  std::list<data_packet> fBuffer;
   std::mutex fBufferMutex;
   std::mutex fMapMutex;
 
