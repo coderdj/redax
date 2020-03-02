@@ -72,7 +72,7 @@ private:
   Options *fOptions;
   MongoLog *fLog;
   DAQController *fDataSource;
-  std::atomic_bool fActive;
+  std::atomic_bool fActive, fRunning;
   bool fErrorBit;
   std::string fCompressor;
   std::map<std::string, std::string*> fFragments;

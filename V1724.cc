@@ -361,7 +361,7 @@ int V1724::SetThresholds(std::vector<u_int16_t> vals) {
 int V1724::End(){
   if(fBoardHandle>=0)
     CAENVME_End(fBoardHandle);
-  fBoardHandle=fLink=fCrate=fBID=-1;
+  fBoardHandle=fLink=fCrate=-1;
   fBaseAddress=0;
   return 0;
 }

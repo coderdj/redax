@@ -32,8 +32,16 @@ StraxInserter::StraxInserter(){
 
 StraxInserter::~StraxInserter(){
   fActive = false;
-  fLog->Entry(MongoLog::Local, "Processing time: %.1f ms, compression time: %.1f ms",
-      fProcTime.count()*0.001, fCompTime.count()*0.001);
+  int wait_counter = 0;
+  fLog->Entry(MongoLog::Local, "Thread %x waiting to stop",
+      std::this_thread::get_id());
+  while (fRunning && wait_counter++ < 5)
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  if (wait_counter == 5)
+    fLog->Entry(MongoLog::Warning, "Thread %x taking a while to stop",
+        std::this_thread::get_id());
+  fLog->Entry(MongoLog::Local, "Processing time: %.1f s, compression time: %.1f s",
+      fProcTime.count()*1e-6, fCompTime.count()*1e-6);
 }
 
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
@@ -344,7 +352,7 @@ void StraxInserter::ParseDocuments(data_packet *dp){
 
 int StraxInserter::ReadAndInsertData(){
   using namespace std::chrono;
-  fActive = true;
+  fActive = fRunning = true;
   bool haddata=false;
   std::list<data_packet*> b;
   data_packet* dp = nullptr;
@@ -380,6 +388,7 @@ int StraxInserter::ReadAndInsertData(){
   }
   if(haddata)
     WriteOutFiles(1000000, true);
+  fRunning = false;
   return 0;
 }
 
@@ -444,6 +453,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     fs::rename(GetFilePath(chunk_index, true),
 	       GetFilePath(chunk_index, false));
     iter = fFragments.erase(iter);
+    comp_end = system_clock::now();
     fCompTime += duration_cast<microseconds>(comp_end-comp_start);
     
     CreateMissing(idnrint);
