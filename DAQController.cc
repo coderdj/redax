@@ -507,9 +507,9 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   bool done(false), redo_iter(false), fail(false), calibrate(true);
   double counts_total(0), counts_around_max(0), B,C,D,E,F, slope, yint, baseline;
   double fraction_around_max(0.8);
-  u_int32_t words_in_event, channel_mask, words_per_channel;
+  u_int32_t words_in_event, channel_mask, words_per_channel, idx;
   u_int16_t val0, val1;
-  int channels_in_event, idx;
+  int channels_in_event;
   auto beg_it = hist.begin(), max_it = hist.begin(), end_it = hist.end();
   auto max_start = max_it, max_end = max_it;
 
@@ -617,7 +617,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       for (auto d : digis) {
         bid = d->bid();
         idx = 0;
-        while ((idx * sizeof(u_int32_t) < reads[bid]->size) && (idx >= 0)) {
+        while ((idx * sizeof(u_int32_t) < reads[bid]->size)) {
           if ((reads[bid]->buff[idx]>>28) == 0xA) {
             words_in_event = reads[bid]->buff[idx]&0xFFFFFFF;
             if (words_in_event == 4) {

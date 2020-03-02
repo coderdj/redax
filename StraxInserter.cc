@@ -196,7 +196,7 @@ void StraxInserter::ParseDocuments(data_packet *dp){
 	    last_times_seen[channel] = channel_time;
 	    
 	  }
-	}
+	} // channel_header_words > 0
 
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
 	// 48 bits this line would be different
@@ -559,4 +559,5 @@ data_packet data_packet::operator=(const data_packet& rhs) {
   header_time = rhs.header_time;
   bid = rhs.bid;
   vBLT = rhs.vBLT;
+  return *this;
 }
