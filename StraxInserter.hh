@@ -23,9 +23,10 @@ class MongoLog;
 struct data_packet{
   public:
     data_packet();
-    data_packet(const data_packet& rhs);
+    data_packet(const data_packet& rhs) = delete; // no copy ctor
+    data_packet(data_packet&& rhs);
     ~data_packet();
-    data_packet operator=(const data_packet& rhs);
+    data_packet& operator=(data_packet&& rhs);
     u_int32_t *buff;
     int32_t size;
     u_int32_t clock_counter;
@@ -55,7 +56,7 @@ public:
   void CheckError(int bid);
   
 private:
-  void ParseDocuments(data_packet &dp);
+  void ParseDocuments(data_packet *dp);
   void WriteOutFiles(int smallest_index_seen, bool end=false);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);

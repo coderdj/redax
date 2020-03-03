@@ -210,7 +210,7 @@ void DAQController::End(){
   if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
 		fBuffer.size());
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete[] dp.buff;});
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
     fBuffer.clear();
   }
 
@@ -224,7 +224,7 @@ void DAQController::ReadData(int link){
   fBufferMutex.lock();
   if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete[] dp.buff;});
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
     fBuffer.clear();
     fBufferLength = 0;
     fDataRate = 0;
@@ -235,7 +235,8 @@ void DAQController::ReadData(int link){
   u_int32_t board_status = 0;
   int readcycler = 0;
   int err_val = 0;
-  std::list<data_packet> local_buffer;
+  std::list<data_packet*> local_buffer;
+  data_packet* dp == nullptr;
   int local_size;
   while(fReadLoop){
     
@@ -261,20 +262,23 @@ void DAQController::ReadData(int link){
                                          digi->bid());
         }
       }
-      data_packet dp;
-      if((dp.size = digi->ReadMBLT(dp.buff, &dp.vBLT))<0){
-        if (dp.buff != nullptr) {
-	  delete[] dp.buff;
-	  dp.buff = nullptr;
+      if (dp == nullptr) dp = new data_packet;
+      if((dp->size = digi->ReadMBLT(dp->buff, &dp->vBLT))<0){
+        if (dp->buff != nullptr) {
+	  delete[] dp->buff; // possible leak, catch here
+	  dp->buff = nullptr;
+          delete dp;
+          dp = nullptr;
 	}
 	break;
       }
-      if(dp.size>0){
-        dp.bid = digi->bid();
-	dp.header_time = digi->GetHeaderTime(dp.buff, dp.size);
-	dp.clock_counter = digi->GetClockCounter(dp.header_time);
+      if(dp->size>0){
+        dp->bid = digi->bid();
+	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
+	dp->clock_counter = digi->GetClockCounter(dp->header_time);
         local_buffer.push_back(dp);
-        local_size += dp.size;
+        local_size += dp->size;
+        dp = nullptr;
       }
     } // for digi in digitizers
     if (local_buffer.size() > 0) {
@@ -312,23 +316,34 @@ void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& ret
       retmap[digi->bid()] = digi->DataFormatDefinition;
 }
 
-int DAQController::GetData(std::list<data_packet> &retVec){
+int DAQController::GetData(std::list<data_packet*> &retVec, unsigned num){
   if (fBufferLength == 0) return 0;
   int ret = 0;
+  data_packet* dp = nullptr;
   fBufferMutex.lock();
   if (fBuffer.size() == 0) {
     fBufferMutex.unlock();
     return 0;
   }
-  retVec.splice(retVec.end(), fBuffer);
-  fBufferLength = 0;
-  ret = fBufferSize;
-  fBufferSize = 0;
+  if (num == 0) {
+    retVec.splice(retVec.end(), fBuffer);
+    fBufferLength = 0;
+    ret = fBufferSize;
+    fBufferSize = 0;
+  } else {
+    do{
+      dp = fBuffer.front();
+      retVec.push_back(dp);
+      fBufferLength--;
+      fBufferSize -= dp->size;
+      ret += dp->size;
+    }while(fBuffer.size()>0 && retVec.size() < num);
+  }
   fBufferMutex.unlock();
   return ret;
 }
 
-int DAQController::GetData(data_packet &dp) {
+int DAQController::GetData(data_packet* &dp) {
   if (fBufferLength == 0) return 0;
   fBufferMutex.lock();
   if (fBuffer.size() == 0) {
@@ -337,7 +352,7 @@ int DAQController::GetData(data_packet &dp) {
   }
   dp = fBuffer.front();
   fBuffer.pop_front();
-  fBufferSize -= dp.size;
+  fBufferSize -= dp->size;
   fBufferLength--;
   fBufferMutex.unlock();
   return 1;
