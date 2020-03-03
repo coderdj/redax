@@ -263,8 +263,10 @@ void DAQController::ReadData(int link){
       }
       data_packet dp;
       if((dp.size = digi->ReadMBLT(dp.buff, &dp.vBLT))<0){
-        if (dp.buff != nullptr)
+        if (dp.buff != nullptr) {
 	  delete[] dp.buff;
+	  dp.buff = nullptr;
+	}
 	break;
       }
       if(dp.size>0){

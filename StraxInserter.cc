@@ -27,19 +27,17 @@ StraxInserter::StraxInserter(){
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
-
+  fThreadId = std::this_thread::get_id();
 }
 
 StraxInserter::~StraxInserter(){
   fActive = false;
   int wait_counter = 0;
-  fLog->Entry(MongoLog::Local, "Thread %x waiting to stop",
-      std::this_thread::get_id());
-  while (fRunning && wait_counter++ < 5)
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-  if (wait_counter == 5)
-    fLog->Entry(MongoLog::Warning, "Thread %x taking a while to stop",
-        std::this_thread::get_id());
+  fLog->Entry(MongoLog::Local, "Thread %x waiting to stop", fThreadId);
+  while (fRunning && wait_counter++ < 50)
+    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  if (wait_counter == 50)
+    fLog->Entry(MongoLog::Warning, "Thread %x taking a while to stop", fThreadId);
   fLog->Entry(MongoLog::Local, "Processing time: %.1f s, compression time: %.1f s",
       fProcTime.count()*1e-6, fCompTime.count()*1e-6);
 }
@@ -60,6 +58,9 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   dataSource->GetDataFormat(fFmt);
   fLog = log;
   fErrorBit = false;
+
+  fProcTime = std::chrono::microseconds(0);
+  fCompTime = std::chrono::microseconds(0);
 
   std::string output_path = fOptions->GetString("strax_output_path", "./");
   try{    
@@ -352,6 +353,7 @@ void StraxInserter::ParseDocuments(data_packet &dp){
 
 int StraxInserter::ReadAndInsertData(){
   using namespace std::chrono;
+  fThreadId = std::this_thread::get_id();
   fActive = fRunning = true;
   bool haddata=false;
   std::list<data_packet> b;
@@ -359,7 +361,7 @@ int StraxInserter::ReadAndInsertData(){
   system_clock::time_point proc_start, proc_end;
   microseconds sleep_time(10);
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
-    while(fActive){
+    while(fActive == true){
       if (fDataSource->GetData(b)) {
         haddata = true;
         for (auto& dp : b) {
@@ -374,7 +376,7 @@ int StraxInserter::ReadAndInsertData(){
         std::this_thread::sleep_for(sleep_time);
     }
   } else {
-    while (fActive) {
+    while (fActive == true) {
       if (fDataSource->GetData(dp)) {
         haddata = true;
         proc_start = system_clock::now();
@@ -403,28 +405,27 @@ static const LZ4F_preferences_t kPrefs = {
 void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
   using namespace std::chrono;
-  std::map<std::string, std::string*>::iterator iter;
   system_clock::time_point comp_start, comp_end;
-  for(iter=fFragments.begin();
-      iter!=fFragments.end(); iter++){
-    std::string chunk_index = iter->first;
+  std::vector<std::string> idx_to_clear;
+  for (auto& iter : fFragments) {
+    std::string chunk_index = iter.first;
     std::string idnr = chunk_index.substr(0, fChunkNameLength);
     int idnrint = std::stoi(idnr);
-    if(!(idnrint < smallest_index_seen-1 || end))    
+    if(!(idnrint < smallest_index_seen-1 || end))
       continue;
-    
+
     comp_start = system_clock::now();
     if(!fs::exists(GetDirectoryPath(chunk_index, true)))
       fs::create_directory(GetDirectoryPath(chunk_index, true));
 
-    size_t uncompressed_size = iter->second->size();
+    size_t uncompressed_size = iter.second->size();
 
     // Compress it
     char *out_buffer = NULL;
     int wsize = 0;
     if(fCompressor == "blosc"){
       out_buffer = new char[uncompressed_size+BLOSC_MAX_OVERHEAD];
-      wsize = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size,  &((*iter->second)[0]),
+      wsize = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size,  iter.second,
 				   out_buffer, uncompressed_size+BLOSC_MAX_OVERHEAD, "lz4", 0, 2);
     }
     else{
@@ -435,12 +436,12 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
       size_t max_compressed_size = LZ4F_compressFrameBound(uncompressed_size, &kPrefs);
       out_buffer = new char[max_compressed_size];
       wsize = LZ4F_compressFrame(out_buffer, max_compressed_size,
-				 &((*iter->second)[0]), uncompressed_size, &kPrefs);
+				 iter.second, uncompressed_size, &kPrefs);
     }
-    delete iter->second;
-    iter->second = nullptr;
+    delete iter.second;
+    iter.second = nullptr;
     fFragmentSize[chunk_index] = 0;
-    fFragmentSize.erase(chunk_index);
+    idx_to_clear.push_back(chunk_index);
     
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
     writefile.write(out_buffer, wsize);
@@ -452,12 +453,16 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
       fs::create_directory(GetDirectoryPath(chunk_index, false));
     fs::rename(GetFilePath(chunk_index, true),
 	       GetFilePath(chunk_index, false));
-    iter = fFragments.erase(iter);
     comp_end = system_clock::now();
     fCompTime += duration_cast<microseconds>(comp_end-comp_start);
     
     CreateMissing(idnrint);
   } // End for through fragments
+  // clear now because c++ sometimes overruns its buffers
+  for (auto s : idx_to_clear) {
+    fFragments.erase(s);
+    fFragmentSize.erase(s);
+  }
   
 
   if(end){

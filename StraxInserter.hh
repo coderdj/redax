@@ -14,6 +14,7 @@
 #include <atomic>
 #include <vector>
 #include <chrono>
+#include <thread>
 
 class DAQController;
 class Options;
@@ -84,6 +85,7 @@ private:
 
   std::chrono::microseconds fProcTime;
   std::chrono::microseconds fCompTime;
+  std::thread::id fThreadId;
 };
 
 #endif

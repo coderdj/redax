@@ -13,6 +13,8 @@
 #include <CAENVMElib.h>
 #include <chrono>
 #include <sstream>
+#include <list>
+#include <utility>
 
 
 V1724::V1724(MongoLog  *log, Options *options){
@@ -35,6 +37,8 @@ V1724::V1724(MongoLog  *log, Options *options){
   fReadoutStatusRegister = 0xEF04;
   fBoardErrRegister = 0xEF00;
 
+  BLT_SIZE=512*1024; // one channel's memory
+
   DataFormatDefinition = {
     {"channel_mask_msb_idx", -1},
     {"channel_mask_msb_mask", -1},
@@ -48,7 +52,6 @@ V1724::V1724(MongoLog  *log, Options *options){
 
   };
 
-  BLT_SIZE = 512*1024*8; // full V1724 memory
 }
 
 V1724::~V1724(){
@@ -264,11 +267,7 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
   // Initialize
   int64_t blt_bytes=0;
   int nb=0,ret=-5;
-  // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
-  // the other, V1724G, has 512 MS/channel = 1MB/channel
-  BLT_SIZE=524288; // full thing
-  std::vector<u_int32_t*> transferred_buffers;
-  std::vector<u_int32_t> transferred_bytes;
+  std::list<std::pair<u_int32_t*, int>> xfer_buffers;
 
   int count = 0;
   u_int32_t* thisBLT = nullptr;
@@ -296,17 +295,15 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
 
       // Delete all reserved data and fail
       delete[] thisBLT;
-      for(unsigned int x=0;x<transferred_buffers.size(); x++)
-	delete[] transferred_buffers[x];
+      for (auto b : xfer_buffers) delete[] b.first;
       return -1;
     }
-    if (nb > BLT_SIZE) fLog->Entry(MongoLog::Message,
+    if (nb > (int)BLT_SIZE) fLog->Entry(MongoLog::Message,
         "Board %i got %i more bytes than asked for", fBID, nb-BLT_SIZE);
 
     count++;
     blt_bytes+=nb;
-    transferred_buffers.push_back(thisBLT);
-    transferred_bytes.push_back(nb);
+    xfer_buffers.push_back(std::make_pair(thisBLT, nb));
 
   }while(ret != cvBusError);
 
@@ -323,18 +320,17 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
     u_int32_t bytes_copied = 0;
     int alloc_size = blt_bytes*safety_factor;
     buffer = new u_int32_t[alloc_size/sizeof(u_int32_t)];
-    for(unsigned int x=0; x<transferred_buffers.size(); x++){
-      std::memcpy(((unsigned char*)buffer)+bytes_copied,
-		  transferred_buffers[x], transferred_bytes[x]);
-      bytes_copied += transferred_bytes[x];
-      delete[] transferred_buffers[x];
+    for (auto& xfer : xfer_buffers) {
+      std::memcpy(((unsigned char*)buffer)+bytes_copied, xfer.first, xfer.second);
+      bytes_copied += xfer.second;
+      if (v != nullptr) v->push_back(xfer.second);
     }
     blt_counts[count]++;
-    if (v != nullptr) *v = transferred_bytes;
     if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Local,
         "Board %i funny buffer accumulation: %i/%i from %i BLTs",
         fBID, bytes_copied, blt_bytes, count);
   }
+  for (auto b : xfer_buffers) delete[] b.first;
   return blt_bytes;
 }
 
