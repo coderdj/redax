@@ -586,13 +586,13 @@ data_packet::~data_packet() {
   vBLT.clear();
 }
 
-data_packet& data_packet::operator=(const data_packet&& rhs) {
+data_packet& data_packet::operator=(data_packet&& rhs) {
   if (buff != nullptr) delete[] buff;
-  buff = rhs.buff;
-  size = rhs.size;
-  clock_counter = rhs.clock_counter;
-  header_time = rhs.header_time;
-  bid = rhs.bid;
-  vBLT = rhs.vBLT;
+  buff = rhs.buff; rhs.buff = nullptr;
+  size = rhs.size; rhs.size = 0;
+  clock_counter = rhs.clock_counter; rhs.clock_counter = 0;
+  header_time = rhs.header_time; rhs.header_time = 0;
+  bid = rhs.bid; rhs.bid = 0;
+  vBLT = rhs.vBLT; rhs.vBLT.clear();
   return *this;
 }

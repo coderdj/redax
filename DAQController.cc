@@ -236,7 +236,7 @@ void DAQController::ReadData(int link){
   int readcycler = 0;
   int err_val = 0;
   std::list<data_packet*> local_buffer;
-  data_packet* dp == nullptr;
+  data_packet* dp = nullptr;
   int local_size;
   while(fReadLoop){
     
