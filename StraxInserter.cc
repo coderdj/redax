@@ -248,7 +248,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	// will be beautiful. First we reinterpret the channel as 16
 	// bit because we want to allow also odd numbers of samples
 	// as FragmentLength
-	u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff+idx);
+	u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff);
 	u_int32_t samples_in_channel = channel_words<<1;
 	u_int32_t index_in_pulse = 0;
 	u_int32_t offset = idx*2;
