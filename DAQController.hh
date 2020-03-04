@@ -37,7 +37,7 @@ public:
     return fStatus;
   };
   int buffer_length(){
-    return fBufferLength;
+    return fBufferSize;
   };
   std::string run_mode();
   
