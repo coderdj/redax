@@ -438,7 +438,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     int wsize = 0;
     if(fCompressor == "blosc"){
       out_buffer = new char[uncompressed_size+BLOSC_MAX_OVERHEAD];
-      wsize = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size,  iter.second,
+      wsize = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size,  iter.second->data(),
 				   out_buffer, uncompressed_size+BLOSC_MAX_OVERHEAD, "lz4", 0, 2);
     }
     else{
@@ -449,7 +449,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
       size_t max_compressed_size = LZ4F_compressFrameBound(uncompressed_size, &kPrefs);
       out_buffer = new char[max_compressed_size];
       wsize = LZ4F_compressFrame(out_buffer, max_compressed_size,
-				 iter.second, uncompressed_size, &kPrefs);
+				 iter.second->data(), uncompressed_size, &kPrefs);
     }
     delete iter.second;
     iter.second = nullptr;
