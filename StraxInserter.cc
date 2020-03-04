@@ -20,7 +20,7 @@ StraxInserter::StraxInserter(){
   fChunkNameLength=6;
   fChunkOverlap = 0x2FAF080;
   fFragmentLength=110*2;
-  fStraxHeaderSize=22;
+  fStraxHeaderSize=24;
   fLog = NULL;
   fErrorBit = false;
   fMissingVerified = 0;
@@ -136,17 +136,17 @@ void StraxInserter::ParseDocuments(data_packet dp){
 	// These defaults are valid for 'default' firmware where all channels same size
 	u_int32_t channel_words = (words_in_event - 4) / channels_in_event;
 	u_int32_t channel_time = event_time;
-	u_int32_t channel_timeMSB; 
-	//u_int32_t baseline_ch;     
+	u_int32_t channel_timeMSB = 0;
+	u_int16_t baseline_ch = 0;
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
 	if(fmt["channel_header_words"] > 0){
 	  channel_words = (buff[idx]&0x7FFFFF)-fmt["channel_header_words"];
 	  channel_time = buff[idx+1]&0xFFFFFFFF;
 
-	  if (fmt["channel_time_msb_idx"] == 2) { 
-	    channel_timeMSB = buff[idx+2]&0xFFFF; 
-	    //baseline_ch = (buff[idx+2]>>16)&0x3FFF;  
+	  if (fmt["channel_time_msb_idx"] == 2) {
+	    channel_timeMSB = buff[idx+2]&0xFFFF;
+	    baseline_ch = (buff[idx+2]>>16)&0x3FFF;
 	  }
 	  
 	  idx += fmt["channel_header_words"];
@@ -252,6 +252,9 @@ void StraxInserter::ParseDocuments(data_packet dp){
 
 	  char *fragmentindex = reinterpret_cast<char*> (&fragment_index);
 	  fragment.append(fragmentindex, 2);
+
+          char* bl = reinterpret_cast<char*>(&baseline);
+          fragment.append(bl, 2);
 
 	  // Copy the raw buffer
 	  if(samples_this_channel>fFragmentLength/2){
