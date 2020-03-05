@@ -271,7 +271,7 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
 
   int count = 0;
   u_int32_t* thisBLT = nullptr;
-  float safety_factor = 1.1; // should handle nonsense
+  float safety_factor = 1.2; // should handle nonsense
   do{
 
     // Reserve space for this block transfer
