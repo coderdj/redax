@@ -412,6 +412,7 @@ int StraxInserter::ReadAndInsertData(){
         for (auto& dp : b) {
           proc_start = system_clock::now();
           ParseDocuments(dp);
+          fBytesProcessed += dp->size;
           delete dp;
           proc_end = system_clock::now();
           fBufferLength--;
@@ -427,6 +428,7 @@ int StraxInserter::ReadAndInsertData(){
         haddata = true;
         proc_start = system_clock::now();
         ParseDocuments(dp);
+        fBytesProcessed += dp->size;
         delete dp;
         proc_end = system_clock::now();
         fProcTime += duration_cast<microseconds>(proc_end - proc_start);
