@@ -33,7 +33,7 @@ StraxInserter::StraxInserter(){
 
 StraxInserter::~StraxInserter(){
   fActive = false;
-  int counter_sort = 0, counter_long = 0;
+  int counter_short = 0, counter_long = 0;
   fLog->Entry(MongoLog::Local, "Thread %x waiting to stop, has %i events left",
       fThreadId, fBufferLength.load());
   int events_start = fBufferLength.load();
@@ -42,7 +42,7 @@ StraxInserter::~StraxInserter(){
     while (fRunning && counter_short++ < 500)
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     if (counter_short >= 500)
-      fLog->Entry(MongoLog::Info, "Thread %x taking a while to stop, still has %i evts",
+      fLog->Entry(MongoLog::Message, "Thread %x taking a while to stop, still has %i evts",
           fThreadId, fBufferLength.load());
   } while (fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
   char prefix = ' ';
