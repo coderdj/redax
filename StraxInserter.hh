@@ -23,10 +23,7 @@ class MongoLog;
 struct data_packet{
   public:
     data_packet();
-    data_packet(const data_packet& rhs) = delete; // no copy ctor
-    data_packet(data_packet&& rhs);
     ~data_packet();
-    data_packet& operator=(data_packet&& rhs);
     u_int32_t *buff;
     int32_t size;
     u_int32_t clock_counter;

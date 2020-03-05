@@ -28,6 +28,7 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fOptions = NULL;
   fStatus = DAXHelpers::Idle;
   fReadLoop = false;
+  fRunning = false;
   fNProcessingThreads=8;
   fBufferLength = 0;
   fDataRate=0.;
@@ -173,6 +174,15 @@ int DAQController::Start(){
 
 int DAQController::Stop(){
 
+  fReadLoop = false; // at some point.
+  int counter = 0;
+  bool one_still_running = false;
+  do{
+    one_still_running = false;
+    for (auto& p : fRunning) one_still_running |= p.second;
+    if (one_still_running) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+  }while(one_still_running && counter++ < 10);
+  if (counter >= 10) fLog->Entry(MongoLog::Local, "Boards taking a while to clear");
   std::cout<<"Deactivating boards"<<std::endl;
   for( auto const& link : fDigitizers ){
     for(auto digi : link.second){
@@ -188,7 +198,6 @@ int DAQController::Stop(){
   }
   fLog->Entry(MongoLog::Debug, "Stopped digitizers");
 
-  fReadLoop = false; // at some point.
   fStatus = DAXHelpers::Idle;
   return 0;
 }
@@ -238,6 +247,7 @@ void DAQController::ReadData(int link){
   std::list<data_packet*> local_buffer;
   data_packet* dp = nullptr;
   int local_size;
+  fRunning[link] = true;
   while(fReadLoop){
     
     for(auto digi : fDigitizers[link]) {
@@ -293,7 +303,8 @@ void DAQController::ReadData(int link){
     readcycler++;
     usleep(1);
   } // while run
-
+  fRunning[link] = false;
+  fLog->Entry(MongoLog::Local, "RO thread %i returning", link);
 }
 
 std::map<int, int> DAQController::GetDataPerChan(){

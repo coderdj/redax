@@ -36,7 +36,7 @@ StraxInserter::~StraxInserter(){
   fLog->Entry(MongoLog::Local, "Thread %x waiting to stop", fThreadId);
   while (fRunning && wait_counter++ < 50)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  if (wait_counter == 50)
+  if (wait_counter >= 50)
     fLog->Entry(MongoLog::Warning, "Thread %x taking a while to stop", fThreadId);
   fLog->Entry(MongoLog::Local, "Processing time: %.1f s, compression time: %.1f s",
       fProcTime.count()*1e-6, fCompTime.count()*1e-6);
@@ -138,8 +138,6 @@ void StraxInserter::ParseDocuments(data_packet* dp){
       bool board_fail = buff[idx+1]&0x4000000; // & (buff[idx+1]>>27)
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
 
-      // I've never seen this happen but afraid to put it into the mongo log
-      // since this call is in a loop
       if(board_fail){
         fDataSource->CheckError(dp->bid);
 	fFailCounter[dp->bid]++;
@@ -159,23 +157,14 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	u_int32_t channel_timeMSB;
         bool whoops = false;
 
-        // let's sanity-check the data first to make sure we didn't get CAENed
-        for (unsigned w = 0; w < channel_words; w++) {
-          if ((idx+w >= total_words) || (buff[idx+w]>>28) == 0xA) {
-            fLog->Entry(MongoLog::Local, "Board %i has CAEN'd itself at idx %x",
-                dp->bid, idx+w);
-            whoops = true;
-            break;
-          }
-        }
-        if (whoops)
-          break;
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
 	if(fmt["channel_header_words"] > 0){
 	  channel_words = std::min(buff[idx]&0x7FFFFF, words_in_event - (idx - event_start_idx));
           if (channel_words < (buff[idx]&0x7FFFFF)) {
-            fLog->Entry(MongoLog::Local, "Board %i ch %i garbled header at idx %i: %u/%u",
+            fLog->Entry(MongoLog::Local, "Board %i ch %i garbled header at idx %i: %x/%x",
                   dp->bid, channel, idx, buff[idx]&0x7FFFFF, words_in_event);
+            idx += fmt["channel_header_words"];
+            break;
           }
           if (channel_words <= fmt["channel_header_words"]) {
             fLog->Entry(MongoLog::Local, "Board %i ch %i empty (%i/%i)",
@@ -218,6 +207,23 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	    
 	  }
 	} // channel_header_words > 0
+
+        // let's sanity-check the data first to make sure we didn't get CAENed
+        for (unsigned w = 0; w < channel_words; w++) {
+          if ((idx+w >= total_words) || (buff[idx+w]>>28) == 0xA) {
+            fLog->Entry(MongoLog::Local, "Board %i has CAEN'd itself at idx %x",
+                dp->bid, idx+w);
+            whoops = true;
+            break;
+          }
+        }
+        if (idx - event_start_idx >= words_in_event) {
+          fLog->Entry(MongoLog::Local, "Board %i CAEN'd itself at idx %x",
+              dp->bid, idx);
+          whoops = true;
+        }
+        if (whoops) // some data got lost somewhere
+          break;
 
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
 	// 48 bits this line would be different
@@ -569,30 +575,9 @@ data_packet::data_packet() {
   bid = 0;
 }
 
-data_packet::data_packet(data_packet&& rhs) {
-  if (buff != nullptr) delete[] buff;
-  buff = rhs.buff; rhs.buff = nullptr;
-  size = rhs.size; rhs.size = 0;
-  clock_counter = rhs.clock_counter; rhs.clock_counter = 0;
-  header_time = rhs.header_time; rhs.header_time = 0;
-  bid = rhs.bid; rhs.bid = 0;
-  vBLT = rhs.vBLT; rhs.vBLT.clear();
-}
-
 data_packet::~data_packet() {
   if (buff != nullptr) delete[] buff;
   buff = nullptr;
   size = clock_counter = header_time = bid = 0;
   vBLT.clear();
-}
-
-data_packet& data_packet::operator=(data_packet&& rhs) {
-  if (buff != nullptr) delete[] buff;
-  buff = rhs.buff; rhs.buff = nullptr;
-  size = rhs.size; rhs.size = 0;
-  clock_counter = rhs.clock_counter; rhs.clock_counter = 0;
-  header_time = rhs.header_time; rhs.header_time = 0;
-  bid = rhs.bid; rhs.bid = 0;
-  vBLT = rhs.vBLT; rhs.vBLT.clear();
-  return *this;
 }

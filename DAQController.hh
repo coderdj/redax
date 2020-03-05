@@ -76,6 +76,7 @@ private:
   std::mutex fMapMutex;
 
   std::atomic_bool fReadLoop;
+  std::map<int, std::atomic_bool> fRunning;
   int fStatus;
   int fNProcessingThreads;
   std::string fHostname;
