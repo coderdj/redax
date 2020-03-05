@@ -28,19 +28,43 @@ StraxInserter::StraxInserter(){
   fOutputPath = "";
   fChunkNameLength = 6;
   fThreadId = std::this_thread::get_id();
+  fBytesProcessed = 0;
 }
 
 StraxInserter::~StraxInserter(){
   fActive = false;
-  int wait_counter = 0;
+  int counter_sort = 0, counter_long = 0;
   fLog->Entry(MongoLog::Local, "Thread %x waiting to stop, has %i events left",
       fThreadId, fBufferLength.load());
-  while (fRunning && wait_counter++ < 500)
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  if (wait_counter >= 500)
-    fLog->Entry(MongoLog::Warning, "Thread %x taking a while to stop", fThreadId);
-  fLog->Entry(MongoLog::Local, "Processing time: %.1f s, compression time: %.1f s",
-      fProcTime.count()*1e-6, fCompTime.count()*1e-6);
+  int events_start = fBufferLength.load();
+  do{
+    events_start = fBufferLength.load();
+    while (fRunning && counter_short++ < 500)
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    if (counter_short >= 500)
+      fLog->Entry(MongoLog::Info, "Thread %x taking a while to stop, still has %i evts",
+          fThreadId, fBufferLength.load());
+  } while (fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
+  char prefix = ' ';
+  float num = 0.;
+  if (fBytesProcessed > (1L<<40)) {
+    prefix = 'T';
+    num = fBytesProcessed/(1024.*1024.*1024.*1024.);
+  } else if (fBytesProcessed > (1L<<30)) {
+    prefix = 'G';
+    num = fBytesProcessed/(1024.*1024.*1024.);
+  } else if (fBytesProcessed > (1<<20)) {
+    prefix = 'M';
+    num = fBytesProcessed/(1024.*1024.);
+  } else if (fBytesProcessed > (1<<10)) {
+    prefix = 'K';
+    num = fBytesProcessed/(1024.);
+  } else {
+    prefix = ' ';
+    num = fBytesProcessed/(1.);
+  }
+  fLog->Entry(MongoLog::Local, "Processed %.1f %cB in %.1f s, compresssed it in %.1f s",
+      num, prefix, fProcTime.count()*1e-6, fCompTime.count()*1e-6);
 }
 
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
@@ -51,7 +75,6 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fFragmentBytes = fOptions->GetInt("strax_fragment_length", 110*2);
   fCompressor = fOptions->GetString("compressor", "lz4");
   fHostname = hostname;
-  fBoardFailCount = 0;
   std::string run_name = fOptions->GetString("run_identifier", "run");
 
   fMissingVerified = 0;

@@ -179,7 +179,7 @@ int DAQController::Stop(){
   do{
     one_still_running = false;
     for (auto& p : fRunning) one_still_running |= p.second;
-    if (one_still_running) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    if (one_still_running) std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }while(one_still_running && counter++ < 10);
   if (counter >= 10) fLog->Entry(MongoLog::Local, "Boards taking a while to clear");
   std::cout<<"Deactivating boards"<<std::endl;
@@ -318,6 +318,12 @@ std::map<int, int> DAQController::GetDataPerChan(){
 long DAQController::GetStraxBufferSize() {
   return std::accumulate(fProcessingThreads.begin(), fProcessingThreads.end(), 0,
       [=](long tot, processingThread pt) {return tot + pt.inserter->GetBufferSize();});
+}
+
+int DAQController::GetBufferLength() {
+  return fBufferLength.load() + std::accumulate(fProcessingThreads.begin(),
+      fProcessingThreads.end(), 0,
+      [](int tot, auto pt){return tot + pt.inserter->GetBufferLength();});
 }
 
 void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& retmap){

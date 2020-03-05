@@ -39,6 +39,7 @@ public:
   int buffer_length(){
     return fBufferSize;
   };
+  int GetBufferLength();
   std::string run_mode();
   
   int Start();

@@ -51,6 +51,7 @@ public:
   long GetBufferSize();
   void GetDataPerChan(std::map<int, int>& ret);
   void CheckError(int bid);
+  int GetBufferLength() {return fBufferLength.load();}
   
 private:
   void ParseDocuments(data_packet *dp);
@@ -76,11 +77,11 @@ private:
   std::string fCompressor;
   std::map<std::string, std::string*> fFragments;
   std::map<std::string, std::atomic_long> fFragmentSize;
-  int fBoardFailCount;
   std::map<int, std::map<std::string, int>> fFmt;
   std::map<int, int> fFailCounter;
   std::map<int, std::atomic_int> fDataPerChan;
   std::atomic_int fBufferLength;
+  long fBytesProcessed;
 
   std::chrono::microseconds fProcTime;
   std::chrono::microseconds fCompTime;
