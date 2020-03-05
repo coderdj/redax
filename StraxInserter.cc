@@ -34,10 +34,10 @@ StraxInserter::~StraxInserter(){
   fActive = false;
   int wait_counter = 0;
   fLog->Entry(MongoLog::Local, "Thread %x waiting to stop, has %i events left",
-      fThreadId, fBufferLength);
-  while (fRunning && wait_counter++ < 50)
+      fThreadId, fBufferLength.load());
+  while (fRunning && wait_counter++ < 500)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  if (wait_counter >= 50)
+  if (wait_counter >= 500)
     fLog->Entry(MongoLog::Warning, "Thread %x taking a while to stop", fThreadId);
   fLog->Entry(MongoLog::Local, "Processing time: %.1f s, compression time: %.1f s",
       fProcTime.count()*1e-6, fCompTime.count()*1e-6);
