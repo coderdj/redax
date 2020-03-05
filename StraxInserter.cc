@@ -336,11 +336,6 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  fragment.append(reductionLevel, 1);
 
 	  // Copy the raw buffer
-	  if(samples_this_channel>fFragmentBytes/2){
-	    std::cout<<samples_this_channel<<"!"<<std::endl;
-	    exit(-1);
-	  }
-
 	  const char *data_loc = reinterpret_cast<const char*>(&(payload[offset+index_in_pulse]));
 	  fragment.append(data_loc, samples_this_channel*2);
 	  while(fragment.size()<fFragmentBytes+fStraxHeaderSize)
