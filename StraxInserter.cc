@@ -33,7 +33,8 @@ StraxInserter::StraxInserter(){
 StraxInserter::~StraxInserter(){
   fActive = false;
   int wait_counter = 0;
-  fLog->Entry(MongoLog::Local, "Thread %x waiting to stop", fThreadId);
+  fLog->Entry(MongoLog::Local, "Thread %x waiting to stop, has %i events left",
+      fThreadId, fBufferLength);
   while (fRunning && wait_counter++ < 50)
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
   if (wait_counter >= 50)
@@ -377,17 +378,20 @@ int StraxInserter::ReadAndInsertData(){
   bool haddata=false;
   std::list<data_packet*> b;
   data_packet* dp;
+  fBufferLength = 0;
   system_clock::time_point proc_start, proc_end;
   microseconds sleep_time(10);
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
     while(fActive == true){
       if (fDataSource->GetData(b)) {
         haddata = true;
+        fBufferLength = b.size();
         for (auto& dp : b) {
           proc_start = system_clock::now();
           ParseDocuments(dp);
           delete dp;
           proc_end = system_clock::now();
+          fBufferLength--;
           fProcTime += duration_cast<microseconds>(proc_end - proc_start);
         }
         b.clear();

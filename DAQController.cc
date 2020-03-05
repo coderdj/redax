@@ -402,15 +402,17 @@ int DAQController::OpenProcessingThreads(){
 
 void DAQController::CloseProcessingThreads(){
   std::map<int,int> board_fails;
-
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
     fProcessingThreads[i].inserter->Close(board_fails);
+    // two stage process so there's time to clear data
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  for(unsigned int i=0; i<fProcessingThreads.size(); i++){
     delete fProcessingThreads[i].inserter;
-
     fProcessingThreads[i].pthread->join();
     delete fProcessingThreads[i].pthread;
-
   }
+
   fProcessingThreads.clear();
   if (std::accumulate(board_fails.begin(), board_fails.end(), 0,
 	[=](int tot, std::pair<int,int> iter) {return tot + iter.second;})) {

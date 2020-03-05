@@ -80,6 +80,7 @@ private:
   std::map<int, std::map<std::string, int>> fFmt;
   std::map<int, int> fFailCounter;
   std::map<int, std::atomic_int> fDataPerChan;
+  std::atomic_int fBufferLength;
 
   std::chrono::microseconds fProcTime;
   std::chrono::microseconds fCompTime;
