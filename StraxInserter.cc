@@ -20,8 +20,8 @@ StraxInserter::StraxInserter(){
   fChunkLength=0x7fffffff; // DAQ magic number
   fChunkNameLength=6;
   fChunkOverlap = 0x2FAF080;
+  fStraxHeaderSize=24;
   fFragmentBytes=110*2;
-  fStraxHeaderSize=31;
   fLog = NULL;
   fErrorBit = false;
   fMissingVerified = 0;
@@ -183,8 +183,9 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	// These defaults are valid for 'default' firmware where all channels same size
 	u_int32_t channel_words = (words_in_event-event_header_words) / channels_in_event;
 	u_int32_t channel_time = event_time;
-	u_int32_t channel_timeMSB;
-        bool whoops = false;
+	u_int32_t channel_timeMSB = 0;
+	u_int16_t baseline_ch = 0;
+  bool whoops = false;
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
 	if(fmt["channel_header_words"] > 0){
@@ -204,8 +205,9 @@ void StraxInserter::ParseDocuments(data_packet* dp){
           channel_words -= fmt["channel_header_words"];
 	  channel_time = buff[idx+1]&0xFFFFFFFF;
 
-	  if (fmt["channel_time_msb_idx"] == 2) { 
-	    channel_timeMSB = buff[idx+2]&0xFFFF; 
+	  if (fmt["channel_time_msb_idx"] == 2) {
+	    channel_timeMSB = buff[idx+2]&0xFFFF;
+	    baseline_ch = (buff[idx+2]>>16)&0x3FFF;
 	  }
 	  
 	  idx += fmt["channel_header_words"];
@@ -275,9 +277,9 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	if(smallest_latest_index_seen == -1 || int(chunk_id) < smallest_latest_index_seen)
 	  smallest_latest_index_seen = chunk_id;
 	
-	bool nextpre=false;//, prevpost=false;
-	if(((chunk_id+1)*fFullChunkLength)-Time64 < fChunkOverlap)
-	  nextpre=true;
+        bool nextpre = (chunk_id+1)* fFullChunkLength - Time64 < fChunkOverlap;
+	//if(((chunk_id+1)*fFullChunkLength)-Time64 < fChunkOverlap)
+	//  nextpre=true;
 
 	// We're now at the first sample of the channel's waveform. This
 	// will be beautiful. First we reinterpret the channel as 16
@@ -323,28 +325,22 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  char *fragmenttime = reinterpret_cast<char*> (&samples_this_channel);
 	  fragment.append(fragmenttime, 4);
 
-	  u_int32_t tii0 = 0; // pulse area
-	  char *thisoneiszero = reinterpret_cast<char*>(&tii0);
-	  fragment.append(thisoneiszero, 4);
-
 	  char *samplesthischannel = reinterpret_cast<char*> (&samples_in_channel);
 	  fragment.append(samplesthischannel, 4);
 
 	  char *fragmentindex = reinterpret_cast<char*> (&fragment_index);
 	  fragment.append(fragmentindex, 2);
 
-	  char *anotherzero = reinterpret_cast<char*> (&tii0); // baseline
-	  fragment.append(anotherzero, 4);
-
-	  u_int8_t rl = 0;
-	  char *reductionLevel = reinterpret_cast<char*> (&rl);
-	  fragment.append(reductionLevel, 1);
+          char* bl = reinterpret_cast<char*>(&baseline_ch);
+          fragment.append(bl, 2);
 
 	  // Copy the raw buffer
 	  const char *data_loc = reinterpret_cast<const char*>(&(payload[offset+index_in_pulse]));
 	  fragment.append(data_loc, samples_this_channel*2);
+    uint8_t zero_filler = 0;
+    char *zero = reinterpret_cast<char*> (&zero_filler);
 	  while(fragment.size()<fFragmentBytes+fStraxHeaderSize)
-	    fragment.append(reductionLevel, 1); // int(0) != int("0")
+	    fragment.append(zero, 1); // int(0) != int("0")
 
 	  //copy(data_loc, data_loc+(samples_this_channel*2),&(fragment[31]));
 
