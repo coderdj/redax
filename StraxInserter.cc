@@ -65,6 +65,11 @@ StraxInserter::~StraxInserter(){
   }
   fLog->Entry(MongoLog::Local, "Processed %.1f %cB in %.1f s, compresssed it in %.1f s",
       num, prefix, fProcTime.count()*1e-6, fCompTime.count()*1e-6);
+  std::stringstream msg;
+  msg << "BL report: ";
+  for (auto p : fBufferCounter)
+    msg << p.first << " 0x" << std::hex << p.second << std::dec << " | ";
+  fLog->Entry(MongoLog::Local, msg.str());
 }
 
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
@@ -404,6 +409,7 @@ int StraxInserter::ReadAndInsertData(){
       if (fDataSource->GetData(b)) {
         haddata = true;
         fBufferLength = b.size();
+        fBufferCounter[int(b.size())]++;
         for (auto& dp : b) {
           proc_start = system_clock::now();
           ParseDocuments(dp);
@@ -414,21 +420,26 @@ int StraxInserter::ReadAndInsertData(){
           fProcTime += duration_cast<microseconds>(proc_end - proc_start);
         }
         b.clear();
-      } else
+      } else {
         std::this_thread::sleep_for(sleep_time);
+        fBufferCounter[0]++;
+      }
     }
   } else {
     while (fActive == true) {
       if (fDataSource->GetData(dp)) {
         haddata = true;
+        fBufferCounter[1]++;
         proc_start = system_clock::now();
         ParseDocuments(dp);
         fBytesProcessed += dp->size;
         delete dp;
         proc_end = system_clock::now();
         fProcTime += duration_cast<microseconds>(proc_end - proc_start);
+      } else {
+        std::this_thread::sleep_for(sleep_time);
+        fBufferCounter[0]++;
       }
-      std::this_thread::sleep_for(sleep_time);
     }
   }
   if(haddata)

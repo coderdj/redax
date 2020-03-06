@@ -64,7 +64,7 @@ protected:
   unsigned int fBoardErrRegister;
 
   int BLT_SIZE;
-  std::map<int, long> blt_counts;
+  std::map<int, long> fBLTCounter;
 
   bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
 		       int sleep, u_int32_t val=1);
@@ -80,6 +80,8 @@ protected:
   bool seen_over_15;
 
   MongoLog *fLog;
+
+  float fBLTSafety, fBufferSafety;
 
 };
 

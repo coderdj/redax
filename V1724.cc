@@ -52,13 +52,16 @@ V1724::V1724(MongoLog  *log, Options *options){
 
   };
 
+  fBLTSafety = 1.4;
+  fBufferSafety = 1.1;
+
 }
 
 V1724::~V1724(){
   End();
   std::stringstream msg;
   msg << "BLT report for board " << fBID << "(BLT " << BLT_SIZE << "): ";
-  for (auto p : blt_counts) {
+  for (auto p : fBLTCounter) {
     msg << p.first << " (";
     for (int i = 63; i >= 0; i--) {
       if (p.second & (1L << i)) { // log2
@@ -129,6 +132,10 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   u_int32_t word(0);
   int my_bid(0);
   
+  fBLTSafety = fOptions->GetDouble("blt_safety_factor", 1.5);
+  fBufferSafety = fOptions->GetDouble("buffer_safety_factor", 1.1);
+  BLT_SIZE = fOptions->GetInt("blt_size", 512*1024);
+
   if (Reset()) {
     fLog->Entry(MongoLog::Error, "Board %i unable to pre-load registers", fBID);
     return -1;
@@ -136,19 +143,21 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
     fLog->Entry(MongoLog::Local, "Board %i reset", fBID);
   }
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
-    fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBID);
-    return -1;
-  }
-  my_bid |= word&0xFF;
-  if ((word = ReadRegister(fSNRegisterMSB)) == 0xFFFFFFFF) {
-    fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBID);
-    return -1;
-  }
-  my_bid |= ((word&0xFF)<<8);
-  if (my_bid != fBID) {
-    fLog->Entry(MongoLog::Local, "Link %i crate %i should be SN %i but is actually %i",
+  if (fOptions->GetInt("do_sn_check", 0) != 0) {
+    if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
+      fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBID);
+      return -1;
+    }
+    my_bid |= word&0xFF;
+    if ((word = ReadRegister(fSNRegisterMSB)) == 0xFFFFFFFF) {
+      fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBID);
+      return -1;
+    }
+    my_bid |= ((word&0xFF)<<8);
+    if (my_bid != fBID) {
+      fLog->Entry(MongoLog::Local, "Link %i crate %i should be SN %i but is actually %i",
         link, crate, fBID, my_bid);
+    }
   }
   return 0;
 }
@@ -270,12 +279,12 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
   std::list<std::pair<u_int32_t*, int>> xfer_buffers;
 
   int count = 0;
+  int alloc_size = BLT_SIZE/sizeof(u_int32_t)*fBLTSafety;
   u_int32_t* thisBLT = nullptr;
-  float safety_factor = 1.2; // should handle nonsense
   do{
 
     // Reserve space for this block transfer
-    thisBLT = new u_int32_t[int(BLT_SIZE/sizeof(u_int32_t)*safety_factor)];
+    thisBLT = new u_int32_t[alloc_size];
     
     try{
       ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
@@ -299,7 +308,8 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
       return -1;
     }
     if (nb > (int)BLT_SIZE) fLog->Entry(MongoLog::Message,
-        "Board %i got %i more bytes than asked for", fBID, nb-BLT_SIZE);
+        "Board %i got %i more bytes than asked for (headroom %i)",
+        fBID, nb-BLT_SIZE, alloc_size-nb);
 
     count++;
     blt_bytes+=nb;
@@ -318,15 +328,15 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
   // maximum bandwidth of the link.
   if(blt_bytes>0){
     u_int32_t bytes_copied = 0;
-    int alloc_size = blt_bytes*safety_factor;
-    buffer = new u_int32_t[alloc_size/sizeof(u_int32_t)];
+    alloc_size = blt_bytes/sizeof(u_int32_t)*fBufferSafety;
+    buffer = new u_int32_t[alloc_size];
     for (auto& xfer : xfer_buffers) {
       std::memcpy(((unsigned char*)buffer)+bytes_copied, xfer.first, xfer.second);
       bytes_copied += xfer.second;
       if (v != nullptr) v->push_back(xfer.second);
     }
-    blt_counts[count]++;
-    if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Local,
+    fBLTCounter[count]++;
+    if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Message,
         "Board %i funny buffer accumulation: %i/%i from %i BLTs",
         fBID, bytes_copied, blt_bytes, count);
   }
