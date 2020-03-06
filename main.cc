@@ -28,7 +28,7 @@ void UpdateStatus(mongocxx::collection& status, DAQController* controller) {
       insert_doc << "host" << hostname <<
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
-	"buffer_length" << controller->buffer_length() <<
+	"buffer_length" << controller->GetBufferLengths() <<
         "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
 	"run_mode" << controller->run_mode() <<
 	"channels" << bsoncxx::builder::stream::open_document <<
