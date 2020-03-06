@@ -254,7 +254,7 @@ int Options::GetCrateOpt(CrateOptions &ret){
   return 0;
 }
 
-int Options::GetChannel(int bid, int cid){
+int16_t Options::GetChannel(int bid, int cid){
   std::string boardstring = std::to_string(bid);
   try{
     return bson_options["channels"][boardstring][cid].get_int32().value;

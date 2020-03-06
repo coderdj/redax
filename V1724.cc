@@ -9,8 +9,12 @@
 #include <iostream>
 #include "MongoLog.hh"
 #include "Options.hh"
+#include "StraxInserter.hh"
 #include <CAENVMElib.h>
 #include <chrono>
+#include <sstream>
+#include <list>
+#include <utility>
 
 
 V1724::V1724(MongoLog  *log, Options *options){
@@ -33,6 +37,8 @@ V1724::V1724(MongoLog  *log, Options *options){
   fReadoutStatusRegister = 0xEF04;
   fBoardErrRegister = 0xEF00;
 
+  BLT_SIZE=512*1024; // one channel's memory
+
   DataFormatDefinition = {
     {"channel_mask_msb_idx", -1},
     {"channel_mask_msb_mask", -1},
@@ -45,10 +51,23 @@ V1724::V1724(MongoLog  *log, Options *options){
     {"channel_time_msb_mask", -1},
 
   };
+
 }
 
 V1724::~V1724(){
   End();
+  std::stringstream msg;
+  msg << "BLT report for board " << fBID << "(BLT " << BLT_SIZE << "): ";
+  for (auto p : blt_counts) {
+    msg << p.first << " (";
+    for (int i = 63; i >= 0; i--) {
+      if (p.second & (1L << i)) { // log2
+        msg << i << ") | ";
+        break;
+      }
+    }
+  }
+  fLog->Entry(MongoLog::Local, msg.str());
 }
 
 int V1724::SINStart(){
@@ -244,22 +263,19 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int64_t V1724::ReadMBLT(unsigned int *&buffer){
+int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
   // Initialize
   int64_t blt_bytes=0;
   int nb=0,ret=-5;
-  // The best-equipped V1724E has 4MS/channel memory = 8 MB/channel
-  // the other, V1724G, has 512 MS/channel = 1MB/channel
-  //unsigned int BLT_SIZE=8388608; //8*8388608; // 8MB buffer size
-  unsigned int BLT_SIZE=524288;
-  std::vector<u_int32_t*> transferred_buffers;
-  std::vector<u_int32_t> transferred_bytes;
+  std::list<std::pair<u_int32_t*, int>> xfer_buffers;
 
   int count = 0;
+  u_int32_t* thisBLT = nullptr;
+  float safety_factor = 1.2; // should handle nonsense
   do{
 
     // Reserve space for this block transfer
-    u_int32_t* thisBLT = new u_int32_t[BLT_SIZE/sizeof(u_int32_t)];
+    thisBLT = new u_int32_t[int(BLT_SIZE/sizeof(u_int32_t)*safety_factor)];
     
     try{
       ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
@@ -279,19 +295,17 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
 
       // Delete all reserved data and fail
       delete[] thisBLT;
-      for(unsigned int x=0;x<transferred_buffers.size(); x++)
-	delete[] transferred_buffers[x];
+      for (auto b : xfer_buffers) delete[] b.first;
       return -1;
     }
+    if (nb > (int)BLT_SIZE) fLog->Entry(MongoLog::Message,
+        "Board %i got %i more bytes than asked for", fBID, nb-BLT_SIZE);
 
     count++;
     blt_bytes+=nb;
-    transferred_buffers.push_back(thisBLT);
-    transferred_bytes.push_back(nb);
+    xfer_buffers.push_back(std::make_pair(thisBLT, nb));
 
   }while(ret != cvBusError);
-
-
 
   // Now, unfortunately we need to make one copy of the data here or else our memory
   // usage explodes. We declare above a buffer of several MB, which is the maximum capacity
@@ -303,18 +317,21 @@ int64_t V1724::ReadMBLT(unsigned int *&buffer){
   // In tests this does not seem to impact our ability to read out the V1724 at the
   // maximum bandwidth of the link.
   if(blt_bytes>0){
-    buffer = new u_int32_t[blt_bytes/sizeof(u_int32_t)];
     u_int32_t bytes_copied = 0;
-    for(unsigned int x=0; x<transferred_buffers.size(); x++){
-      std::memcpy(((unsigned char*)buffer)+bytes_copied,
-		  transferred_buffers[x], transferred_bytes[x]);
-      bytes_copied += transferred_bytes[x];
+    int alloc_size = blt_bytes*safety_factor;
+    buffer = new u_int32_t[alloc_size/sizeof(u_int32_t)];
+    for (auto& xfer : xfer_buffers) {
+      std::memcpy(((unsigned char*)buffer)+bytes_copied, xfer.first, xfer.second);
+      bytes_copied += xfer.second;
+      if (v != nullptr) v->push_back(xfer.second);
     }
+    blt_counts[count]++;
+    if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Local,
+        "Board %i funny buffer accumulation: %i/%i from %i BLTs",
+        fBID, bytes_copied, blt_bytes, count);
   }
-  for(unsigned int x=0;x<transferred_buffers.size(); x++)
-    delete[] transferred_buffers[x];
+  for (auto b : xfer_buffers) delete[] b.first;
   return blt_bytes;
-  
 }
 
 int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){
@@ -340,7 +357,7 @@ int V1724::SetThresholds(std::vector<u_int16_t> vals) {
 int V1724::End(){
   if(fBoardHandle>=0)
     CAENVME_End(fBoardHandle);
-  fBoardHandle=fLink=fCrate=fBID=-1;
+  fBoardHandle=fLink=fCrate=-1;
   fBaseAddress=0;
   return 0;
 }
