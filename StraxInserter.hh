@@ -80,6 +80,7 @@ private:
   std::map<int, std::map<std::string, int>> fFmt;
   std::map<int, int> fFailCounter;
   std::map<int, std::atomic_int> fDataPerChan;
+  std::map<int, long> fBufferCounter;
   std::atomic_int fBufferLength;
   long fBytesProcessed;
 
