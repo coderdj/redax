@@ -341,7 +341,7 @@ int DAQController::GetData(std::list<data_packet*> &retVec, unsigned num){
     fBufferMutex.unlock();
     return 0;
   }
-  if (num == 0) num == std::max(16, fBufferLength >> 4);
+  if (num == 0) num = std::max(16, fBufferLength >> 4);
   if (num == 0) {
     retVec.splice(retVec.end(), fBuffer);
     fBufferLength = 0;
