@@ -326,7 +326,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  char *fragmentindex = reinterpret_cast<char*> (&fragment_index);
 	  fragment.append(fragmentindex, 2);
 
-          char* bl = reinterpret_cast<char*>(&baseline);
+          char* bl = reinterpret_cast<char*>(&baseline_ch);
           fragment.append(bl, 2);
 
 	  // Copy the raw buffer
@@ -334,7 +334,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  fragment.append(data_loc, samples_this_channel*2);
     uint8_t zero_filler = 0;
     char *zero = reinterpret_cast<char*> (&zero_filler);
-	  while(fragment.size()<fFragmentLength+fStraxHeaderSize)
+	  while(fragment.size()<fFragmentBytes+fStraxHeaderSize)
 	    fragment.append(zero, 1); // int(0) != int("0")
 
 	  //copy(data_loc, data_loc+(samples_this_channel*2),&(fragment[31]));
