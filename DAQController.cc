@@ -30,8 +30,7 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fReadLoop = false;
   fNProcessingThreads=8;
   fBufferLength = 0;
-  fRawDataBuffer = NULL;
-  fDatasize=0.;
+  fDataRate=0.;
   fHostname = hostname;
 }
 
@@ -87,13 +86,6 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	}
 	fLog->Entry(MongoLog::Debug, "Initialized digitizer %i", d.board);
 	
-	if(digi->Reset()!=0){
-	  fLog->Entry(MongoLog::Error,
-		      "Digitizer %i unable to load pre-registers",
-		      digi->bid());
-	  fStatus = DAXHelpers::Idle;
-	  return -1;
-	}
     }
     else{
       delete digi;
@@ -181,6 +173,15 @@ int DAQController::Start(){
 
 int DAQController::Stop(){
 
+  fReadLoop = false; // at some point.
+  int counter = 0;
+  bool one_still_running = false;
+  do{
+    one_still_running = false;
+    for (auto& p : fRunning) one_still_running |= p.second;
+    if (one_still_running) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }while(one_still_running && counter++ < 10);
+  if (counter >= 10) fLog->Entry(MongoLog::Local, "Boards taking a while to clear");
   std::cout<<"Deactivating boards"<<std::endl;
   for( auto const& link : fDigitizers ){
     for(auto digi : link.second){
@@ -196,34 +197,29 @@ int DAQController::Stop(){
   }
   fLog->Entry(MongoLog::Debug, "Stopped digitizers");
 
-  fReadLoop = false; // at some point.
   fStatus = DAXHelpers::Idle;
   return 0;
 }
 
 void DAQController::End(){
   Stop();
-  fLog->Entry(MongoLog::Local, "Closing Processing Threads");
-  CloseProcessingThreads();
   fLog->Entry(MongoLog::Local, "Closing Digitizers");
   for( auto const& link : fDigitizers ){
     for(auto digi : link.second){
       digi->End();
       delete digi;
     }
-  } 
+  }
+  fLog->Entry(MongoLog::Local, "Closing Processing Threads");
+  CloseProcessingThreads();
   fDigitizers.clear();
   fStatus = DAXHelpers::Idle;
 
-  if(fRawDataBuffer != NULL){
+  if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
-		fRawDataBuffer->size());
-    for(unsigned int i=0; i<fRawDataBuffer->size(); i++){
-      delete[] (*fRawDataBuffer)[i].buff;
-      (*fRawDataBuffer)[i].buff = NULL;
-    }
-    delete fRawDataBuffer;
-    fRawDataBuffer = NULL;
+		fBuffer.size());
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
+    fBuffer.clear();
   }
 
   std::cout<<"Finished end"<<std::endl;
@@ -234,23 +230,23 @@ void DAQController::ReadData(int link){
   
   // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
   fBufferMutex.lock();
-  if(fRawDataBuffer != NULL){
+  if(fBuffer.size() != 0){
     fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
-    for(unsigned int x=0;x<fRawDataBuffer->size(); x++){
-      delete[] (*fRawDataBuffer)[x].buff;
-      (*fRawDataBuffer)[x].buff = NULL;
-    }
-    delete fRawDataBuffer;
-    fBufferLength=0;
-    fRawDataBuffer = NULL;
+    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
+    fBuffer.clear();
+    fBufferLength = 0;
+    fDataRate = 0;
+    fBufferSize = 0;
   }
   fBufferMutex.unlock();
   
-  u_int32_t lastRead = 0; // bytes read in last cycle. make sure we clear digitizers at run stop
   u_int32_t board_status = 0;
-  long int readcycler = 0;
+  int readcycler = 0;
   int err_val = 0;
-  std::vector<data_packet> local_buffer;
+  std::list<data_packet*> local_buffer;
+  data_packet* dp = nullptr;
+  int local_size;
+  fRunning[link] = true;
   while(fReadLoop){
     
     for(auto digi : fDigitizers[link]) {
@@ -275,42 +271,45 @@ void DAQController::ReadData(int link){
                                          digi->bid());
         }
       }
-      data_packet d;
-      d.buff=NULL;
-      d.size=0;
-      d.bid = digi->bid();
-      d.size = digi->ReadMBLT(d.buff);
-
-      lastRead += d.size;
-      
-      if(d.size<0){
-	//LOG ERROR
-	if(d.buff!=NULL){
-	  delete[] d.buff;
-          d.buff = NULL;
-        }
+      if (dp == nullptr) dp = new data_packet;
+      if((dp->size = digi->ReadMBLT(dp->buff, &dp->vBLT))<0){
+        if (dp->buff != nullptr) {
+	  delete[] dp->buff; // possible leak, catch here
+	  dp->buff = nullptr;
+          delete dp;
+          dp = nullptr;
+	}
 	break;
       }
-      if(d.size>0){
-	d.header_time = digi->GetHeaderTime(d.buff, d.size);
-	d.clock_counter = digi->GetClockCounter(d.header_time);
-	fDatasize += d.size;
-	local_buffer.push_back(d);
+      if(dp->size>0){
+        dp->bid = digi->bid();
+	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
+	dp->clock_counter = digi->GetClockCounter(dp->header_time);
+        local_buffer.push_back(dp);
+        local_size += dp->size;
+        dp = nullptr;
       }
     } // for digi in digitizers
-    if(local_buffer.size()!=0)
-      AppendData(local_buffer);
-    local_buffer.clear();
+    if (local_buffer.size() > 0) {
+      fBufferMutex.lock();
+      fBufferLength += local_buffer.size();
+      fBuffer.splice(fBuffer.end(), local_buffer); // clears local_buffer
+      fBufferSize += local_size;
+      fDataRate += local_size;
+      fBufferMutex.unlock();
+      local_size = 0;
+    }
     readcycler++;
     usleep(1);
   } // while run
-
+  fRunning[link] = false;
+  fLog->Entry(MongoLog::Local, "RO thread %i returning", link);
 }
 
-std::map<int, long> DAQController::GetDataPerChan(){
+std::map<int, int> DAQController::GetDataPerChan(){
   // Return a map of data transferred per channel since last update
   // Clears the private maps in the StraxInserters
-  std::map <int, long> retmap;
+  std::map <int, int> retmap;
   for (const auto& pt : fProcessingThreads)
     pt.inserter->GetDataPerChan(retmap);
   return retmap;
@@ -321,47 +320,59 @@ long DAQController::GetStraxBufferSize() {
       [=](long tot, processingThread pt) {return tot + pt.inserter->GetBufferSize();});
 }
 
+int DAQController::GetBufferLength() {
+  return fBufferLength.load() + std::accumulate(fProcessingThreads.begin(),
+      fProcessingThreads.end(), 0,
+      [](int tot, auto pt){return tot + pt.inserter->GetBufferLength();});
+}
+
 void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& retmap){
   for( auto const& link : fDigitizers )
     for(auto digi : link.second)
       retmap[digi->bid()] = digi->DataFormatDefinition;
 }
 
-void DAQController::AppendData(std::vector<data_packet> &d){
-  // Blocks!
-  fBufferMutex.lock();
-  if(fRawDataBuffer==NULL)
-    fRawDataBuffer = new std::vector<data_packet>();
-  fRawDataBuffer->insert( fRawDataBuffer->end(), d.begin(), d.end() );
-  u_int64_t bl = 0;
-  for(unsigned int x=0; x<fRawDataBuffer->size(); x++){
-    bl += (*fRawDataBuffer)[x].size;
-  }
-  fBufferLength = bl; 
-  fBufferMutex.unlock();  
-}
-
-int DAQController::GetData(std::vector <data_packet> *&retVec){
-  // Check once, is it worth locking mutex?
-  retVec=NULL;
-  if(fBufferLength==0)
-    return 0;
-  if(!fBufferMutex.try_lock())
-    return 0;
-
+int DAQController::GetData(std::list<data_packet*> &retVec, unsigned num){
+  if (fBufferLength == 0) return 0;
   int ret = 0;
-  // Check again, is there still data?
-  if(fRawDataBuffer != NULL && fRawDataBuffer->size()>0){
-
-    // Pass ownership to calling function
-    retVec = fRawDataBuffer;
-    fRawDataBuffer = NULL;
-
-    ret = retVec->size();
+  data_packet* dp = nullptr;
+  fBufferMutex.lock();
+  if (fBuffer.size() == 0) {
+    fBufferMutex.unlock();
+    return 0;
+  }
+  if (num == 0) num == std::max(16, fBufferLength >> 4);
+  if (num == 0) {
+    retVec.splice(retVec.end(), fBuffer);
     fBufferLength = 0;
+    ret = fBufferSize;
+    fBufferSize = 0;
+  } else {
+    do{
+      dp = fBuffer.front();
+      retVec.push_back(dp);
+      fBufferLength--;
+      fBufferSize -= dp->size;
+      ret += dp->size;
+    }while(fBuffer.size()>0 && retVec.size() < num);
   }
   fBufferMutex.unlock();
   return ret;
+}
+
+int DAQController::GetData(data_packet* &dp) {
+  if (fBufferLength == 0) return 0;
+  fBufferMutex.lock();
+  if (fBuffer.size() == 0) {
+    fBufferMutex.unlock();
+    return 0;
+  }
+  dp = fBuffer.front();
+  fBuffer.pop_front();
+  fBufferSize -= dp->size;
+  fBufferLength--;
+  fBufferMutex.unlock();
+  return 1;
 }
 
 bool DAQController::CheckErrors(){
@@ -398,15 +409,17 @@ int DAQController::OpenProcessingThreads(){
 
 void DAQController::CloseProcessingThreads(){
   std::map<int,int> board_fails;
-
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
     fProcessingThreads[i].inserter->Close(board_fails);
-    fProcessingThreads[i].pthread->join();
-
-    delete fProcessingThreads[i].pthread;
-    delete fProcessingThreads[i].inserter;
-   
+    // two stage process so there's time to clear data
   }
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  for(unsigned int i=0; i<fProcessingThreads.size(); i++){
+    delete fProcessingThreads[i].inserter;
+    fProcessingThreads[i].pthread->join();
+    delete fProcessingThreads[i].pthread;
+  }
+
   fProcessingThreads.clear();
   if (std::accumulate(board_fails.begin(), board_fails.end(), 0,
 	[=](int tot, std::pair<int,int> iter) {return tot + iter.second;})) {
@@ -519,18 +532,18 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   for (auto digi : digis) { // alloc ALL the things!
     bid = digi->bid();
     ch_this_digi = digi->GetNumChannels();
-    dac_values[bid] = vector<u_int16_t>(ch_this_digi);
-    channel_finished[bid] = vector<int>(ch_this_digi);
-    bl_per_channel[bid] = vector<vector<double>>(ch_this_digi, vector<double>(max_steps));
-    diff[bid] = vector<int>(ch_this_digi);
+    dac_values[bid] = vector<u_int16_t>(ch_this_digi, 0);
+    channel_finished[bid] = vector<int>(ch_this_digi, 0);
+    bl_per_channel[bid] = vector<vector<double>>(ch_this_digi, vector<double>(max_steps,0));
+    diff[bid] = vector<int>(ch_this_digi, 0);
   }
 
   bool done(false), redo_iter(false), fail(false), calibrate(true);
   double counts_total(0), counts_around_max(0), B,C,D,E,F, slope, yint, baseline;
   double fraction_around_max(0.8);
-  u_int32_t words_in_event, channel_mask, words_per_channel;
+  u_int32_t words_in_event, channel_mask, words_per_channel, idx;
   u_int16_t val0, val1;
-  int channels_in_event, idx;
+  int channels_in_event;
   auto beg_it = hist.begin(), max_it = hist.begin(), end_it = hist.end();
   auto max_start = max_it, max_end = max_it;
 
@@ -609,8 +622,9 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       std::this_thread::sleep_for(1ms);
 
       // readout
-      for (auto d : digis)
+      for (auto d : digis) {
         bytes_read[d->bid()] = d->ReadMBLT(buffers[d->bid()]);
+      }
 
       // decode
       if (std::any_of(bytes_read.begin(), bytes_read.end(),
@@ -619,15 +633,16 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
           if (bytes_read[d->bid()] < 0)
             fLog->Entry(MongoLog::Error, "Board %i has readout error in baselines",
                 d->bid());
-          return -2;
         }
+        std::for_each(buffers.begin(), buffers.end(), [](auto p){delete[] p.second;});
+        return -2;
       }
       if (std::any_of(bytes_read.begin(), bytes_read.end(), [=](auto p) {
             return (0 <= p.second) && (p.second <= 16);})) { // header-only readouts???
         fLog->Entry(MongoLog::Local, "Undersized readout");
         step--;
         steps_repeated++;
-        for (auto& p : buffers) delete[] p.second;
+        std::for_each(buffers.begin(), buffers.end(), [](auto p){delete[] p.second;});
         continue;
       }
 
@@ -635,7 +650,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       for (auto d : digis) {
         bid = d->bid();
         idx = 0;
-        while ((idx * sizeof(u_int32_t) < bytes_read[bid]) && (idx >= 0)) {
+        while ((idx * sizeof(u_int32_t) < bytes_read[bid])) {
           if ((buffers[bid][idx]>>28) == 0xA) {
             words_in_event = buffers[bid][idx]&0xFFFFFFF;
             if (words_in_event == 4) {
@@ -695,7 +710,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         } // end of while in buffer
       } // process per digi
       // cleanup buffers
-      for (auto& b : buffers) delete[] b.second;
+      for (auto p : buffers) delete[] p.second;
       if (redo_iter) {
         redo_iter = false;
         step--;

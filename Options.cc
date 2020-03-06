@@ -238,8 +238,12 @@ int Options::GetCrateOpt(CrateOptions &ret){
   // I think we can just hack the above getters to allow dot notation
   // for a more robust solution to access subdocuments
   try{
-    ret.s_in = bson_options["V2718"]["s_in"].get_int32().value;
-    ret.pulser_freq = bson_options["V2718"]["pulser_freq"].get_int32().value;
+    try{
+      ret.pulser_freq = float(bson_options["V2718"]["pulser_freq"].get_int32().value);
+    } catch(std::exception& e) {
+      ret.pulser_freq = bson_options["V2718"]["pulser_freq"].get_double().value;
+    }
+    ret.s_in = float(bson_options["V2718"]["s_in"].get_int32().value);
     ret.muon_veto = bson_options["V2718"]["muon_veto"].get_int32().value;
     ret.neutron_veto = bson_options["V2718"]["neutron_veto"].get_int32().value;
     ret.led_trigger = bson_options["V2718"]["led_trigger"].get_int32().value;
@@ -250,7 +254,7 @@ int Options::GetCrateOpt(CrateOptions &ret){
   return 0;
 }
 
-int Options::GetChannel(int bid, int cid){
+int16_t Options::GetChannel(int bid, int cid){
   std::string boardstring = std::to_string(bid);
   try{
     return bson_options["channels"][boardstring][cid].get_int32().value;

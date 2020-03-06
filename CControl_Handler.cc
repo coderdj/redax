@@ -107,7 +107,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   }else{
     fLog->Entry(MongoLog::Debug, "No V1495");
   }
-
+  fLog->Entry(MongoLog::Local, "Arm sequence finished");
   fStatus = DAXHelpers::Armed;
   return 0;
 
@@ -129,11 +129,13 @@ int CControl_Handler::DeviceStart(){
   }
 
   fStatus = DAXHelpers::Running;
+  fLog->Entry(MongoLog::Local, "Start sequence completed");
   return 0;
 }
 
 // Stopping the previously started devices; V2718, V1495, DDC10...
 int CControl_Handler::DeviceStop(){
+  fLog->Entry(MongoLog::Local, "Beginning stop sequence");
 
   // If V2718 here then send stop signal
   if(fV2718 != NULL){

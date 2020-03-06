@@ -248,7 +248,7 @@ int main(int argc, char** argv){
 	  }
 	  else
 	    logger->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
-	}
+	} else if (command == "quit") b_run = false;
       }
     }
     catch(const std::exception &e){
@@ -282,6 +282,7 @@ int main(int argc, char** argv){
     }
     usleep(1000000);
   }
+  delete controller;
   delete logger;
   exit(0);
   

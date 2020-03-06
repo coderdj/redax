@@ -34,7 +34,7 @@ struct RegisterType{
 };
 
 struct CrateOptions{
-  int pulser_freq;
+  float pulser_freq;
   int neutron_veto;
   int muon_veto;
   int led_trigger;
@@ -86,7 +86,7 @@ public:
   int GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs, std::vector<int>& bids);
   int GetCrateOpt(CrateOptions &ret);
   int GetHEVOpt(HEVOptions &ret);
-  int GetChannel(int bid, int cid);
+  int16_t GetChannel(int bid, int cid);
   int GetNestedInt(std::string path, int default_value);
   std::vector<u_int16_t> GetThresholds(int board);
 
