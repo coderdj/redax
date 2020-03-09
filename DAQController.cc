@@ -283,7 +283,6 @@ void DAQController::ReadData(int link){
       }
       if(dp->size>0){
         dp->bid = digi->bid();
-        fLog->Entry(MongoLog::Local, "BLT from %i : %i", digi->bid(), dp->bid);
 	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
 	dp->clock_counter = digi->GetClockCounter(dp->header_time);
         local_buffer.push_back(dp);
