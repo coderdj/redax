@@ -77,7 +77,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fOptions = options;
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
-  fFragmentBytes = fOptions->GetInt("strax_fragment_length", 110*2);
+  fFragmentBytes = fOptions->GetInt("strax_fragment_payload_bytes", 110*2);
   fCompressor = fOptions->GetString("compressor", "lz4");
   fHostname = hostname;
   std::string run_name = fOptions->GetString("run_identifier", "run");
@@ -286,47 +286,47 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	// bit because we want to allow also odd numbers of samples
 	// as FragmentLength
 	u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff);
-	u_int32_t samples_in_channel = channel_words<<1;
+	u_int32_t samples_in_pulse = channel_words<<1;
 	u_int32_t index_in_pulse = 0;
 	u_int32_t offset = idx*2;
 	u_int16_t fragment_index = 0;
+	u_int16_t sw = fmt["ns_per_sample"];
+        int fragment_samples = fFragmentBytes>>1;
 	int16_t cl = fOptions->GetChannel(dp->bid, channel);
-        fDataPerChan[cl] += samples_in_channel<<1;
+        fDataPerChan[cl] += samples_in_pulse<<1;
 	// Failing to discern which channel we're getting data from seems serious enough to throw
 	if(cl==-1)
 	  throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
           
 	
-	while(index_in_pulse < samples_in_channel){
+	while(index_in_pulse < samples_in_pulse){
 	  std::string fragment;
 	  
 	  // How long is this fragment?
-	  u_int32_t max_sample = index_in_pulse + fFragmentBytes/2;
-	  u_int32_t samples_this_channel = fFragmentBytes/2;
-	  if((unsigned int)(fFragmentBytes/2 + (fragment_index*fFragmentBytes/2)) >
-	     samples_in_channel){
-	    max_sample = index_in_pulse + (samples_in_channel -
-					    (fragment_index*fFragmentBytes/2));
-	    samples_this_channel = max_sample-index_in_pulse;
+	  u_int32_t max_sample = index_in_pulse + fragment_samples;
+	  u_int32_t samples_this_fragment = fragment_samples;
+	  if((unsigned int)(fragment_samples + (fragment_index*fragment_samples)) >
+	     samples_in_pulse){
+	    max_sample = index_in_pulse + (samples_in_pulse -
+					    (fragment_index*fragment_samples));
+	    samples_this_fragment = max_sample-index_in_pulse;
 	  }
+
+	  u_int64_t time_this_fragment = Time64 + fragment_samples*sw*fragment_index;
+	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
+	  fragment.append(pulseTime, 8);
+
+	  char *samplesinpulse = reinterpret_cast<char*> (&samples_in_pulse);
+	  fragment.append(samplesinpulse, 4);
+
+	  char *sampleWidth = reinterpret_cast<char*> (&sw);
+	  fragment.append(sampleWidth, 2);
 
 	  char *channelLoc = reinterpret_cast<char*> (&cl);
 	  fragment.append(channelLoc, 2);
 
-	  u_int16_t sw = fmt["ns_per_sample"];
-	  char *sampleWidth = reinterpret_cast<char*> (&sw);
-	  fragment.append(sampleWidth, 2);
-
-	  u_int64_t time_this_fragment = Time64 + (fFragmentBytes>>1)*sw*fragment_index;
-	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
-	  fragment.append(pulseTime, 8);
-
-	  //u_int32_t ft = fFragmentBytes/2;
-	  char *fragmenttime = reinterpret_cast<char*> (&samples_this_channel);
-	  fragment.append(fragmenttime, 4);
-
-	  char *samplesthischannel = reinterpret_cast<char*> (&samples_in_channel);
-	  fragment.append(samplesthischannel, 4);
+	  char *fragmentlength = reinterpret_cast<char*> (&samples_this_fragment);
+	  fragment.append(fragmentlength, 4);
 
 	  char *fragmentindex = reinterpret_cast<char*> (&fragment_index);
 	  fragment.append(fragmentindex, 2);
@@ -336,15 +336,12 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 
 	  // Copy the raw buffer
 	  const char *data_loc = reinterpret_cast<const char*>(&(payload[offset+index_in_pulse]));
-	  fragment.append(data_loc, samples_this_channel*2);
-    uint8_t zero_filler = 0;
-    char *zero = reinterpret_cast<char*> (&zero_filler);
+	  fragment.append(data_loc, samples_this_fragment*2);
+          uint8_t zero_filler = 0;
+          char *zero = reinterpret_cast<char*> (&zero_filler);
 	  while(fragment.size()<fFragmentBytes+fStraxHeaderSize)
 	    fragment.append(zero, 1); // int(0) != int("0")
 
-	  //copy(data_loc, data_loc+(samples_this_channel*2),&(fragment[31]));
-
-	  
 	  // Minor mess to maintain the same width of file names and do the pre/post stuff
 	  // If not in pre/post
 	  std::string chunk_index = std::to_string(chunk_id);
