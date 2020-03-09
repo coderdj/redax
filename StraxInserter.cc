@@ -290,6 +290,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	u_int32_t index_in_pulse = 0;
 	u_int32_t offset = idx*2;
 	u_int16_t fragment_index = 0;
+	u_int16_t sw = fmt["ns_per_sample"];
         int fragment_samples = fFragmentBytes>>1;
 	int16_t cl = fOptions->GetChannel(dp->bid, channel);
         fDataPerChan[cl] += samples_in_pulse<<1;
@@ -318,7 +319,6 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  char *samplesinpulse = reinterpret_cast<char*> (&samples_in_pulse);
 	  fragment.append(samplesinpulse, 4);
 
-	  u_int16_t sw = fmt["ns_per_sample"];
 	  char *sampleWidth = reinterpret_cast<char*> (&sw);
 	  fragment.append(sampleWidth, 2);
 
