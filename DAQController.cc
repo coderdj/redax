@@ -283,6 +283,7 @@ void DAQController::ReadData(int link){
       }
       if(dp->size>0){
         dp->bid = digi->bid();
+        fLog->Entry(MongoLog::Local, "BLT from %i : %i", digi->bid(), dp->bid);
 	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
 	dp->clock_counter = digi->GetClockCounter(dp->header_time);
         local_buffer.push_back(dp);
@@ -341,20 +342,19 @@ int DAQController::GetData(std::list<data_packet*> &retVec, unsigned num){
     fBufferMutex.unlock();
     return 0;
   }
-  if (num == 0) num = std::max(16, fBufferLength >> 4);
+  if (num == 0) num = std::min(std::max(16, fBufferLength >> 4), fBuffer.size());
   if (num == 0) {
     retVec.splice(retVec.end(), fBuffer);
     fBufferLength = 0;
     ret = fBufferSize;
     fBufferSize = 0;
   } else {
-    do{
-      dp = fBuffer.front();
-      retVec.push_back(dp);
+    retVec.splice(retVec.end(), fBuffer.begin(), fBuffer.begin()+num);
+    for (const auto p : retVec) {
       fBufferLength--;
       fBufferSize -= dp->size;
       ret += dp->size;
-    }while(fBuffer.size()>0 && retVec.size() < num);
+    }
   }
   fBufferMutex.unlock();
   return ret;
