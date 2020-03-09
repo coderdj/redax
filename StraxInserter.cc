@@ -337,8 +337,8 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  // Copy the raw buffer
 	  const char *data_loc = reinterpret_cast<const char*>(&(payload[offset+index_in_pulse]));
 	  fragment.append(data_loc, samples_this_fragment*2);
-    uint8_t zero_filler = 0;
-    char *zero = reinterpret_cast<char*> (&zero_filler);
+          uint8_t zero_filler = 0;
+          char *zero = reinterpret_cast<char*> (&zero_filler);
 	  while(fragment.size()<fFragmentBytes+fStraxHeaderSize)
 	    fragment.append(zero, 1); // int(0) != int("0")
 
