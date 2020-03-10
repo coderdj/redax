@@ -63,6 +63,7 @@ StraxInserter::~StraxInserter(){
     prefix = ' ';
     num = fBytesProcessed/(1.);
   }
+  if (fBufferCounter.empty()) return;
   fLog->Entry(MongoLog::Local, "Processed %.1f %cB in %.1f s, compresssed it in %.1f s",
       num, prefix, fProcTime.count()*1e-6, fCompTime.count()*1e-6);
   std::stringstream msg;
@@ -414,7 +415,6 @@ int StraxInserter::ReadAndInsertData(){
         b.clear();
       } else {
         std::this_thread::sleep_for(sleep_time);
-        fBufferCounter[0]++;
       }
     }
   } else {
@@ -430,7 +430,6 @@ int StraxInserter::ReadAndInsertData(){
         fProcTime += duration_cast<microseconds>(proc_end - proc_start);
       } else {
         std::this_thread::sleep_for(sleep_time);
-        fBufferCounter[0]++;
       }
     }
   }

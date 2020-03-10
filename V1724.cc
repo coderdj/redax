@@ -59,13 +59,14 @@ V1724::V1724(MongoLog  *log, Options *options){
 
 V1724::~V1724(){
   End();
+  if (fBLTCounter.empty()) return;
   std::stringstream msg;
   msg << "BLT report for board " << fBID << "(BLT " << BLT_SIZE << "): ";
   for (auto p : fBLTCounter) {
-    msg << p.first << " (";
+    msg << p.first << " ";
     for (int i = 63; i >= 0; i--) {
       if (p.second & (1L << i)) { // log2
-        msg << i << ") | ";
+        msg << i << " | ";
         break;
       }
     }
