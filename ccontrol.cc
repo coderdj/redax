@@ -6,6 +6,10 @@
 #include <limits.h>
 #include <unistd.h>
 
+#include <mongocxx/instance.hpp>
+#include <bsoncxx/builder/stream/document.hpp>
+#include <bsoncxx/json.hpp>
+
 int main(int argc, char** argv){
   
   mongocxx::instance instance{};
@@ -15,7 +19,7 @@ int main(int argc, char** argv){
     std::cout<<"Where MONGO_URI is the URI of the command DB"<<std::endl;
     return -1;
   }
-  std::string dbname = "xenonnt";
+  std::string dbname = "daq";
   if(argc >=3)
     dbname = argv[3];
 
@@ -118,7 +122,7 @@ int main(int argc, char** argv){
 	 delete options;
 	 options = NULL;
        }
-       options = new Options(logger, mode, options_collection, dac_collection, override_json);
+       options = new Options(logger, mode, mongo_uri, dbname, override_json);
 	 
        // Initialise the V2178, V1495 and DDC10...etc.      
        if(fHandler->DeviceArm(run, options) != 0){

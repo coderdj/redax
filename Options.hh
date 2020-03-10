@@ -7,14 +7,10 @@
 #include <streambuf>
 #include <iostream>
 #include <stdexcept>
-#include <bsoncxx/array/view.hpp>
-#include <bsoncxx/types.hpp>
-#include <bsoncxx/json.hpp>
 #include <bsoncxx/document/view.hpp>
 #include <bsoncxx/document/value.hpp>
-#include <bsoncxx/builder/stream/document.hpp>
-#include <bsoncxx/exception/exception.hpp>
 #include <mongocxx/collection.hpp>
+#include <mongocxx/client.hpp>
 
 struct BoardType{
   int link;
@@ -67,12 +63,11 @@ class MongoLog;
 class Options{
 
 public:
-  Options(MongoLog *log, std::string name, mongocxx::collection opts_collection,
-          mongocxx::collection dac_collection, std::string override_opts);
+  Options(MongoLog *log, std::string name, std::string suri,
+  	std::string dbname, std::string override_opts);
   ~Options();
 
-  int Load(std::string name, mongocxx::collection opts_collection,
-          std::string override_opts);
+  int Load(std::string name, mongocxx::collection& opts_collection, std::string override_opts);
   int Override(bsoncxx::document::view override_opts);
   std::string ExportToString();
   
@@ -92,6 +87,7 @@ public:
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
 private:
+  mongocxx::client fClient;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   MongoLog *fLog;

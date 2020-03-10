@@ -34,7 +34,7 @@ public:
   int InitializeElectronics(Options *options, std::vector<int> &keys);
 
   int status(){return fStatus;}
-  int GetBufferLengths();
+  int GetBufferLength();
   std::string run_mode();
   
   int Start();

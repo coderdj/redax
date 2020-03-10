@@ -2,6 +2,9 @@
 #include <experimental/filesystem>
 #include <iostream>
 #include <chrono>
+#include <mongocxx/uri.hpp>
+#include <mongocxx/database.hpp>
+#include <bsoncxx/builder/stream/document.hpp>
 
 MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays){
   fLogLevel = 0;
@@ -127,7 +130,6 @@ int MongoLog::Entry(int priority, std::string message, ...){
 				  "message" << message <<
 				  "priority" << priority <<
 				  bsoncxx::builder::stream::finalize);
-      //std::cout<<"("<<priority<<"): "<<message<<std::endl;
     }
     catch(const std::exception &e){
       std::cout<<"Failed to insert log message "<<message<<" ("<<

@@ -11,24 +11,31 @@
 #include <chrono>
 #include <thread>
 
-bool b_run = true;
+#include <mongocxx/instance.hpp>
+#include <bsoncxx/builder/stream/document.hpp>
+#include <bsoncxx/json.hpp>
+
+std::atomic_bool b_run = true;
 std::string hostname = "";
 
 void SignalHandler(int signum) {
-    std::cout << "Received signal "<<signum<<std::endl;
+    std::cout << "\nReceived signal "<<signum<<std::endl;
     b_run = false;
     return;
 }
 
-void UpdateStatus(mongocxx::collection& status, DAQController* controller) {
-  while (b_run) {
+void UpdateStatus(std::string suri, std::string dbname, DAQController* controller) {
+  mongocxx::uri uri(suri);
+  mongocxx::client c(uri);
+  mongocxx::collection status = c[dbname]["status"];
+  while (b_run == true) {
     try{
       // Put in status update document
       auto insert_doc = bsoncxx::builder::stream::document{};
       insert_doc << "host" << hostname <<
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
-	"buffer_length" << controller->GetBufferLengths() <<
+	"buffer_length" << controller->GetBufferLength() <<
         "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
 	"run_mode" << controller->run_mode() <<
 	"channels" << bsoncxx::builder::stream::open_document <<
@@ -103,11 +110,11 @@ int main(int argc, char** argv){
   // boards and tracking the status
   DAQController *controller = new DAQController(logger, hostname);
   std::vector<std::thread*> readoutThreads;
-  std::thread status_update(&UpdateStatus, std::ref(status), controller);
+  std::thread status_update(&UpdateStatus, suri, dbname, controller);
   
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
-  while(b_run){
+  while(b_run == true){
 
     // Try to poll for commands
     bsoncxx::stdx::optional<bsoncxx::document::value> querydoc;
@@ -241,7 +248,7 @@ int main(int argc, char** argv){
 	      fOptions = NULL;
 	    }
 	    fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
-				   options_collection, dac_collection, override_json);
+				   suri, dbname, override_json);
 	    std::vector<int> links;
 	    if(controller->InitializeElectronics(fOptions, links) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");

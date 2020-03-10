@@ -2,12 +2,22 @@
 #include "DAXHelpers.hh"
 #include "MongoLog.hh"
 
+#include <mongocxx/uri.hpp>
+#include <mongocxx/database.hpp>
+#include <bsoncxx/array/view.hpp>
+#include <bsoncxx/types.hpp>
+#include <bsoncxx/json.hpp>
+#include <bsoncxx/builder/stream/document.hpp>
+#include <bsoncxx/exception/exception.hpp>
+
 Options::Options(MongoLog *log, std::string options_name,
-          mongocxx::collection opts_collection,
-          mongocxx::collection dac_collection, std::string override_opts){
+          std::string suri, std::string dbname, std::string override_opts){
   bson_value = NULL;
   fLog = log;
-  fDAC_collection = dac_collection;
+  mongocxx::uri uri{suri};
+  fClient = mongocxx::client{uri};
+  fDAC_collection = fClient[dbname]["dac_calibration"];
+  mongocxx::collection opts_collection = fClient[dbname]["options"];
   if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
 }
@@ -24,7 +34,7 @@ std::string Options::ExportToString(){
   return ret;
 }
 
-int Options::Load(std::string name, mongocxx::collection opts_collection,
+int Options::Load(std::string name, mongocxx::collection& opts_collection,
 	std::string override_opts){
   // Try to pull doc from DB
   bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
