@@ -6,6 +6,7 @@
 #include "DDC10.hh"
 #include "V1495.hh"
 #include <vector>
+#include <bsoncxx/builder/stream/document.hpp>
 
 CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
   fOptions = NULL;

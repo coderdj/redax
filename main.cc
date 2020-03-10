@@ -8,13 +8,49 @@
 #include "MongoLog.hh"
 #include "Options.hh"
 #include <limits.h>
+#include <chrono>
+#include <thread>
 
-bool b_run = true;
+#include <mongocxx/instance.hpp>
+#include <bsoncxx/builder/stream/document.hpp>
+#include <bsoncxx/json.hpp>
+
+std::atomic_bool b_run = true;
+std::string hostname = "";
 
 void SignalHandler(int signum) {
-    std::cout << "Received signal "<<signum<<std::endl;
+    std::cout << "\nReceived signal "<<signum<<std::endl;
     b_run = false;
     return;
+}
+
+void UpdateStatus(std::string suri, std::string dbname, DAQController* controller) {
+  mongocxx::uri uri(suri);
+  mongocxx::client c(uri);
+  mongocxx::collection status = c[dbname]["status"];
+  while (b_run == true) {
+    try{
+      // Put in status update document
+      auto insert_doc = bsoncxx::builder::stream::document{};
+      insert_doc << "host" << hostname <<
+	"rate" << controller->GetDataSize()/1e6 <<
+	"status" << controller->status() <<
+	"buffer_length" << controller->GetBufferLength() <<
+        "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
+	"run_mode" << controller->run_mode() <<
+	"channels" << bsoncxx::builder::stream::open_document <<
+	[&](bsoncxx::builder::stream::key_context<> doc){
+	for( auto const& pair : controller->GetDataPerChan() )
+	  doc << std::to_string(pair.first) << (pair.second>>10); // KB not MB
+	} << bsoncxx::builder::stream::close_document;
+	status.insert_one(insert_doc << bsoncxx::builder::stream::finalize);
+    }catch(const std::exception &e){
+      std::cout<<"Can't connect to DB to update."<<std::endl;
+      std::cout<<e.what()<<std::endl;
+    }
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+  }
+  std::cout<<"Status update returning\n";
 }
 
 int main(int argc, char** argv){
@@ -35,14 +71,14 @@ int main(int argc, char** argv){
     std::cout<<"...exiting"<<std::endl;
     exit(0);
   }
-  std::string dbname = "xenonnt";
+  std::string dbname = "daq";
   if(argc >= 4)
     dbname = argv[3];
 
   // We will consider commands addressed to this PC's ID 
   char chostname[HOST_NAME_MAX];
   gethostname(chostname, HOST_NAME_MAX);
-  std::string hostname=chostname;
+  hostname=chostname;
   hostname+= "_reader_";
   std::string sid = argv[1];
   hostname += sid;
@@ -72,12 +108,13 @@ int main(int argc, char** argv){
   
   // The DAQController object is responsible for passing commands to the
   // boards and tracking the status
-  DAQController *controller = new DAQController(logger, hostname);  
+  DAQController *controller = new DAQController(logger, hostname);
   std::vector<std::thread*> readoutThreads;
+  std::thread status_update(&UpdateStatus, suri, dbname, controller);
   
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
-  while(b_run){
+  while(b_run == true){
 
     // Try to poll for commands
     bsoncxx::stdx::optional<bsoncxx::document::value> querydoc;
@@ -211,7 +248,7 @@ int main(int argc, char** argv){
 	      fOptions = NULL;
 	    }
 	    fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
-				   options_collection, dac_collection, override_json);
+				   suri, dbname, override_json);
 	    std::vector<int> links;
 	    if(controller->InitializeElectronics(fOptions, links) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
@@ -258,34 +295,13 @@ int main(int argc, char** argv){
 
     // Insert some information on this readout node back to the monitor DB
     controller->CheckErrors();
-
-    try{
-
-      // Put in status update document
-      auto insert_doc = bsoncxx::builder::stream::document{};
-      insert_doc << "host" << hostname <<
-	"rate" << controller->GetDataSize()/1e6 <<
-	"status" << controller->status() <<
-	"buffer_length" << controller->buffer_length()/1e6 <<
-        "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
-	"run_mode" << controller->run_mode() <<
-	"current_run_id" << current_run_id <<
-	"channels" << bsoncxx::builder::stream::open_document <<
-	[&](bsoncxx::builder::stream::key_context<> doc){
-	for( auto const& pair : controller->GetDataPerChan() )
-	  doc << std::to_string(pair.first) << (pair.second>>10); // KB not MB
-	} << bsoncxx::builder::stream::close_document;
-	status.insert_one(insert_doc << bsoncxx::builder::stream::finalize);
-    }catch(const std::exception &e){
-      std::cout<<"Can't connect to DB to update."<<std::endl;
-      std::cout<<e.what()<<std::endl;
-    }
-    usleep(1000000);
+    std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
+  status_update.join();
   delete controller;
+  if (fOptions != NULL) delete fOptions;
   delete logger;
   exit(0);
-  
 
 }
 

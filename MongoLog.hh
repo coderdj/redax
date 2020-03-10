@@ -15,11 +15,7 @@
 #include <thread>
 
 #include <mongocxx/client.hpp>
-#include <mongocxx/uri.hpp>
-#include <mongocxx/instance.hpp>
-#include <mongocxx/database.hpp>
 #include <mongocxx/collection.hpp>
-#include <bsoncxx/builder/stream/document.hpp>
 
 /* 
    A brief treatise on log priorities. 
