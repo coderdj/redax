@@ -141,6 +141,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
   u_int32_t *buff = dp->buff;
   int smallest_latest_index_seen = -1;
   const int event_header_words = 4;
+  u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
   
   u_int32_t idx = 0;
   std::map<std::string, int> fmt = fFmt[dp->bid];
@@ -185,7 +186,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	u_int32_t channel_time = event_time;
 	u_int32_t channel_timeMSB = 0;
 	u_int16_t baseline_ch = 0;
-  bool whoops = false;
+        bool whoops = false;
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
 	if(fmt["channel_header_words"] > 0){
@@ -259,7 +260,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
 	// 48 bits this line would be different
 	int iBitShift = 31;
-	int64_t Time64 ;
+	int64_t Time64;
 
 	 if (fmt["channel_time_msb_idx"] == 2) { 
 	   Time64 = fmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
@@ -269,17 +270,6 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 					      iBitShift) + channel_time); // in ns
 	   }
 	
-	// Get the CHUNK and decide if this event also goes into a PRE/POST file
-	u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
-	u_int64_t chunk_id = u_int64_t(Time64/fFullChunkLength);
-	
-	// Check if this is the smallest_latest_index_seen
-	if(smallest_latest_index_seen == -1 || int(chunk_id) < smallest_latest_index_seen)
-	  smallest_latest_index_seen = chunk_id;
-	
-        bool nextpre = (chunk_id+1)* fFullChunkLength - Time64 < fChunkOverlap;
-	//if(((chunk_id+1)*fFullChunkLength)-Time64 < fChunkOverlap)
-	//  nextpre=true;
 
 	// We're now at the first sample of the channel's waveform. This
 	// will be beautiful. First we reinterpret the channel as 16
@@ -288,7 +278,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff);
 	u_int32_t samples_in_pulse = channel_words<<1;
 	u_int32_t index_in_pulse = 0;
-	u_int32_t offset = idx*2;
+	u_int32_t offset = idx<<1;
 	u_int16_t fragment_index = 0;
 	u_int16_t sw = fmt["ns_per_sample"];
         int fragment_samples = fFragmentBytes>>1;
@@ -342,6 +332,14 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  while(fragment.size()<fFragmentBytes+fStraxHeaderSize)
 	    fragment.append(zero, 1); // int(0) != int("0")
 
+	  // Get the CHUNK and decide if this event also goes into a PRE/POST file
+	  int chunk_id = time_this_fragment/fFullChunkLength;
+	
+	  // Check if this is the smallest_latest_index_seen
+	  if(smallest_latest_index_seen == -1 || chunk_id < smallest_latest_index_seen)
+	    smallest_latest_index_seen = chunk_id;
+	
+          bool nextpre = (chunk_id+1)* fFullChunkLength - time_this_fragment < fChunkOverlap;
 	  // Minor mess to maintain the same width of file names and do the pre/post stuff
 	  // If not in pre/post
 	  std::string chunk_index = std::to_string(chunk_id);
@@ -349,7 +347,8 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	    chunk_index.insert(0, "0");
 
 	  if(!nextpre){
-	    if(fFragments.find(chunk_index) == fFragments.end()){
+//            if (fFragments.contains(chunk_index)){// c++20 feature not in c++17 :(
+	    if(fFragments.count(chunk_index) == 0){
 	      fFragments[chunk_index] = new std::string();
 	    }
 	    fFragments[chunk_index]->append(fragment);
@@ -360,13 +359,13 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	    while(nextchunk_index.size() < fChunkNameLength)
 	      nextchunk_index.insert(0, "0");
 
-	    if(fFragments.find(nextchunk_index+"_pre") == fFragments.end()){
+	    if(fFragments.count(nextchunk_index+"_pre") == 0){
 	      fFragments[nextchunk_index+"_pre"] = new std::string();
 	    }
 	    fFragments[nextchunk_index+"_pre"]->append(fragment);
             fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
 
-	    if(fFragments.find(chunk_index+"_post") == fFragments.end()){
+	    if(fFragments.count(chunk_index+"_post") == 0){
 	      fFragments[chunk_index+"_post"] = new std::string();
 	    }
 	    fFragments[chunk_index+"_post"]->append(fragment);
