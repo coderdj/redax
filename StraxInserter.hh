@@ -44,7 +44,7 @@ public:
   StraxInserter();
   ~StraxInserter();
   
-  int  Initialize(Options *options, MongoLog *log, int bid
+  int  Initialize(Options *options, MongoLog *log, int bid,
 		  DAQController *dataSource, std::string hostname);
   void Close(std::map<int,int>& ret);
   

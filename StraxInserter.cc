@@ -78,6 +78,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, int bid,
   fOptions = options;
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
+  fFullChunkLength = fChunkLength+fChunkOverlap;
   fFragmentBytes = fOptions->GetInt("strax_fragment_payload_bytes", 110*2);
   fCompressor = fOptions->GetString("compressor", "lz4");
   fHostname = hostname;
@@ -118,7 +119,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, int bid,
 
 void StraxInserter::Close(std::map<int,int>& ret){
   fActive = false;
-  for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
+  ret[fBID] = fFailCounter;
 }
 
 long StraxInserter::GetBufferSize() {
@@ -136,7 +137,7 @@ void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
   return;
 }
 
-int64_t StraxInserter::HandleClockRollover(int ch, u_int32_t ts) {
+int64_t StraxInserter::HandleClockRollovers(int ch, u_int32_t ts) {
   // note ch==0 means event timestamp
   // ch==1 means ch0, etc
   if (fLastTimeSeen[ch] < ts) {
@@ -169,7 +170,7 @@ void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp) {
   int16_t baseline = 0;
   fragment.append((char*)&baseline, 2);
   int8_t zero = 0;
-  while (fragment.size < fFragmentBytes)
+  while (fragment.size() < fFragmentBytes)
     fragment.append((char*)&zero, 1);
   AddFragmentToBuffer(fragment, timestamp);
   return;
@@ -184,7 +185,6 @@ void StraxInserter::ParseDocuments(data_packet* dp){
   u_int32_t *buff = dp->buff;
   int smallest_latest_index_seen = -1;
   const int event_header_words = 4;
-  u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
   
   u_int32_t idx = 0;
   int64_t event_time_abs = 0;
@@ -284,7 +284,6 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
 	// 48 bits this line would be different
-	int iBitShift = 31;
 	int64_t Time64;
 
 	if (fFmt["channel_time_msb_idx"] == 2) { 
@@ -399,7 +398,7 @@ int StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp)
       nextchunk_index.insert(0, "0");
 
     if(fFragments.count(nextchunk_index+"_pre") == 0){
-      Fragments[nextchunk_index+"_pre"] = new std::string();
+      fFragments[nextchunk_index+"_pre"] = new std::string();
     }
     fFragments[nextchunk_index+"_pre"]->append(fragment);
     fFragmentSize[nextchunk_index+"_pre"] += fragment.size();

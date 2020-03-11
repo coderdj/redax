@@ -29,7 +29,6 @@ DAQController::DAQController(MongoLog *log, std::string hostname){
   fStatus = DAXHelpers::Idle;
   fReadLoop = false;
   fNProcessingThreads=8;
-  fBufferLength = 0;
   fDataRate=0.;
   fHostname = hostname;
 }
@@ -88,7 +87,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	fBufferSize[digi->bid()] = 0;
         fBufferLength[digi->bid()] = 0;
         fBuffer[digi->bid()] = std::queue<data_packet*>();
-        fBufferMutex[digi->bid()] = std::mutex();
+        //fBufferMutex[digi->bid()] = std::mutex(); // no operator=
     }
     else{
       delete digi;
@@ -218,11 +217,13 @@ void DAQController::End(){
   fDigitizers.clear();
   fStatus = DAXHelpers::Idle;
 
-  if(fBuffer.size() != 0){
-    fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
-		fBuffer.size());
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
-    fBuffer.clear();
+  for (auto& p : fBuffer) {
+    if(p.second.size() != 0){
+      fLog->Entry(MongoLog::Warning, "Deleting uncleared buffer of size %i from board %i",
+		p.second.size(), p.first);
+      std::for_each(p.second.begin(), p.second.end(), [](auto dp){delete dp;});
+      p.second.clear();
+    }
   }
 
   std::cout<<"Finished end"<<std::endl;
@@ -232,21 +233,22 @@ void DAQController::ReadData(int link){
   fReadLoop = true;
   
   // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
-  fBufferMutex.lock();
-  if(fBuffer.size() != 0){
-    fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
-    fBuffer.clear();
-    fBufferLength = 0;
-    fDataRate = 0;
-    fBufferSize = 0;
+
+  for (auto digi : fDigitizers[link]) {
+    fBufferMutex[digi->bid()].lock();
+    if(fBuffer[digi->bid()].size() != 0){
+      fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
+      std::for_each(fBuffer[digi->bid()].begin(), fBuffer[digi->bid()].end(),
+          [](auto dp){delete dp;});
+      fBuffer[digi->bid()].clear();
+      fDataRate = 0;
+    }
+    fBufferMutex[digi->bid()].unlock();
   }
-  fBufferMutex.unlock();
   
   u_int32_t board_status = 0;
   int readcycler = 0;
   int err_val = 0;
-  std::queue<data_packet*> local_buffer;
   data_packet* dp = nullptr;
   fRunning[link] = true;
   while(fReadLoop){
@@ -328,7 +330,6 @@ std::map<std::string, int> DAQController::GetDataFormat(int bid){
 int DAQController::GetData(std::queue<data_packet*> &retQ, int bid){
   if (fBufferLength[bid] == 0) return 0;
   int ret = 0;
-  data_packet* dp = nullptr;
   // let's use a fancy raii lock guard that unlocks when it goes out of scope
   const std::lock_guard<std::mutex> lock(fBufferMutex[bid]);
   if (fBuffer[bid].size() == 0) return 0;
