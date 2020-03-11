@@ -93,8 +93,8 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, int bid,
   fErrorBit = false;
   fBytesProcessed = 0;
   int max_channels = 16;
-  mLastTimeSeen = std::vector<u_int32_t>(max_channels+1, 0);
-  mClockRollovers = std::vector<long>(max_channels+1, 0);
+  fLastTimeSeen = std::vector<u_int32_t>(max_channels+1, 0);
+  fClockRollovers = std::vector<long>(max_channels+1, 0);
   // we add 1 to the size to also track the event timestamp
 
   fProcTime = std::chrono::microseconds(0);
@@ -152,6 +152,7 @@ int64_t StraxInserter::HandleClockRollovers(int ch, u_int32_t ts) {
         fBID, ch, fLastTimeSeen[ch], ts, fClockRollovers[ch]);
   }
   fLastTimeSeen[ch] = ts;
+  iBitShift = 31;
   return (fClockRollovers[ch] << iBitShift) + ts;
 }
 

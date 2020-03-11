@@ -221,30 +221,22 @@ void DAQController::End(){
     if(p.second.size() != 0){
       fLog->Entry(MongoLog::Warning, "Deleting uncleared buffer of size %i from board %i",
 		p.second.size(), p.first);
-      std::for_each(p.second.begin(), p.second.end(), [](auto dp){delete dp;});
-      p.second.clear();
+      while (p.second.size() > 0) {
+        data_packet* dp = p.front();
+        delete dp;
+      }
     }
   }
+  fBuffer.clear();
+  fBufferSize.clear();
+  fBufferLength.clear();
+  fBoardMap.clear();
 
   std::cout<<"Finished end"<<std::endl;
 }
 
 void DAQController::ReadData(int link){
   fReadLoop = true;
-  
-  // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
-
-  for (auto digi : fDigitizers[link]) {
-    fBufferMutex[digi->bid()].lock();
-    if(fBuffer[digi->bid()].size() != 0){
-      fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
-      std::for_each(fBuffer[digi->bid()].begin(), fBuffer[digi->bid()].end(),
-          [](auto dp){delete dp;});
-      fBuffer[digi->bid()].clear();
-      fDataRate = 0;
-    }
-    fBufferMutex[digi->bid()].unlock();
-  }
   
   u_int32_t board_status = 0;
   int readcycler = 0;
@@ -292,7 +284,7 @@ void DAQController::ReadData(int link){
         fBuffer[dp->bid].push(dp);
         fBufferSize[dp->bid] += dp->size;
         fDataRate += dp->size;
-        fBufferMutex.unlock();
+        fBufferMutex[dp->bid].unlock();
         dp = nullptr;
       }
     } // for digi in digitizers
@@ -318,9 +310,13 @@ long DAQController::GetStraxBufferSize() {
 }
 
 int DAQController::GetBufferLength() {
-  return fBufferLength.load() + std::accumulate(fProcessingThreads.begin(),
+  int redax_buffer = std::accumulate(fBufferLength.begin(), fBufferLength.end(), 0,
+      [&](int tot, std::atomic_int& l) {return tot + l.load();});
+
+  int strax_buffer = std::accumulate(fProcessingThreads.begin(),
       fProcessingThreads.end(), 0,
       [](int tot, auto pt){return tot + pt.inserter->GetBufferLength();});
+  return redax_buffer + strax_buffer;
 }
 
 std::map<std::string, int> DAQController::GetDataFormat(int bid){
