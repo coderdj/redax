@@ -457,6 +457,7 @@ int StraxInserter::ReadAndInsertData(){
   }
   if(haddata)
     WriteOutFiles(1000000, true);
+  fDataPerChan.clear();
   fRunning = false;
   return 0;
 }
