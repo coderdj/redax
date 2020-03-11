@@ -9,7 +9,7 @@
 #include <cstdarg>
 #include <numeric>
 #include <sstream>
-#include <list>
+#include <queue>
 
 namespace fs=std::experimental::filesystem;
 
@@ -27,23 +27,23 @@ StraxInserter::StraxInserter(){
   fMissingVerified = 0;
   fOutputPath = "";
   fChunkNameLength = 6;
-  fThreadId = std::this_thread::get_id();
   fBytesProcessed = 0;
+  fBID = -1;
 }
 
 StraxInserter::~StraxInserter(){
   fActive = false;
   int counter_short = 0, counter_long = 0;
-  fLog->Entry(MongoLog::Local, "Thread %x waiting to stop, has %i events left",
-      fThreadId, fBufferLength.load());
+  fLog->Entry(MongoLog::Local, "Board %i processor waiting to stop, has %i events left",
+      fBID, fBufferLength.load());
   int events_start = fBufferLength.load();
   do{
     events_start = fBufferLength.load();
     while (fRunning && counter_short++ < 500)
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     if (counter_short >= 500)
-      fLog->Entry(MongoLog::Message, "Thread %x taking a while to stop, still has %i evts",
-          fThreadId, fBufferLength.load());
+      fLog->Entry(MongoLog::Message, "Board %i processor taking a while to stop, still has %i evts",
+          fBID, fBufferLength.load());
   } while (fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
   char prefix = ' ';
   float num = 0.;
@@ -64,8 +64,8 @@ StraxInserter::~StraxInserter(){
     num = fBytesProcessed/(1.);
   }
   if (fBufferCounter.empty()) return;
-  fLog->Entry(MongoLog::Local, "Processed %.1f %cB in %.1f s, compresssed it in %.1f s",
-      num, prefix, fProcTime.count()*1e-6, fCompTime.count()*1e-6);
+  fLog->Entry(MongoLog::Local, "BID %i processed %.1f %cB in %.1f s, compresssed in %.1f s",
+      fBID, num, prefix, fProcTime.count()*1e-6, fCompTime.count()*1e-6);
   std::stringstream msg;
   msg << "BL report: ";
   for (auto p : fBufferCounter)
@@ -73,8 +73,8 @@ StraxInserter::~StraxInserter(){
   fLog->Entry(MongoLog::Local, msg.str());
 }
 
-int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
-			      std::string hostname){
+int StraxInserter::Initialize(Options *options, MongoLog *log, int bid,
+    DAQController *dataSource, std::string hostname){
   fOptions = options;
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
@@ -83,11 +83,18 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fHostname = hostname;
   std::string run_name = fOptions->GetString("run_identifier", "run");
 
+  fBID = bid;
+
   fMissingVerified = 0;
   fDataSource = dataSource;
-  dataSource->GetDataFormat(fFmt);
+  fFmt = dataSource->GetDataFormat(bid);
   fLog = log;
   fErrorBit = false;
+  fBytesProcessed = 0;
+  int max_channels = 16;
+  mLastTimeSeen = std::vector<u_int32_t>(max_channels+1, 0);
+  mClockRollovers = std::vector<long>(max_channels+1, 0);
+  // we add 1 to the size to also track the event timestamp
 
   fProcTime = std::chrono::microseconds(0);
   fCompTime = std::chrono::microseconds(0);
@@ -129,14 +136,49 @@ void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
   return;
 }
 
+int64_t StraxInserter::HandleClockRollover(int ch, u_int32_t ts) {
+  // note ch==0 means event timestamp
+  // ch==1 means ch0, etc
+  if (fLastTimeSeen[ch] < ts) {
+    // this TS larger than last TS, no rollover
+  } else if (fLastTimeSeen[ch] > ts) {
+    // this TS smaller than last TS, rollover
+    fClockRollovers[ch]++;
+  } else {
+    // timestamps the same??
+    fLog->Entry(MongoLog::Warning,
+        "Something odd in timestamps on %i/%i: last %i, this %i, rollovers %i",
+        fBID, ch, fLastTimeSeen[ch], ts, fClockRollovers[ch]);
+  }
+  fLastTimeSeen[ch] = ts;
+  return (fClockRollovers[ch] << iBitShift) + ts;
+}
+
+void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp) {
+  std::string fragment;
+  fragment.append((char*)&timestamp, 8);
+  int32_t pulse_length = fFragmentBytes>>1;
+  fragment.append((char*)&pulse_length, 4);
+  int16_t sw = fFmt["ns_per_sample"];
+  fragment.append((char*)&sw, 2);
+  int16_t ch = 799; // TODO extend to MV and NV
+  fragment.append((char*)&ch, 2);
+  fragment.append((char*)&pulse_length, 4); // pulse length == fragment length
+  int16_t fragment_i = 0;
+  fragment.append((char*)&fragment_i, 2);
+  int16_t baseline = 0;
+  fragment.append((char*)&baseline, 2);
+  int8_t zero = 0;
+  while (fragment.size < fFragmentBytes)
+    fragment.append((char*)&zero, 1);
+  AddFragmentToBuffer(fragment, timestamp);
+  return;
+}
+
 void StraxInserter::ParseDocuments(data_packet* dp){
   
   // Take a buffer and break it up into one document per channel
   unsigned int max_channels = 16; // hardcoded to accomodate V1730
-  
-  // Unpack the things from the data packet
-  std::vector<u_int32_t> clock_counters(max_channels, dp->clock_counter);
-  std::vector<u_int32_t> last_times_seen(max_channels, 0xFFFFFFFF);
   
   u_int32_t size = dp->size;
   u_int32_t *buff = dp->buff;
@@ -145,7 +187,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
   u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
   
   u_int32_t idx = 0;
-  std::map<std::string, int> fmt = fFmt[dp->bid];
+  int64_t event_time_abs = 0;
   unsigned total_words = size/sizeof(u_int32_t);
   while(idx < total_words && buff[idx] != 0xFFFFFFFF){
     
@@ -157,10 +199,10 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 
       if (words_in_event < (buff[idx]&0xFFFFFFF)) {
         fLog->Entry(MongoLog::Local, "Board %i garbled event header at idx %i: %u/%u (%i)",
-            dp->bid, idx, buff[idx]&0xFFFFFFF, total_words-idx, dp->vBLT.size());
+            fBID, idx, buff[idx]&0xFFFFFFF, total_words-idx, dp->vBLT.size());
       }
 
-      if (fmt["channel_mask_msb_idx"] != -1) {
+      if (fFmt["channel_mask_msb_idx"] != -1) {
 	channel_mask = ( ((buff[idx+2]>>24)&0xFF)<<8 ) | (buff[idx+1]&0xFF);
       }
       
@@ -169,9 +211,12 @@ void StraxInserter::ParseDocuments(data_packet* dp){
       bool board_fail = buff[idx+1]&0x4000000; // & (buff[idx+1]>>27)
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
 
+      event_time_abs = HandleClockRollovers(0, event_time);
+
       if(board_fail){
-        fDataSource->CheckError(dp->bid);
-	fFailCounter[dp->bid]++;
+        fDataSource->CheckError(fBID);
+        fErrorBit = true;
+	fFailCounter++;
         idx += event_header_words;
         continue;
       }
@@ -190,87 +235,63 @@ void StraxInserter::ParseDocuments(data_packet* dp){
         bool whoops = false;
 
 	// Presence of a channel header indicates non-default firmware (DPP-DAW) so override
-	if(fmt["channel_header_words"] > 0){
+	if(fFmt["channel_header_words"] > 0){
 	  channel_words = std::min(buff[idx]&0x7FFFFF, words_in_event - (idx - event_start_idx));
           if (channel_words < (buff[idx]&0x7FFFFF)) {
             fLog->Entry(MongoLog::Local, "Board %i ch %i garbled header at idx %i: %x/%x",
-                  dp->bid, channel, idx, buff[idx]&0x7FFFFF, words_in_event);
-            idx += fmt["channel_header_words"];
+                  fBID, channel, idx, buff[idx]&0x7FFFFF, words_in_event);
+            idx += fFmt["channel_header_words"];
+            GenerateArtificialDeadtime(event_time_abs);
             break;
           }
-          if (channel_words <= fmt["channel_header_words"]) {
+          if ((int)channel_words <= fFmt["channel_header_words"]) {
             fLog->Entry(MongoLog::Local, "Board %i ch %i empty (%i/%i)",
-                dp->bid, channel, channel_words, fmt["channel_header_words"]);
-            idx += (fmt["channel_header_words"]-channel_words);
+                fBID, channel, channel_words, fFmt["channel_header_words"]);
+            idx += (fFmt["channel_header_words"]-channel_words);
+            GenerateArtificialDeadtime(event_time_abs);
             continue;
           }
-          channel_words -= fmt["channel_header_words"];
+          channel_words -= fFmt["channel_header_words"];
 	  channel_time = buff[idx+1]&0xFFFFFFFF;
 
-	  if (fmt["channel_time_msb_idx"] == 2) {
+	  if (fFmt["channel_time_msb_idx"] == 2) {
 	    channel_timeMSB = buff[idx+2]&0xFFFF;
 	    baseline_ch = (buff[idx+2]>>16)&0x3FFF;
 	  }
-	  
-	  idx += fmt["channel_header_words"];
 
-	  // V1724 only. 1730 has a **26-day** clock counter. 
-	  if(fmt["channel_header_words"] <= 2){    
-	    // OK. Here's the logic for the clock reset, and I realize this is the
-	    // second place in the code where such weird logic is needed but that's it
-	    // First, on the first instance of a channel we gotta check if
-	    // the channel clock rolled over BEFORE this clock and adjust the counter
-	    
-	    if(channel_time > 15e8 && dp->header_time<5e8 &&
-	       last_times_seen[channel] == 0xFFFFFFFF && clock_counters[channel]!=0){
-	      clock_counters[channel]--;
-	    }
-	    // Now check the opposite
-	    else if(channel_time <5e8 && dp->header_time > 15e8 &&
-		    last_times_seen[channel] == 0xFFFFFFFF){
-	      clock_counters[channel]++;
-	    }
-	    
-	    // Now check if this time < last time (indicates rollover)
-	    if(channel_time < last_times_seen[channel] &&
-	       last_times_seen[channel]!=0xFFFFFFFF)
-	      clock_counters[channel]++;
-
-	    last_times_seen[channel] = channel_time;
-	    
-	  }
+	  idx += fFmt["channel_header_words"];
+ 
 	} // channel_header_words > 0
 
         // let's sanity-check the data first to make sure we didn't get CAENed
         for (unsigned w = 0; w < channel_words; w++) {
           if ((idx+w >= total_words) || (buff[idx+w]>>28) == 0xA) {
             fLog->Entry(MongoLog::Local, "Board %i has CAEN'd itself at idx %x",
-                dp->bid, idx+w);
+                fBID, idx+w);
             whoops = true;
             break;
           }
         }
         if (idx - event_start_idx >= words_in_event) {
           fLog->Entry(MongoLog::Local, "Board %i CAEN'd itself at idx %x",
-              dp->bid, idx);
+              fBID, idx);
           whoops = true;
         }
-        if (whoops) // some data got lost somewhere
+        if (whoops) {// some data got lost somewhere
+          GenerateArtificialDeadtime(event_time_abs);
           break;
+        }
 
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
 	// 48 bits this line would be different
 	int iBitShift = 31;
 	int64_t Time64;
 
-	 if (fmt["channel_time_msb_idx"] == 2) { 
-	   Time64 = fmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
-	 }
-	 else { 
-	   Time64 = fmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
-					      iBitShift) + channel_time); // in ns
-	   }
-	
+	if (fFmt["channel_time_msb_idx"] == 2) { 
+	  Time64 = fFmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
+	} else {
+          Time64 = fFmt["ns_per_clk"]*HandleClockRollovers(channel+1, channel_time); // in ns
+	}
 
 	// We're now at the first sample of the channel's waveform. This
 	// will be beautiful. First we reinterpret the channel as 16
@@ -281,9 +302,9 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	u_int32_t index_in_pulse = 0;
 	u_int32_t offset = idx<<1;
 	u_int16_t fragment_index = 0;
-	u_int16_t sw = fmt["ns_per_sample"];
+	u_int16_t sw = fFmt["ns_per_sample"];
         int fragment_samples = fFragmentBytes>>1;
-	int16_t cl = fOptions->GetChannel(dp->bid, channel);
+	int16_t cl = fOptions->GetChannel(fBID, channel);
         fDataPerChan[cl] += samples_in_pulse<<1;
 	// Failing to discern which channel we're getting data from seems serious enough to throw
 	if(cl==-1)
@@ -334,44 +355,12 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	    fragment.append(zero, 1); // int(0) != int("0")
 
 	  // Get the CHUNK and decide if this event also goes into a PRE/POST file
-	  int chunk_id = time_this_fragment/fFullChunkLength;
+	  int chunk_id = AddFragmentToBuffer(fragment, Time64);
 	
 	  // Check if this is the smallest_latest_index_seen
 	  if(smallest_latest_index_seen == -1 || chunk_id < smallest_latest_index_seen)
 	    smallest_latest_index_seen = chunk_id;
 	
-          bool nextpre = (chunk_id+1)* fFullChunkLength - time_this_fragment < fChunkOverlap;
-	  // Minor mess to maintain the same width of file names and do the pre/post stuff
-	  // If not in pre/post
-	  std::string chunk_index = std::to_string(chunk_id);
-	  while(chunk_index.size() < fChunkNameLength)
-	    chunk_index.insert(0, "0");
-
-	  if(!nextpre){
-//            if (fFragments.contains(chunk_index)){// c++20 feature not in c++17 :(
-	    if(fFragments.count(chunk_index) == 0){
-	      fFragments[chunk_index] = new std::string();
-	    }
-	    fFragments[chunk_index]->append(fragment);
-            fFragmentSize[chunk_index] += fragment.size();
-	  }
-	  else{
-	    std::string nextchunk_index = std::to_string(chunk_id+1);
-	    while(nextchunk_index.size() < fChunkNameLength)
-	      nextchunk_index.insert(0, "0");
-
-	    if(fFragments.count(nextchunk_index+"_pre") == 0){
-	      fFragments[nextchunk_index+"_pre"] = new std::string();
-	    }
-	    fFragments[nextchunk_index+"_pre"]->append(fragment);
-            fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
-
-	    if(fFragments.count(chunk_index+"_post") == 0){
-	      fFragments[chunk_index+"_post"] = new std::string();
-	    }
-	    fFragments[chunk_index+"_post"]->append(fragment);
-            fFragmentSize[chunk_index+"_post"] += fragment.size();
-	  }
 	  fragment_index++;
 	  index_in_pulse = max_sample;
 	}
@@ -384,48 +373,81 @@ void StraxInserter::ParseDocuments(data_packet* dp){
   }
   if(smallest_latest_index_seen != -1)
     WriteOutFiles(smallest_latest_index_seen);
+
+  fBytesProcessed += dp->size;
+  delete dp;
 }
 
+int StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp) {
+  int chunk_id = timestamp/fFullChunkLength;
+
+  bool nextpre = (chunk_id+1)* fFullChunkLength - timestamp < fChunkOverlap;
+
+  std::string chunk_index = std::to_string(chunk_id);
+  while(chunk_index.size() < fChunkNameLength)
+    chunk_index.insert(0, "0");
+
+  if(!nextpre){
+    if(fFragments.count(chunk_index) == 0){
+      fFragments[chunk_index] = new std::string();
+    }
+    fFragments[chunk_index]->append(fragment);
+    fFragmentSize[chunk_index] += fragment.size();
+  } else {
+    std::string nextchunk_index = std::to_string(chunk_id+1);
+    while(nextchunk_index.size() < fChunkNameLength)
+      nextchunk_index.insert(0, "0");
+
+    if(fFragments.count(nextchunk_index+"_pre") == 0){
+      Fragments[nextchunk_index+"_pre"] = new std::string();
+    }
+    fFragments[nextchunk_index+"_pre"]->append(fragment);
+    fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
+
+    if(fFragments.count(chunk_index+"_post") == 0){
+      fFragments[chunk_index+"_post"] = new std::string();
+    }
+    fFragments[chunk_index+"_post"]->append(fragment);
+    fFragmentSize[chunk_index+"_post"] += fragment.size();
+  }
+  return chunk_id;
+}
 
 int StraxInserter::ReadAndInsertData(){
   using namespace std::chrono;
-  fThreadId = std::this_thread::get_id();
   fActive = fRunning = true;
   bool haddata=false;
-  std::list<data_packet*> b;
+  std::queue<data_packet*> q;
   data_packet* dp;
   fBufferLength = 0;
   system_clock::time_point proc_start, proc_end;
   microseconds sleep_time(10);
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
     while(fActive == true){
-      if (fDataSource->GetData(b)) {
+      if (fDataSource->GetData(q, fBID)) {
         haddata = true;
-        fBufferLength = b.size();
-        fBufferCounter[int(b.size())]++;
-        for (auto& dp : b) {
+        fBufferLength = q.size();
+        fBufferCounter[int(q.size())]++;
+        while (q.size() > 0) {
           proc_start = system_clock::now();
+          dp = q.front();
           ParseDocuments(dp);
-          fBytesProcessed += dp->size;
-          delete dp;
+          q.pop();
+          fBufferLength = q.size();
           proc_end = system_clock::now();
-          fBufferLength--;
           fProcTime += duration_cast<microseconds>(proc_end - proc_start);
         }
-        b.clear();
       } else {
         std::this_thread::sleep_for(sleep_time);
       }
     }
   } else {
     while (fActive == true) {
-      if (fDataSource->GetData(dp)) {
+      if (fDataSource->GetData(dp, fBID)) {
         haddata = true;
         fBufferCounter[1]++;
         proc_start = system_clock::now();
         ParseDocuments(dp);
-        fBytesProcessed += dp->size;
-        delete dp;
         proc_end = system_clock::now();
         fProcTime += duration_cast<microseconds>(proc_end - proc_start);
       } else {
@@ -590,20 +612,4 @@ void StraxInserter::CreateMissing(u_int32_t back_from_id){
     }
   }
   fMissingVerified = back_from_id;
-}
-
-
-data_packet::data_packet() {
-  buff = nullptr;
-  size = 0;
-  clock_counter = 0;
-  header_time = 0;
-  bid = 0;
-}
-
-data_packet::~data_packet() {
-  if (buff != nullptr) delete[] buff;
-  buff = nullptr;
-  size = clock_counter = header_time = bid = 0;
-  //vBLT.clear();
 }

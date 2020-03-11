@@ -19,7 +19,6 @@ class V1724{
   int ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v=nullptr);
   int WriteRegister(unsigned int reg, unsigned int value);
   unsigned int ReadRegister(unsigned int reg);
-  int GetClockCounter(u_int32_t timestamp);
   int End();
 
   int bid(){
@@ -42,7 +41,6 @@ class V1724{
   bool EnsureStopped(int ntries, int sleep);
   int CheckErrors();
   u_int32_t GetAcquisitionStatus();
-  u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
 
   std::map<std::string, int> DataFormatDefinition;
 

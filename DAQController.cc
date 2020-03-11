@@ -85,7 +85,10 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
 	  keys.push_back(d.link);
 	}
 	fLog->Entry(MongoLog::Debug, "Initialized digitizer %i", d.board);
-	
+	fBufferSize[digi->bid()] = 0;
+        fBufferLength[digi->bid()] = 0;
+        fBuffer[digi->bid()] = std::queue<data_packet*>();
+        fBufferMutex[digi->bid()] = std::mutex();
     }
     else{
       delete digi;
@@ -243,9 +246,8 @@ void DAQController::ReadData(int link){
   u_int32_t board_status = 0;
   int readcycler = 0;
   int err_val = 0;
-  std::list<data_packet*> local_buffer;
+  std::queue<data_packet*> local_buffer;
   data_packet* dp = nullptr;
-  int local_size;
   fRunning[link] = true;
   while(fReadLoop){
     
@@ -283,22 +285,15 @@ void DAQController::ReadData(int link){
       }
       if(dp->size>0){
         dp->bid = digi->bid();
-	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
-	dp->clock_counter = digi->GetClockCounter(dp->header_time);
-        local_buffer.push_back(dp);
-        local_size += dp->size;
+        fBufferMutex[dp->bid].lock();
+        fBufferLength[dp->bid]++;
+        fBuffer[dp->bid].push(dp);
+        fBufferSize[dp->bid] += dp->size;
+        fDataRate += dp->size;
+        fBufferMutex.unlock();
         dp = nullptr;
       }
     } // for digi in digitizers
-    if (local_buffer.size() > 0) {
-      fBufferMutex.lock();
-      fBufferLength += local_buffer.size();
-      fBuffer.splice(fBuffer.end(), local_buffer); // clears local_buffer
-      fBufferSize += local_size;
-      fDataRate += local_size;
-      fBufferMutex.unlock();
-      local_size = 0;
-    }
     readcycler++;
     usleep(1);
   } // while run
@@ -326,53 +321,32 @@ int DAQController::GetBufferLength() {
       [](int tot, auto pt){return tot + pt.inserter->GetBufferLength();});
 }
 
-void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& retmap){
-  for( auto const& link : fDigitizers )
-    for(auto digi : link.second)
-      retmap[digi->bid()] = digi->DataFormatDefinition;
+std::map<std::string, int> DAQController::GetDataFormat(int bid){
+  return fBoardMap[bid]->DataFormatDefinition;
 }
 
-int DAQController::GetData(std::list<data_packet*> &retVec, unsigned num){
-  if (fBufferLength == 0) return 0;
+int DAQController::GetData(std::queue<data_packet*> &retQ, int bid){
+  if (fBufferLength[bid] == 0) return 0;
   int ret = 0;
   data_packet* dp = nullptr;
-  fBufferMutex.lock();
-  if (fBuffer.size() == 0) {
-    fBufferMutex.unlock();
-    return 0;
-  }
-  if (num == 0) num = std::max(16, fBufferLength >> 4);
-  if (num == 0) {
-    retVec.splice(retVec.end(), fBuffer);
-    fBufferLength = 0;
-    ret = fBufferSize;
-    fBufferSize = 0;
-  } else {
-    do {
-      dp = fBuffer.front();
-      fBuffer.pop_front();
-      fBufferLength--;
-      fBufferSize -= dp->size;
-      ret += dp->size;
-      retVec.push_back(dp);
-    } while (retVec.size() < num && fBuffer.size()>0);
-  }
-  fBufferMutex.unlock();
+  // let's use a fancy raii lock guard that unlocks when it goes out of scope
+  const std::lock_guard<std::mutex> lock(fBufferMutex[bid]);
+  if (fBuffer[bid].size() == 0) return 0;
+  fBuffer[bid].swap(retQ);
+  fBufferLength[bid] = 0;
+  ret = fBufferSize[bid];
+  fBufferSize[bid] = 0;
   return ret;
 }
 
-int DAQController::GetData(data_packet* &dp) {
-  if (fBufferLength == 0) return 0;
-  fBufferMutex.lock();
-  if (fBuffer.size() == 0) {
-    fBufferMutex.unlock();
-    return 0;
-  }
-  dp = fBuffer.front();
-  fBuffer.pop_front();
-  fBufferSize -= dp->size;
-  fBufferLength--;
-  fBufferMutex.unlock();
+int DAQController::GetData(data_packet* &dp, int bid) {
+  if (fBufferLength[bid] == 0) return 0;
+  const std::lock_guard<std::mutex> lock(fBufferMutex[bid]);
+  if (fBuffer[bid].size() == 0) return 0;
+  dp = fBuffer[bid].front();
+  fBufferSize[bid] -= dp->size;
+  fBufferLength[bid]--;
+  fBuffer[bid].pop();
   return 1;
 }
 
@@ -395,15 +369,15 @@ bool DAQController::CheckErrors(){
 
 int DAQController::OpenProcessingThreads(){
   int ret = 0;
-  for(int i=0; i<fNProcessingThreads; i++){
-    processingThread p;
-    p.inserter = new StraxInserter();
-    if (p.inserter->Initialize(fOptions, fLog, this, fHostname)) {
-      p.pthread = new std::thread(); // something to delete later
+  for(auto& p : fBoardMap){
+    processingThread pt;
+    pt.inserter = new StraxInserter();
+    if (pt.inserter->Initialize(fOptions, fLog, p.first, this, fHostname)) {
+      pt.pthread = new std::thread(); // something to delete later
       ret++;
     } else
-      p.pthread = new std::thread(&StraxInserter::ReadAndInsertData, p.inserter);
-    fProcessingThreads.push_back(p);
+      pt.pthread = new std::thread(&StraxInserter::ReadAndInsertData, pt.inserter);
+    fProcessingThreads.push_back(pt);
   }
   return ret;
 }

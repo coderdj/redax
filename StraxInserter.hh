@@ -22,12 +22,14 @@ class MongoLog;
 
 struct data_packet{
   public:
-    data_packet();
-    ~data_packet();
+    data_packet() : buff(nullptr), size(0), bid(0) {}
+    ~data_packet() {
+      if (buff != nullptr) delete[] buff;
+      buff = nullptr;
+      size = bid = 0;
+    }
     u_int32_t *buff;
     int32_t size;
-    u_int32_t clock_counter;
-    u_int32_t header_time;
     int bid;
     std::vector<u_int32_t> vBLT;
 };
@@ -42,7 +44,7 @@ public:
   StraxInserter();
   ~StraxInserter();
   
-  int  Initialize(Options *options, MongoLog *log, 
+  int  Initialize(Options *options, MongoLog *log, int bid
 		  DAQController *dataSource, std::string hostname);
   void Close(std::map<int,int>& ret);
   
@@ -50,12 +52,14 @@ public:
   bool CheckError(){ return fErrorBit; }
   long GetBufferSize();
   void GetDataPerChan(std::map<int, int>& ret);
-  void CheckError(int bid);
   int GetBufferLength() {return fBufferLength.load();}
   
 private:
   void ParseDocuments(data_packet *dp);
   void WriteOutFiles(int smallest_index_seen, bool end=false);
+  int64_t HandleClockRollovers(int, u_int32_t);
+  int AddFragmentToBuffer(std::string&, int64_t);
+  void GenerateArtificialDeadtime(int64_t);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
   std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
@@ -68,25 +72,28 @@ private:
   u_int16_t fFragmentBytes; // This is in BYTES
   u_int16_t fStraxHeaderSize; // in BYTES too
   u_int32_t fChunkNameLength;
+  int64_t fFullChunkLength;
   std::string fOutputPath, fHostname;
   Options *fOptions;
   MongoLog *fLog;
   DAQController *fDataSource;
   std::atomic_bool fActive, fRunning;
   bool fErrorBit;
+  int fBID;
   std::string fCompressor;
   std::map<std::string, std::string*> fFragments;
   std::map<std::string, std::atomic_long> fFragmentSize;
-  std::map<int, std::map<std::string, int>> fFmt;
-  std::map<int, int> fFailCounter;
+  std::map<std::string, int> fFmt;
+  int fFailCounter;
   std::map<int, std::atomic_int> fDataPerChan;
   std::map<int, long> fBufferCounter;
   std::atomic_int fBufferLength;
   long fBytesProcessed;
+  std::vector<u_int32_t> fLastTimeSeen;
+  std::vector<long> fClockRollovers;
 
   std::chrono::microseconds fProcTime;
   std::chrono::microseconds fCompTime;
-  std::thread::id fThreadId;
 };
 
 #endif

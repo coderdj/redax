@@ -126,10 +126,6 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   fCrate = crate;
   fBID = bid;
   fBaseAddress=address;
-  clock_counter = 0;
-  last_time = 0;
-  seen_over_15 = false;
-  seen_under_5 = true; // starts run as true
   u_int32_t word(0);
   int my_bid(0);
   
@@ -167,83 +163,6 @@ int V1724::Reset() {
   int ret = WriteRegister(fResetRegister, 0x1);
   ret += WriteRegister(fBoardErrRegister, 0x30);
   return ret;
-}
-
-u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
-  u_int32_t idx = 0;
-  while(idx < size/sizeof(u_int32_t)){
-    if(buff[idx]>>28==0xA)
-      return buff[idx+3]&0x7FFFFFFF;
-    idx++;
-  }
-  return 0xFFFFFFFF;
-}
-
-int V1724::GetClockCounter(u_int32_t timestamp){
-  // The V1724 has a 31-bit on board clock counter that counts 10ns samples.
-  // So it will reset every 21 seconds. We need to count the resets or we
-  // can't run longer than that. But it's not as simple as incementing a
-  // counter every time a timestamp is less than the previous one because
-  // we're multi-threaded and channels are quasi-independent. So we need
-  // this fancy logic here.
-
-  //Seen under 5, true first time you see something under 5. False first time you
-  // see something under 15 but >5
-  // Seen over 15, true first time you se something >15 if under 5=false. False first
-  // time you see something under 5
-
-  // First, is this number greater than the previous?
-  if(timestamp > last_time){
-
-    // Case 1. This is over 15s but seen_under_5 is true. Give 1 back
-    if(timestamp >= 15e8 && seen_under_5 && clock_counter != 0)
-      return clock_counter-1;
-
-    // Case 2. This is over 5s and seen_under_5 is true.
-    else if(timestamp >= 5e8 && timestamp < 15e8 && seen_under_5){
-      seen_under_5 = false;
-      last_time = timestamp;
-      return clock_counter;
-    }
-
-    // Case 3. This is over 15s and seen_under_5 is false
-    else if(timestamp >= 15e8 && !seen_under_5){
-      seen_over_15 = true;
-      last_time = timestamp;
-      return clock_counter;
-    }
-
-    // Case 5. Anything else where the clock is progressing correctly
-    else{
-      last_time = timestamp;
-      return clock_counter;
-    }
-  }
-
-  // Second, is this number less than the previous?
-  else if(timestamp < last_time){
-
-    // Case 1. Genuine clock reset. under 5s is false and over 15s is true
-    if(timestamp < 5e8 && !seen_under_5 && seen_over_15){
-      seen_under_5 = true;
-      seen_over_15 = false;
-      last_time = timestamp;
-      clock_counter++;
-      return clock_counter;
-    }
-
-    // Case 2: Any other jitter within the 21 seconds, just return
-    else{
-      return clock_counter;
-    }
-  }
-  else{
-    fLog->Entry(MongoLog::Warning,
-      "Board %i something odd in your clock counters. t_new: %i, last_time: %i, over_15: %i, under_5: %i",
-		fBID, timestamp, last_time, seen_over_15, seen_under_5);
-    // Counter equal to last time, so we're happy and keep the same counter
-    return clock_counter;
-  }  
 }
 
 int V1724::WriteRegister(unsigned int reg, unsigned int value){
