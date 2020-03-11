@@ -152,7 +152,7 @@ int64_t StraxInserter::HandleClockRollovers(int ch, u_int32_t ts) {
         fBID, ch, fLastTimeSeen[ch], ts, fClockRollovers[ch]);
   }
   fLastTimeSeen[ch] = ts;
-  iBitShift = 31;
+  int iBitShift = 31;
   return (fClockRollovers[ch] << iBitShift) + ts;
 }
 

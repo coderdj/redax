@@ -222,8 +222,7 @@ void DAQController::End(){
       fLog->Entry(MongoLog::Warning, "Deleting uncleared buffer of size %i from board %i",
 		p.second.size(), p.first);
       while (p.second.size() > 0) {
-        data_packet* dp = p.front();
-        delete dp;
+        delete p.second.front();
       }
     }
   }
@@ -311,7 +310,7 @@ long DAQController::GetStraxBufferSize() {
 
 int DAQController::GetBufferLength() {
   int redax_buffer = std::accumulate(fBufferLength.begin(), fBufferLength.end(), 0,
-      [&](int tot, std::atomic_int& l) {return tot + l.load();});
+      [&](int tot, auto& p) {return tot + p.second.load();});
 
   int strax_buffer = std::accumulate(fProcessingThreads.begin(),
       fProcessingThreads.end(), 0,
