@@ -57,7 +57,7 @@ public:
   
 private:
   void ParseDocuments(data_packet *dp);
-  void WriteOutFiles(int smallest_index_seen);
+  void WriteOutFiles(int smallest_index_seen, bool end = false);
   void End();
   int64_t HandleClockRollovers(int, u_int32_t);
   int AddFragmentToBuffer(std::string&, int64_t);

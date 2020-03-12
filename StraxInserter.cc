@@ -148,7 +148,7 @@ int64_t StraxInserter::HandleClockRollovers(int ch, u_int32_t ts) {
     fClockRollovers[ch]++;
   } else {
     // timestamps the same??
-    fLog->Entry(MongoLog::Info,
+    fLog->Entry(MongoLog::Message,
         "Something odd in timestamps on %i/%i: last %x, this %x, rollovers %i",
         fBID, ch, fLastTimeSeen[ch], ts, fClockRollovers[ch]);
   }
@@ -457,7 +457,7 @@ int StraxInserter::ReadAndInsertData(){
     }
   }
   if(haddata)
-    WriteOutFiles(1000000);
+    WriteOutFiles(1000000, true);
   End();
   fDataPerChan.clear();
   fRunning = false;
@@ -472,7 +472,7 @@ static const LZ4F_preferences_t kPrefs = {
     { 0, 0, 0 },  /* reserved, must be set to 0 */
 };
 
-void StraxInserter::WriteOutFiles(int smallest_index_seen){
+void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // Write the contents of fFragments to blosc-compressed files
   using namespace std::chrono;
   system_clock::time_point comp_start, comp_end;
