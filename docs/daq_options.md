@@ -184,7 +184,7 @@ Various options that tell redax how to run.
 |baseline_reference_run | If 'baseline_dac_mode' is set to 'cached' it will use the values from the run number defined here. |
 |baseline_value | If 'baseline_dac_mode' is set to 'fit' it will attempt to adjust the baselines until they hit the decimal value defined here, which must lie between 0 and 16386 for a 14-bit ADC. |
 |baseline_fixed_value |Use this to set the DAC offset register directly with this value. See CAEN documentation for more details. |
-|processing_threads |The number of threads per link working on converting data between CAEN and strax format. Should be larger for processes responsible for more channels and can be smaller for processes only reading a few channels. |
+|processing_threads |The number of threads working on converting data between CAEN and strax format. Should be larger for processes responsible for more boards and can be smaller for processes only reading a few boards. |
 
 ## Strax Output Options
 
@@ -195,7 +195,7 @@ There are various configuration options for the strax output that must be set.
   "strax_chunk_overlap": 0.5,
   "strax_output_path": "/data/xenon/raw/xenonnt",
   "strax_chunk_length": 5,
-  "strax_fragment_length": 220
+  "strax_fragment_payload_bytes": 220
 }
 ```
 
@@ -203,7 +203,7 @@ There are various configuration options for the strax output that must be set.
 | ---- | ---- | 
 | strax_chunk_overlap | Defines the overlap period between strax chunks in seconds. Make is at least some few times larger than your typical event length. In any case it should be larger than your largest expected event. |
 | strax_chunk_length | Length of each strax chunk in seconds. There's some balance required here. It should be short enough that strax can process reasonably online, as it waits for each chunk to finish then loads it at once (the size should be digestable). But it shouldn't be so short that it needlessly micro-segments the data. Order of 5-15 seconds seems reasonable at the time of writing. |
-|strax_fragment_length | How long are the fragments? In general this should be long enough that it definitely covers the vast majority of your SPE pulses. Our SPE pulses are ~100 samples, so the default value of 220 bytes (2 bytes per sample) provides a small amount of overhead. |
+|strax_fragment_payload_bytes | How long are the fragments? In general this should be long enough that it definitely covers the vast majority of your SPE pulses. Our SPE pulses are ~100 samples, so the default value of 220 bytes (2 bytes per sample) provides a small amount of overhead. |
 |strax_output_path | Where should we write data? This must be a locally mounted data store. Redax will handle sub-directories so just provide the top-level directory where all the live data should go. |
 
 ## Channel Map
@@ -245,3 +245,25 @@ Note that if there are any skipped channels (for instance, if you are using inpu
 ## Trigger thresholds
 
 Redax assigns trigger thresholds using a syntax identical to that of the channel map (above).
+
+## Lower-level diagnostic options
+
+Redax accepts a variety of options that control various low-level operations. The default values should be fine, and really should only be adjusted if you know what's going on.
+
+|Option | Description |
+| ---- | ---- |
+| baseline_max_iterations | The maximum number of overall iterations to go through when fitting baselines. Baselining runs until either this number of iterations are completed, or the baselines converge, whichever happens first. Default 2. |
+| baseline_max_steps | The maximum number of steps per iteration during baselining. Steps involve measuring the baseline and trying to adjust it towards the target value. Default 20. |
+| baseline_adjustment_threshold | How close the measured baseline must be to the target baseline in ADC units. If the absolute difference is less than this value, a channel is considered to have converged. Default 10. |
+| baselie_convergence_threshold | How many consecutive times a channel must be within the adjustment threshold to be considered stable and finished. Default 3. |
+| baseline_min_adjustment | The minimum change to the DAC value, given in DAC units. Note that the DAC is 16-bit while the digitizer is only 14-bit, so a conversion of approximately 0.25 does apply. Default 10. |
+| baseline_rebin_log2 | How much to rebin samples by when calculating the baseline. This is intended to provide some level of noise immunity. Samples are bit-shifted right by this value (ie, sample >> value). Default 1. |
+| baseline_bins_around_max | How close around the mode the majority of samples must be. This is given in units of rebinned samples, so if this value is 3 and the rebin value is 1, then the region around the max is 6 ADC samples (3 << 1) in each direction. Default 3 |
+| baseline_fraction_around_max | What fraction of total samples in the pulse must be around the mode for the pulse to be accepted. Default 0.8. |
+| baseline_triggers_per_step | How many software triggers to send for each baseline step. Default 3. |
+| baseline_ms_between_triggers | How long between software triggers. Default 10. |
+| blt_size | How many bytes to read from the digitizer during each BLT readout. Default 0x80000. |
+| blt_safety_factor | Sometimes the digitizer returns more bytes during a BLT readout than you ask for (it depends on the number and size of events in the digitizer's memory). This value is how much extra memory to allocate so you don't overrun the readout buffer. Default 1.5. |
+| buffer_safety_factor | Same, except for the longer-lived buffer that redax carries until data is processed and queued for compression. Default 1.1. |
+| do_sn_check | Whether or not to have each board check its serial number during initialization. Default 1. |
+| buffer_type | The StraxInserter can either ask the DAQController for one event at a time to process (buffer_type = 'single') or it can ask for several events to store in its own buffer (buffer_type = 'dual'). All accesses to the DAQController buffer are mutexed, so in high-rate modes it's better to use the dual-buffer setup. Default 'dual' |
