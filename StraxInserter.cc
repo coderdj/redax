@@ -29,6 +29,7 @@ StraxInserter::StraxInserter(){
   fChunkNameLength = 6;
   fBytesProcessed = 0;
   fBID = -1;
+  fFailCounter = 0;
 }
 
 StraxInserter::~StraxInserter(){
