@@ -49,14 +49,16 @@ public:
   void Close(std::map<int,int>& ret);
   
   int ReadAndInsertData();
-  bool CheckError(){ return fErrorBit; }
+  bool CheckError(){ bool ret = fErrorBit; fErrorBit = false; return ret; }
   long GetBufferSize();
   void GetDataPerChan(std::map<int, int>& ret);
   int GetBufferLength() {return fBufferLength.load();}
+  int ID() {return fBID;}
   
 private:
   void ParseDocuments(data_packet *dp);
-  void WriteOutFiles(int smallest_index_seen, bool end=false);
+  void WriteOutFiles(int smallest_index_seen);
+  void End();
   int64_t HandleClockRollovers(int, u_int32_t);
   int AddFragmentToBuffer(std::string&, int64_t);
   void GenerateArtificialDeadtime(int64_t);

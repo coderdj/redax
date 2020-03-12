@@ -148,8 +148,8 @@ int64_t StraxInserter::HandleClockRollovers(int ch, u_int32_t ts) {
     fClockRollovers[ch]++;
   } else {
     // timestamps the same??
-    fLog->Entry(MongoLog::Warning,
-        "Something odd in timestamps on %i/%i: last %i, this %i, rollovers %i",
+    fLog->Entry(MongoLog::Info,
+        "Something odd in timestamps on %i/%i: last %x, this %x, rollovers %i",
         fBID, ch, fLastTimeSeen[ch], ts, fClockRollovers[ch]);
   }
   fLastTimeSeen[ch] = ts;
@@ -457,7 +457,8 @@ int StraxInserter::ReadAndInsertData(){
     }
   }
   if(haddata)
-    WriteOutFiles(1000000, true);
+    WriteOutFiles(1000000);
+  End();
   fDataPerChan.clear();
   fRunning = false;
   return 0;
@@ -471,7 +472,7 @@ static const LZ4F_preferences_t kPrefs = {
     { 0, 0, 0 },  /* reserved, must be set to 0 */
 };
 
-void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
+void StraxInserter::WriteOutFiles(int smallest_index_seen){
   // Write the contents of fFragments to blosc-compressed files
   using namespace std::chrono;
   system_clock::time_point comp_start, comp_end;
@@ -532,31 +533,29 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     fFragments.erase(s);
     fFragmentSize.erase(s);
   }
-  
 
-  if(end){
-    std::for_each(fFragments.begin(), fFragments.end(), [](auto p){if (p.second != nullptr) delete p.second;});
-    fFragments.clear();
-    fFragmentSize.clear();
-    fs::path write_path(fOutputPath);
-    std::string filename = fHostname;
-    write_path /= "THE_END";
-    if(!fs::exists(write_path)){
-      fLog->Entry(MongoLog::Local,"Creating END directory at %s",write_path.c_str());
-      try{
-        fs::create_directory(write_path);
-      }
-      catch(...){};
+}
+
+void StraxInserter::End() {
+  std::for_each(fFragments.begin(), fFragments.end(),
+      [](auto p){if (p.second != nullptr) delete p.second;});
+  fFragments.clear();
+  fFragmentSize.clear();
+  fs::path write_path(fOutputPath);
+  std::string filename = fHostname;
+  write_path /= "THE_END";
+  if(!fs::exists(write_path)){
+    fLog->Entry(MongoLog::Local,"Creating END directory at %s",write_path.c_str());
+    try{
+      fs::create_directory(write_path);
     }
-    std::stringstream ss;
-    ss<<std::this_thread::get_id();
-    write_path /= fHostname + "_" + ss.str();
-    std::ofstream outfile;
-    outfile.open(write_path, std::ios::out);
-    outfile<<"...my only friend";
-    outfile.close();
+    catch(...){};
   }
-
+  write_path /= fHostname + "_" + std::to_string(fBID);
+  std::ofstream outfile;
+  outfile.open(write_path, std::ios::out);
+  outfile<<"...my only friend";
+  outfile.close();
 }
 
 std::string StraxInserter::GetStringFormat(int id){
@@ -577,10 +576,8 @@ fs::path StraxInserter::GetDirectoryPath(std::string id, bool temp){
 fs::path StraxInserter::GetFilePath(std::string id, bool temp){
   fs::path write_path = GetDirectoryPath(id, temp);
   std::string filename = fHostname;
-  std::stringstream ss;
-  ss<<std::this_thread::get_id();
   filename += "_";
-  filename += ss.str();
+  filename += std::to_string(fBID);
   write_path /= filename;
   return write_path;
 }

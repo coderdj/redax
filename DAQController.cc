@@ -223,6 +223,7 @@ void DAQController::End(){
 		p.second.size(), p.first);
       while (p.second.size() > 0) {
         delete p.second.front();
+        p.second.pop();
       }
     }
   }
@@ -355,7 +356,8 @@ bool DAQController::CheckErrors(){
 
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
     if(fProcessingThreads[i].inserter->CheckError()){
-      fLog->Entry(MongoLog::Error, "Error found in processing thread.");
+      fLog->Entry(MongoLog::Error, "Error found in processing thread %i.",
+          fProcessingThreads[i].inserter->ID());
       fStatus=DAXHelpers::Error;
       return true;
     }
