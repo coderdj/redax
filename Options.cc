@@ -372,3 +372,8 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
   fDAC_collection.update_one(search_doc.view(), write_doc.view(), options);
   return;
 }
+
+void SaveBenchmarks(std::map<int, long>& buffer_counter, long bytes,
+    double proc_time_us, double comp_time_us, long tid) {
+
+}
