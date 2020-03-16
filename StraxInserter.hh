@@ -88,6 +88,9 @@ private:
   std::map<int, long> fBufferCounter;
   std::atomic_int fBufferLength;
   long fBytesProcessed;
+  long fFragmentsProcessed;
+  long fEventsProcessed;
+  long fDataPacketsProcessed;
 
   std::chrono::microseconds fProcTime;
   std::chrono::microseconds fCompTime;
