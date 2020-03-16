@@ -120,6 +120,7 @@ void StraxInserter::Close(std::map<int,int>& ret){
 }
 
 void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
+  if (!fActive) return;
   const std::lock_guard<std::mutex> lg(fDPC_mutex);
   for (auto& pair : fDataPerChan) {
     ret[pair.first] += pair.second;
