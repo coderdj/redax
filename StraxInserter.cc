@@ -373,10 +373,9 @@ void StraxInserter::ParseDocuments(data_packet* dp){
     else
       idx++;
   }
-  {
-    const std::lock_guard<std::mutex> lg(fDPC_mutex);
-    for (auto& p : data_per_chan) fDataPerChan[p.first] += p.second;
-  }
+  fDPC_mutex.lock();
+  for (auto& p : data_per_chan) fDataPerChan[p.first] += p.second;
+  fDPC_mutex.unlock();
   proc_end = system_clock::now();
   if(smallest_latest_index_seen != -1)
     WriteOutFiles(smallest_latest_index_seen);
