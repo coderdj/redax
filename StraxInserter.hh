@@ -47,7 +47,7 @@ public:
   void Close(std::map<int,int>& ret);
   
   int ReadAndInsertData();
-  bool CheckError(){ return fErrorBit; }
+  bool CheckError(){ return bool ret = fErrorBit; fErrorBit = false; return ret;}
   long GetBufferSize();
   void GetDataPerChan(std::map<int, int>& ret);
   void CheckError(int bid);
@@ -56,6 +56,8 @@ public:
 private:
   void ParseDocuments(data_packet *dp);
   void WriteOutFiles(int smallest_index_seen, bool end=false);
+  void GenerateAritificalDeadtime(int64_t timestamp);
+  int AddFragmentToBuffer(std::string& fragment, int64_t timestamp);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
   std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
@@ -63,11 +65,12 @@ private:
   void CreateMissing(u_int32_t back_from_id);
   int fMissingVerified;
 
-  u_int64_t fChunkLength; // ns
-  u_int32_t fChunkOverlap; // ns
-  u_int16_t fFragmentBytes; // This is in BYTES
-  u_int16_t fStraxHeaderSize; // in BYTES too
-  u_int32_t fChunkNameLength;
+  int64_t fChunkLength; // ns
+  int64_t fChunkOverlap; // ns
+  int16_t fFragmentBytes; // This is in BYTES
+  int16_t fStraxHeaderSize; // in BYTES too
+  int32_t fChunkNameLength;
+  int64_t fFullChunkLength;
   std::string fOutputPath, fHostname;
   Options *fOptions;
   MongoLog *fLog;
