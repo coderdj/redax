@@ -508,7 +508,8 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     idx_to_clear.push_back(chunk_index);
 
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
-    fLog->Entry(MongoLog::Local, "Thread %x chunk %s", fThreadId, chunk_index.c_str());
+    fLog->Entry(MongoLog::Local, "Thread %x chunk %s %x bytes",
+        fThreadId, chunk_index.c_str(), uncompressed_size);
     writefile.write(out_buffer, wsize);
     delete[] out_buffer;
     writefile.close();
