@@ -26,7 +26,6 @@ StraxInserter::StraxInserter(){
   fErrorBit = false;
   fMissingVerified = 0;
   fOutputPath = "";
-  fChunkNameLength = 6;
   fThreadId = std::this_thread::get_id();
   fBytesProcessed = 0;
   fFullChunkLength = fChunkLength+fChunkOverlap;
@@ -46,6 +45,8 @@ StraxInserter::~StraxInserter(){
       fLog->Entry(MongoLog::Message, "Thread %x taking a while to stop, still has %i evts",
           fThreadId, fBufferLength.load());
   } while (fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
+  if (fBytesProcessed > 0)
+    WriteOutFiles(1000000, true);
   char prefix = ' ';
   float num = 0.;
   if (fBytesProcessed > (1L<<40)) {
@@ -114,8 +115,6 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 void StraxInserter::Close(std::map<int,int>& ret){
   fActive = false;
   for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
-  if (fBytesProcessed > 0)
-    WriteOutFiles(1000000, true);
 }
 
 long StraxInserter::GetBufferSize() {
@@ -133,7 +132,7 @@ void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
   return;
 }
 
-void GenerateArtificialDeadtime(int64_t timestamp) {
+void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp) {
   std::string fragment;
   fragment.append((char*)&timestamp, sizeof(timestamp));
   int32_t length = fFragmentBytes>>1;
@@ -148,7 +147,7 @@ void GenerateArtificialDeadtime(int64_t timestamp) {
   int16_t baseline = 0;
   fragment.append((char*)&baseline, sizeof(baseline));
   int8_t zero = 0;
-  while (fragment.size() < fFragmentBytes+fStraxHeaderSize)
+  while ((int)fragment.size() < fFragmentBytes+fStraxHeaderSize)
     fragment.append((char*)&zero, sizeof(zero));
   AddFragmentToBuffer(fragment, timestamp);
 }
@@ -428,7 +427,7 @@ int StraxInserter::ReadAndInsertData(){
   std::list<data_packet*> b;
   data_packet* dp;
   fBufferLength = 0;
-  microseconds sleep_time(10);
+  std::chrono::microseconds sleep_time(10);
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
     while(fActive == true){
       if (fDataSource->GetData(&b)) {

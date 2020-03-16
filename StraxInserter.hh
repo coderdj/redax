@@ -47,7 +47,7 @@ public:
   void Close(std::map<int,int>& ret);
   
   int ReadAndInsertData();
-  bool CheckError(){ return bool ret = fErrorBit; fErrorBit = false; return ret;}
+  bool CheckError(){ bool ret = fErrorBit; fErrorBit = false; return ret;}
   long GetBufferSize();
   void GetDataPerChan(std::map<int, int>& ret);
   void CheckError(int bid);
@@ -67,9 +67,9 @@ private:
 
   int64_t fChunkLength; // ns
   int64_t fChunkOverlap; // ns
-  int16_t fFragmentBytes; // This is in BYTES
-  int16_t fStraxHeaderSize; // in BYTES too
-  int32_t fChunkNameLength;
+  int fFragmentBytes; // This is in BYTES
+  int fStraxHeaderSize; // in BYTES too
+  unsigned fChunkNameLength;
   int64_t fFullChunkLength;
   std::string fOutputPath, fHostname;
   Options *fOptions;
