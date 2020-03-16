@@ -291,12 +291,11 @@ void DAQController::ReadData(int link){
       }
     } // for digi in digitizers
     if (local_buffer.size() > 0) {
-      fBufferMutex.lock();
+      const std::lock_guard<std::mutex> lg(fBufferMutex);
       fBufferLength += local_buffer.size();
       fBuffer.splice(fBuffer.end(), local_buffer); // clears local_buffer
       fBufferSize += local_size;
       fDataRate += local_size;
-      fBufferMutex.unlock();
       local_size = 0;
     }
     readcycler++;
@@ -332,47 +331,36 @@ void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& ret
       retmap[digi->bid()] = digi->DataFormatDefinition;
 }
 
-int DAQController::GetData(std::list<data_packet*> &retVec, unsigned num){
+int DAQController::GetData(std::list<data_packet*>* retQ, unsigned num){
   if (fBufferLength == 0) return 0;
   int ret = 0;
   data_packet* dp = nullptr;
-  fBufferMutex.lock();
+  const std::lock_guard<std::mutex> lg(fBufferMutex);
   if (fBuffer.size() == 0) {
-    fBufferMutex.unlock();
     return 0;
   }
   if (num == 0) num = std::max(16, fBufferLength >> 4);
-  if (num == 0) {
-    retVec.splice(retVec.end(), fBuffer);
-    fBufferLength = 0;
-    ret = fBufferSize;
-    fBufferSize = 0;
-  } else {
-    do {
-      dp = fBuffer.front();
-      fBuffer.pop_front();
-      fBufferLength--;
-      fBufferSize -= dp->size;
-      ret += dp->size;
-      retVec.push_back(dp);
-    } while (retVec.size() < num && fBuffer.size()>0);
-  }
-  fBufferMutex.unlock();
+  do {
+    dp = fBuffer.front();
+    fBuffer.pop_front();
+    fBufferLength--;
+    fBufferSize -= dp->size;
+    ret += dp->size;
+    retQ->push_back(dp);
+  } while (retQ->size() < num && fBuffer.size()>0);
   return ret;
 }
 
 int DAQController::GetData(data_packet* &dp) {
   if (fBufferLength == 0) return 0;
-  fBufferMutex.lock();
+  const std::lock_guard<std::mutex> lg(fBufferMutex);
   if (fBuffer.size() == 0) {
-    fBufferMutex.unlock();
     return 0;
   }
   dp = fBuffer.front();
   fBuffer.pop_front();
   fBufferSize -= dp->size;
   fBufferLength--;
-  fBufferMutex.unlock();
   return 1;
 }
 

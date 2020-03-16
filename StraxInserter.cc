@@ -9,7 +9,7 @@
 #include <cstdarg>
 #include <numeric>
 #include <sstream>
-#include <queue>
+#include <list>
 
 namespace fs=std::experimental::filesystem;
 
@@ -114,6 +114,8 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 void StraxInserter::Close(std::map<int,int>& ret){
   fActive = false;
   for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
+  if (fBytesProcessed > 0)
+    WriteOutFiles(1000000, true);
 }
 
 long StraxInserter::GetBufferSize() {
@@ -152,22 +154,26 @@ void GenerateArtificialDeadtime(int64_t timestamp) {
 }
 
 void StraxInserter::ParseDocuments(data_packet* dp){
-  
+
+  using namespace std::chrono;
+  system_clock::time_point proc_start, proc_end;
+
   // Take a buffer and break it up into one document per channel
   unsigned int max_channels = 16; // hardcoded to accomodate V1730
-  
+
   // Unpack the things from the data packet
   std::vector<u_int32_t> clock_counters(max_channels, dp->clock_counter);
   std::vector<u_int32_t> last_times_seen(max_channels, 0xFFFFFFFF);
-  
+
   u_int32_t size = dp->size;
   u_int32_t *buff = dp->buff;
   int smallest_latest_index_seen = -1;
   const int event_header_words = 4;
-  
+
   u_int32_t idx = 0;
   std::map<std::string, int> fmt = fFmt[dp->bid];
   unsigned total_words = size/sizeof(u_int32_t);
+  proc_start = system_clock::now();
   while(idx < total_words && buff[idx] != 0xFFFFFFFF){
     
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
@@ -328,8 +334,8 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
 	  fragment.append(pulseTime, 8);
 
-	  char *samplesinpulse = reinterpret_cast<char*> (&samples_in_pulse);
-	  fragment.append(samplesinpulse, 4);
+	  char *fragmentlength = reinterpret_cast<char*> (&samples_this_fragment);
+	  fragment.append(fragmentlength, 4);
 
 	  char *sampleWidth = reinterpret_cast<char*> (&sw);
 	  fragment.append(sampleWidth, 2);
@@ -337,8 +343,8 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  char *channelLoc = reinterpret_cast<char*> (&cl);
 	  fragment.append(channelLoc, 2);
 
-	  char *fragmentlength = reinterpret_cast<char*> (&samples_this_fragment);
-	  fragment.append(fragmentlength, 4);
+	  char *samplesinpulse = reinterpret_cast<char*> (&samples_in_pulse);
+	  fragment.append(samplesinpulse, 4);
 
 	  char *fragmentindex = reinterpret_cast<char*> (&fragment_index);
 	  fragment.append(fragmentindex, 2);
@@ -370,8 +376,13 @@ void StraxInserter::ParseDocuments(data_packet* dp){
     else
       idx++;
   }
+  proc_end = system_clock::now();
   if(smallest_latest_index_seen != -1)
     WriteOutFiles(smallest_latest_index_seen);
+
+  fBytesProcessed += dp->size;
+  fProcTime += duration_cast<microseconds>(proc_end - proc_start);
+  delete dp;
 }
 
 int StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp) {
@@ -412,29 +423,20 @@ int StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp)
 
 
 int StraxInserter::ReadAndInsertData(){
-  using namespace std::chrono;
   fThreadId = std::this_thread::get_id();
   fActive = fRunning = true;
-  bool haddata=false;
-  std::queue<data_packet*> b;
+  std::list<data_packet*> b;
   data_packet* dp;
   fBufferLength = 0;
-  system_clock::time_point proc_start, proc_end;
   microseconds sleep_time(10);
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
     while(fActive == true){
       if (fDataSource->GetData(&b)) {
-        haddata = true;
         fBufferLength = b.size();
         fBufferCounter[int(b.size())]++;
-        for (auto& dp : b) {
-          proc_start = system_clock::now();
-          ParseDocuments(dp);
-          fBytesProcessed += dp->size;
-          delete dp;
-          proc_end = system_clock::now();
+        for (auto dp_ : b) {
+          ParseDocuments(dp_);
           fBufferLength--;
-          fProcTime += duration_cast<microseconds>(proc_end - proc_start);
         }
         b.clear();
       } else {
@@ -444,21 +446,13 @@ int StraxInserter::ReadAndInsertData(){
   } else {
     while (fActive == true) {
       if (fDataSource->GetData(dp)) {
-        haddata = true;
         fBufferCounter[1]++;
-        proc_start = system_clock::now();
         ParseDocuments(dp);
-        fBytesProcessed += dp->size;
-        delete dp;
-        proc_end = system_clock::now();
-        fProcTime += duration_cast<microseconds>(proc_end - proc_start);
       } else {
         std::this_thread::sleep_for(sleep_time);
       }
     }
   }
-  if(haddata)
-    WriteOutFiles(1000000, true);
   fRunning = false;
   return 0;
 }

@@ -8,7 +8,7 @@
 #include <vector>
 #include <cstdint>
 #include <mutex>
-#include <queue>
+#include <list>
 
 class StraxInserter;
 class MongoLog;
@@ -42,7 +42,7 @@ public:
   void ReadData(int link);
   void End();
 
-  int GetData(std::queue<data_packet*>* retVec, unsigned num = 0);
+  int GetData(std::list<data_packet*>* retQ, unsigned num = 0);
   int GetData(data_packet* &dp);
 
   int GetDataSize(){int ds = fDataRate; fDataRate=0; return ds;}
@@ -63,7 +63,7 @@ private:
 
   std::vector <processingThread> fProcessingThreads;
   std::map<int, std::vector <V1724*>> fDigitizers;
-  std::queue<data_packet*> fBuffer;
+  std::list<data_packet*> fBuffer;
   std::mutex fBufferMutex;
   std::mutex fMapMutex;
 
