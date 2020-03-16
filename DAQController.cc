@@ -308,6 +308,7 @@ void DAQController::ReadData(int link){
 std::map<int, int> DAQController::GetDataPerChan(){
   // Return a map of data transferred per channel since last update
   // Clears the private maps in the StraxInserters
+  const std::lock_guard<std::mutex> lg(fPTmutex);
   std::map <int, int> retmap;
   for (const auto& pt : fProcessingThreads)
     pt.inserter->GetDataPerChan(retmap);
@@ -315,11 +316,13 @@ std::map<int, int> DAQController::GetDataPerChan(){
 }
 
 long DAQController::GetStraxBufferSize() {
+  const std::lock_guard<std::mutex> lg(fPTmutex);
   return std::accumulate(fProcessingThreads.begin(), fProcessingThreads.end(), 0,
       [=](long tot, processingThread pt) {return tot + pt.inserter->GetBufferSize();});
 }
 
 int DAQController::GetBufferLength() {
+  const std::lock_guard<std::mutex> lg(fPTmutex);
   return fBufferLength.load() + std::accumulate(fProcessingThreads.begin(),
       fProcessingThreads.end(), 0,
       [](int tot, auto pt){return tot + pt.inserter->GetBufferLength();});
@@ -371,6 +374,7 @@ bool DAQController::CheckErrors(){
   // on the order of ~second(s) and initialize a STOP in case
   // the function returns "true"
 
+  const std::lock_guard<std::mutex> lg(fPTmutex);
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
     if(fProcessingThreads[i].inserter->CheckError()){
       fLog->Entry(MongoLog::Error, "Error found in processing thread.");
@@ -383,6 +387,7 @@ bool DAQController::CheckErrors(){
 
 int DAQController::OpenProcessingThreads(){
   int ret = 0;
+  const std::lock_guard<std::mutex> lg(fPTmutex);
   for(int i=0; i<fNProcessingThreads; i++){
     processingThread p;
     p.inserter = new StraxInserter();
@@ -398,6 +403,7 @@ int DAQController::OpenProcessingThreads(){
 
 void DAQController::CloseProcessingThreads(){
   std::map<int,int> board_fails;
+  const std::lock_guard<std::mutex> lg(fPTmutex);
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
     fProcessingThreads[i].inserter->Close(board_fails);
     // two stage process so there's time to clear data

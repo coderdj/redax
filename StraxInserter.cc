@@ -35,7 +35,7 @@ StraxInserter::StraxInserter(){
 StraxInserter::~StraxInserter(){
   fActive = false;
   int counter_short = 0, counter_long = 0;
-  fLog->Entry(MongoLog::Local, "Thread %x waiting to stop, has %i events left",
+  fLog->Entry(MongoLog::Local, "Thread %lx waiting to stop, has %i events left",
       fThreadId, fBufferLength.load());
   int events_start = fBufferLength.load();
   do{
@@ -43,11 +43,10 @@ StraxInserter::~StraxInserter(){
     while (fRunning && counter_short++ < 500)
       std::this_thread::sleep_for(std::chrono::milliseconds(10));
     if (counter_short >= 500)
-      fLog->Entry(MongoLog::Message, "Thread %x taking a while to stop, still has %i evts",
+      fLog->Entry(MongoLog::Message, "Thread %lx taking a while to stop, still has %i evts",
           fThreadId, fBufferLength.load());
   } while (fRunning && fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
-  if (fBytesProcessed > 0)
-    WriteOutFiles(1000000, true);
+  return;
   char prefix = ' ';
   float num = 0.;
   if (fBytesProcessed > (1L<<40)) {
@@ -107,8 +106,8 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
     fLog->Entry(MongoLog::Error, "StraxInserter::Initialize tried to create output directory but failed. Check that you have permission to write here.");
     return -1;
   }
-  fLog->Entry(MongoLog::Local, "Strax output initialized with %li ns chunks and %li ns overlap time",
-    fChunkLength, fChunkOverlap);
+  //fLog->Entry(MongoLog::Local, "Strax output initialized with %li ns chunks and %li ns overlap time",
+  //  fChunkLength, fChunkOverlap);
 
   return 0;
 }
@@ -454,6 +453,8 @@ int StraxInserter::ReadAndInsertData(){
       }
     }
   }
+  if (fBytesProcessed > 0)
+    WriteOutFiles(1000000, true);
   fRunning = false;
   return 0;
 }
@@ -506,7 +507,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     iter.second = nullptr;
     fFragmentSize -= uncompressed_size;
     idx_to_clear.push_back(chunk_index);
-    
+
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
     writefile.write(out_buffer, wsize);
     delete[] out_buffer;
