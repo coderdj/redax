@@ -66,6 +66,7 @@ private:
   std::list<data_packet*> fBuffer;
   std::mutex fBufferMutex;
   std::mutex fMapMutex;
+  std::mutex fPTmutex;
 
   std::atomic_bool fReadLoop;
   std::map<int, std::atomic_bool> fRunning;

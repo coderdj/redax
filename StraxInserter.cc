@@ -506,8 +506,9 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     iter.second = nullptr;
     fFragmentSize -= uncompressed_size;
     idx_to_clear.push_back(chunk_index);
-    
+
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
+    fLog->Entry(MongoLog::Local, "Thread %x chunk %06i", fThreadId, chunk_index);
     writefile.write(out_buffer, wsize);
     delete[] out_buffer;
     writefile.close();
@@ -532,6 +533,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     std::for_each(fFragments.begin(), fFragments.end(), [](auto p){if (p.second != nullptr) delete p.second;});
     fFragments.clear();
     fFragmentSize = 0;
+    fLog->Entry(MongoLog::Local, "Thread %x chunk END", fThreadId);
     fs::path write_path(fOutputPath);
     std::string filename = fHostname;
     write_path /= "THE_END";
