@@ -85,7 +85,6 @@ private:
   long fBytesProcessed;
   long fFragmentsProcessed;
   long fEventsProcessed;
-  long fDataPacketsProcessed;
 
   std::chrono::microseconds fProcTime;
   std::chrono::microseconds fCompTime;

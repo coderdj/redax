@@ -16,6 +16,7 @@ Options::Options(MongoLog *log, std::string options_name,
   fLog = log;
   mongocxx::uri uri{suri};
   fClient = mongocxx::client{uri};
+  fDBname = dbname;
   fDAC_collection = fClient[dbname]["dac_calibration"];
   mongocxx::collection opts_collection = fClient[dbname]["options"];
   if(Load(options_name, opts_collection, override_opts)!=0)
@@ -373,7 +374,31 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
   return;
 }
 
-void SaveBenchmarks(std::map<int, long>& buffer_counter, long bytes,
-    double proc_time_us, double comp_time_us, long tid) {
+void SaveBenchmarks(std::map<std::string, long>& byte_counter,
+    std::map<int, long>& buffer_counter, long bytes,
+    double proc_time_us, double comp_time_us) {
+  using namespace bsoncxx::builder::stream;
+  std::string run_id = GetString("run_identifier", "latest");
+  auto search_doc = document{} << "run" << run_id << finalize;
+  auto update_doc = document{};
+  update_doc << "$set" << "run" << run_id;
+  update_doc << "$push" << open_document;
+  update_doc << "bytes" << byte_counter["bytes"];
+  update_doc << "fragments" << byte_counter["fragments"];
+  update_doc << "events" << byte_counter["events"];
+  update_doc << "data_packets" << byte_counter["data_packets"];
+  update_doc << "processing_time_us" << proc_time_us;
+  update_doc << "compression_time_us" << comp_time_us;
+  update_doc << "buffer_xfers" << open_document;
+  for (auto& p : buffer_counter) {
+    update_doc << p.first << p.second;
+  }
+  update_doc << close_document; // buffer xfers
 
+  update_doc << close_document; // push
+  auto write_doc = update_doc << finalize;
+  mongocxx::options::update options;
+  options.upsert(true);
+  fClient[fDBname]["redax_benchmarks"].update_one(search_doc.view(), write_doc.view(), options);
+  return;
 }

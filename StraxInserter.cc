@@ -31,7 +31,6 @@ StraxInserter::StraxInserter(){
   fBytesProcessed = 0;
   fFragmentsProcessed = 0;
   fEventsProcessed = 0;
-  fDataPacketsProcessed = 0;
 }
 
 StraxInserter::~StraxInserter(){
@@ -48,14 +47,14 @@ StraxInserter::~StraxInserter(){
       fLog->Entry(MongoLog::Message, "Thread %x taking a while to stop, still has %i evts",
           fThreadId, fBufferLength.load());
   } while (fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
-  char prefix = ' ';
-  float num = 0.;
+  long total_dps = std::accumulate(fBufferCounter.begin(), fBufferCounter.end(), 0,
+      [&](long tot, auto& p){return tot + p.second;});
   std::map<std::string, long> counters {
     {"bytes", fBytesProcessed},
     {"fragments", fFragmentsProcessed},
     {"events", fEventsProcessed},
-    {"datapackets", fDataPacketsProcessed}};
-  fOptions->SaveBenchmarkData(fThreadId, counters, fBufferCounter,
+    {"data_packets", total_dps}};
+  fOptions->SaveBenchmarkData(counters, fBufferCounter,
       fProcTime.count(), fCompTime.count());
 }
 

@@ -86,13 +86,14 @@ public:
   std::vector<u_int16_t> GetThresholds(int board);
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
-  void SaveBenchmarks(std:map<int, long>&, long, double, double, long);
+  void SaveBenchmarks(std:map<std::string, long>&, std::map<int, long>& double, double);
 private:
   mongocxx::client fClient;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   MongoLog *fLog;
   mongocxx::collection fDAC_collection;
+  std::string fDBname;
 };
 
 #endif
