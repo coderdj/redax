@@ -46,8 +46,6 @@ StraxInserter::~StraxInserter(){
       fLog->Entry(MongoLog::Message, "Thread %x taking a while to stop, still has %i evts",
           fThreadId, fBufferLength.load());
   } while (fRunning && fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
-  if (fBytesProcessed > 0)
-    WriteOutFiles(1000000, true);
   char prefix = ' ';
   float num = 0.;
   if (fBytesProcessed > (1L<<40)) {
@@ -454,6 +452,8 @@ int StraxInserter::ReadAndInsertData(){
       }
     }
   }
+  if (fBytesProcessed > 0)
+    WriteOutFiles(1000000, true);
   fRunning = false;
   return 0;
 }
@@ -508,7 +508,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     idx_to_clear.push_back(chunk_index);
 
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
-    fLog->Entry(MongoLog::Local, "Thread %x chunk %s %x bytes",
+    fLog->Entry(MongoLog::Local, "Thread %lx chunk %s %x bytes",
         fThreadId, chunk_index.c_str(), uncompressed_size);
     writefile.write(out_buffer, wsize);
     delete[] out_buffer;
