@@ -356,7 +356,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  fragment.append(data_loc, samples_this_fragment*2);
           uint8_t zero_filler = 0;
           char *zero = reinterpret_cast<char*> (&zero_filler);
-	  while(fragment.size()<fFragmentBytes+fStraxHeaderSize)
+	  while((int)fragment.size()<fFragmentBytes+fStraxHeaderSize)
 	    fragment.append(zero, 1); // int(0) != int("0")
 
           int chunk_id = AddFragmentToBuffer(fragment, time_this_fragment);
