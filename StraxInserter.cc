@@ -29,6 +29,9 @@ StraxInserter::StraxInserter(){
   fChunkNameLength = 6;
   fThreadId = std::this_thread::get_id();
   fBytesProcessed = 0;
+  fFragmentsProcessed = 0;
+  fEventsProcessed = 0;
+  fDataPacketsProcessed = 0;
 }
 
 StraxInserter::~StraxInserter(){
@@ -47,30 +50,13 @@ StraxInserter::~StraxInserter(){
   } while (fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
   char prefix = ' ';
   float num = 0.;
-  if (fBytesProcessed > (1L<<40)) {
-    prefix = 'T';
-    num = fBytesProcessed/(1024.*1024.*1024.*1024.);
-  } else if (fBytesProcessed > (1L<<30)) {
-    prefix = 'G';
-    num = fBytesProcessed/(1024.*1024.*1024.);
-  } else if (fBytesProcessed > (1<<20)) {
-    prefix = 'M';
-    num = fBytesProcessed/(1024.*1024.);
-  } else if (fBytesProcessed > (1<<10)) {
-    prefix = 'K';
-    num = fBytesProcessed/(1024.);
-  } else {
-    prefix = ' ';
-    num = fBytesProcessed/(1.);
-  }
-  if (fBufferCounter.empty()) return;
-  fLog->Entry(MongoLog::Local, "Processed %.1f %cB in %.1f s, compresssed it in %.1f s",
-      num, prefix, fProcTime.count()*1e-6, fCompTime.count()*1e-6);
-  std::stringstream msg;
-  msg << "BL report: ";
-  for (auto p : fBufferCounter)
-    msg << p.first << " 0x" << std::hex << p.second << std::dec << " | ";
-  fLog->Entry(MongoLog::Local, msg.str());
+  std::map<std::string, long> counters {
+    {"bytes", fBytesProcessed},
+    {"fragments", fFragmentsProcessed},
+    {"events", fEventsProcessed},
+    {"datapackets", fDataPacketsProcessed}};
+  fOptions->SaveBenchmarkData(fThreadId, counters, fBufferCounter,
+      fProcTime.count(), fCompTime.count());
 }
 
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
