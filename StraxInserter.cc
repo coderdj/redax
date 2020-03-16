@@ -28,6 +28,7 @@ StraxInserter::StraxInserter(){
   fOutputPath = "";
   fThreadId = std::this_thread::get_id();
   fBytesProcessed = 0;
+  fFragmentSize = 0;
   fFullChunkLength = fChunkLength+fChunkOverlap;
 }
 
@@ -44,7 +45,7 @@ StraxInserter::~StraxInserter(){
     if (counter_short >= 500)
       fLog->Entry(MongoLog::Message, "Thread %x taking a while to stop, still has %i evts",
           fThreadId, fBufferLength.load());
-  } while (fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
+  } while (fRunning && fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
   if (fBytesProcessed > 0)
     WriteOutFiles(1000000, true);
   char prefix = ' ';
@@ -114,17 +115,12 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 
 void StraxInserter::Close(std::map<int,int>& ret){
   fActive = false;
+  const std::lock_guard<std::mutex> lg(fFC_mutex);
   for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
 }
 
-long StraxInserter::GetBufferSize() {
-  long ret = 0;
-  ret = std::accumulate(fFragmentSize.begin(), fFragmentSize.end(), 0L,
-      [&](long tot, auto& iter) {return tot + iter.second;});
-  return ret;
-}
-
 void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
+  const std::lock_guard<std::mutex> lg(fDPC_mutex);
   for (auto& pair : fDataPerChan) {
     ret[pair.first] += pair.second;
     pair.second = 0;
@@ -171,6 +167,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 
   u_int32_t idx = 0;
   std::map<std::string, int> fmt = fFmt[dp->bid];
+  std::map<int, int> data_per_chan;
   unsigned total_words = size/sizeof(u_int32_t);
   proc_start = system_clock::now();
   while(idx < total_words && buff[idx] != 0xFFFFFFFF){
@@ -196,6 +193,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
 
       if(board_fail){
+        const std::lock_guard<std::mutex> lg(fFC_mutex);
         fDataSource->CheckError(dp->bid);
 	fFailCounter[dp->bid]++;
         idx += event_header_words;
@@ -306,11 +304,11 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	u_int32_t samples_in_pulse = channel_words<<1;
 	u_int32_t index_in_pulse = 0;
 	u_int32_t offset = idx<<1;
-	u_int16_t fragment_index = 0;
+	u_int16_t fragment_index = 0;Hmm. Readers 0,1, and 2 all segfaulted at the same ti
 	u_int16_t sw = fmt["ns_per_sample"];
         int fragment_samples = fFragmentBytes>>1;
 	int16_t cl = fOptions->GetChannel(dp->bid, channel);
-        fDataPerChan[cl] += samples_in_pulse<<1;
+        data_per_chan[cl] += samples_in_pulse<<1;
 	// Failing to discern which channel we're getting data from seems serious enough to throw
 	if(cl==-1)
 	  throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
@@ -375,6 +373,10 @@ void StraxInserter::ParseDocuments(data_packet* dp){
     else
       idx++;
   }
+  {
+    const std::lock_guard<std::mutex> lg(fDPC_mutex);
+    for (auto& p : data_per_channel) fDataPerChan[p.first] += p.second;
+  }
   proc_end = system_clock::now();
   if(smallest_latest_index_seen != -1)
     WriteOutFiles(smallest_latest_index_seen);
@@ -394,12 +396,13 @@ int StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp)
   while(chunk_index.size() < fChunkNameLength)
     chunk_index.insert(0, "0");
 
+  fFragmentSize += fragment.size();
+
   if(!nextpre){
     if(fFragments.count(chunk_index) == 0){
       fFragments[chunk_index] = new std::string();
     }
     fFragments[chunk_index]->append(fragment);
-    fFragmentSize[chunk_index] += fragment.size();
   } else {
     std::string nextchunk_index = std::to_string(chunk_id+1);
     while(nextchunk_index.size() < fChunkNameLength)
@@ -409,13 +412,11 @@ int StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp)
       fFragments[nextchunk_index+"_pre"] = new std::string();
     }
     fFragments[nextchunk_index+"_pre"]->append(fragment);
-    fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
 
     if(fFragments.count(chunk_index+"_post") == 0){
       fFragments[chunk_index+"_post"] = new std::string();
     }
     fFragments[chunk_index+"_post"]->append(fragment);
-    fFragmentSize[chunk_index+"_post"] += fragment.size();
   }
   return chunk_id;
 }
@@ -502,7 +503,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
     }
     delete iter.second;
     iter.second = nullptr;
-    fFragmentSize[chunk_index] = 0;
+    fFragmentSize -= uncompressed_size;
     idx_to_clear.push_back(chunk_index);
     
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
@@ -523,7 +524,6 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   // clear now because c++ sometimes overruns its buffers
   for (auto s : idx_to_clear) {
     fFragments.erase(s);
-    fFragmentSize.erase(s);
   }
   
 

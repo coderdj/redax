@@ -48,7 +48,7 @@ public:
   
   int ReadAndInsertData();
   bool CheckError(){ bool ret = fErrorBit; fErrorBit = false; return ret;}
-  long GetBufferSize();
+  long GetBufferSize() {return fFragmentSize.load();}
   void GetDataPerChan(std::map<int, int>& ret);
   void CheckError(int bid);
   int GetBufferLength() {return fBufferLength.load();}
@@ -79,10 +79,12 @@ private:
   bool fErrorBit;
   std::string fCompressor;
   std::map<std::string, std::string*> fFragments;
-  std::map<std::string, std::atomic_long> fFragmentSize;
+  std::atomic_long fFragmentSize;
   std::map<int, std::map<std::string, int>> fFmt;
   std::map<int, int> fFailCounter;
+  std::mutex fFC_mutex;
   std::map<int, std::atomic_int> fDataPerChan;
+  std::muxtex fDPC_mutex;
   std::map<int, long> fBufferCounter;
   std::atomic_int fBufferLength;
   long fBytesProcessed;
