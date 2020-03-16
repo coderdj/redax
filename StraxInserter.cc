@@ -26,9 +26,9 @@ StraxInserter::StraxInserter(){
   fErrorBit = false;
   fMissingVerified = 0;
   fOutputPath = "";
-  fChunkNameLength = 6;
   fThreadId = std::this_thread::get_id();
   fBytesProcessed = 0;
+  fFullChunkLength = fChunkLength+fChunkOverlap;
 }
 
 StraxInserter::~StraxInserter(){
@@ -45,6 +45,8 @@ StraxInserter::~StraxInserter(){
       fLog->Entry(MongoLog::Message, "Thread %x taking a while to stop, still has %i evts",
           fThreadId, fBufferLength.load());
   } while (fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
+  if (fBytesProcessed > 0)
+    WriteOutFiles(1000000, true);
   char prefix = ' ';
   float num = 0.;
   if (fBytesProcessed > (1L<<40)) {
@@ -80,6 +82,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
   fFragmentBytes = fOptions->GetInt("strax_fragment_payload_bytes", 110*2);
   fCompressor = fOptions->GetString("compressor", "lz4");
+  fFullChunkLength = fChunkLength+fChunkOverlap;
   fHostname = hostname;
   std::string run_name = fOptions->GetString("run_identifier", "run");
 
@@ -129,24 +132,47 @@ void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
   return;
 }
 
+void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp) {
+  std::string fragment;
+  fragment.append((char*)&timestamp, sizeof(timestamp));
+  int32_t length = fFragmentBytes>>1;
+  fragment.append((char*)&length, sizeof(length));
+  int16_t sw = 10;
+  fragment.append((char*)&sw, sizeof(sw));
+  int16_t channel = 799; // TODO add MV and NV support
+  fragment.append((char*)&channel, sizeof(channel));
+  fragment.append((char*)&length, sizeof(length));
+  int16_t fragment_i = 0;
+  fragment.append((char*)&fragment_i, sizeof(fragment_i));
+  int16_t baseline = 0;
+  fragment.append((char*)&baseline, sizeof(baseline));
+  int8_t zero = 0;
+  while ((int)fragment.size() < fFragmentBytes+fStraxHeaderSize)
+    fragment.append((char*)&zero, sizeof(zero));
+  AddFragmentToBuffer(fragment, timestamp);
+}
+
 void StraxInserter::ParseDocuments(data_packet* dp){
-  
+
+  using namespace std::chrono;
+  system_clock::time_point proc_start, proc_end;
+
   // Take a buffer and break it up into one document per channel
   unsigned int max_channels = 16; // hardcoded to accomodate V1730
-  
+
   // Unpack the things from the data packet
   std::vector<u_int32_t> clock_counters(max_channels, dp->clock_counter);
   std::vector<u_int32_t> last_times_seen(max_channels, 0xFFFFFFFF);
-  
+
   u_int32_t size = dp->size;
   u_int32_t *buff = dp->buff;
   int smallest_latest_index_seen = -1;
   const int event_header_words = 4;
-  u_int64_t fFullChunkLength = fChunkLength+fChunkOverlap;
-  
+
   u_int32_t idx = 0;
   std::map<std::string, int> fmt = fFmt[dp->bid];
   unsigned total_words = size/sizeof(u_int32_t);
+  proc_start = system_clock::now();
   while(idx < total_words && buff[idx] != 0xFFFFFFFF){
     
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
@@ -307,8 +333,8 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
 	  fragment.append(pulseTime, 8);
 
-	  char *samplesinpulse = reinterpret_cast<char*> (&samples_in_pulse);
-	  fragment.append(samplesinpulse, 4);
+	  char *fragmentlength = reinterpret_cast<char*> (&samples_this_fragment);
+	  fragment.append(fragmentlength, 4);
 
 	  char *sampleWidth = reinterpret_cast<char*> (&sw);
 	  fragment.append(sampleWidth, 2);
@@ -316,8 +342,8 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  char *channelLoc = reinterpret_cast<char*> (&cl);
 	  fragment.append(channelLoc, 2);
 
-	  char *fragmentlength = reinterpret_cast<char*> (&samples_this_fragment);
-	  fragment.append(fragmentlength, 4);
+	  char *samplesinpulse = reinterpret_cast<char*> (&samples_in_pulse);
+	  fragment.append(samplesinpulse, 4);
 
 	  char *fragmentindex = reinterpret_cast<char*> (&fragment_index);
 	  fragment.append(fragmentindex, 2);
@@ -330,48 +356,15 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	  fragment.append(data_loc, samples_this_fragment*2);
           uint8_t zero_filler = 0;
           char *zero = reinterpret_cast<char*> (&zero_filler);
-	  while(fragment.size()<fFragmentBytes+fStraxHeaderSize)
+	  while((int)fragment.size()<fFragmentBytes+fStraxHeaderSize)
 	    fragment.append(zero, 1); // int(0) != int("0")
 
-	  // Get the CHUNK and decide if this event also goes into a PRE/POST file
-	  int chunk_id = time_this_fragment/fFullChunkLength;
-	
+          int chunk_id = AddFragmentToBuffer(fragment, time_this_fragment);
+
 	  // Check if this is the smallest_latest_index_seen
 	  if(smallest_latest_index_seen == -1 || chunk_id < smallest_latest_index_seen)
 	    smallest_latest_index_seen = chunk_id;
 	
-          bool nextpre = (chunk_id+1)* fFullChunkLength - time_this_fragment < fChunkOverlap;
-	  // Minor mess to maintain the same width of file names and do the pre/post stuff
-	  // If not in pre/post
-	  std::string chunk_index = std::to_string(chunk_id);
-	  while(chunk_index.size() < fChunkNameLength)
-	    chunk_index.insert(0, "0");
-
-	  if(!nextpre){
-//            if (fFragments.contains(chunk_index)){// c++20 feature not in c++17 :(
-	    if(fFragments.count(chunk_index) == 0){
-	      fFragments[chunk_index] = new std::string();
-	    }
-	    fFragments[chunk_index]->append(fragment);
-            fFragmentSize[chunk_index] += fragment.size();
-	  }
-	  else{
-	    std::string nextchunk_index = std::to_string(chunk_id+1);
-	    while(nextchunk_index.size() < fChunkNameLength)
-	      nextchunk_index.insert(0, "0");
-
-	    if(fFragments.count(nextchunk_index+"_pre") == 0){
-	      fFragments[nextchunk_index+"_pre"] = new std::string();
-	    }
-	    fFragments[nextchunk_index+"_pre"]->append(fragment);
-            fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
-
-	    if(fFragments.count(chunk_index+"_post") == 0){
-	      fFragments[chunk_index+"_post"] = new std::string();
-	    }
-	    fFragments[chunk_index+"_post"]->append(fragment);
-            fFragmentSize[chunk_index+"_post"] += fragment.size();
-	  }
 	  fragment_index++;
 	  index_in_pulse = max_sample;
 	}
@@ -382,35 +375,67 @@ void StraxInserter::ParseDocuments(data_packet* dp){
     else
       idx++;
   }
+  proc_end = system_clock::now();
   if(smallest_latest_index_seen != -1)
     WriteOutFiles(smallest_latest_index_seen);
+
+  fBytesProcessed += dp->size;
+  fProcTime += duration_cast<microseconds>(proc_end - proc_start);
+  delete dp;
+}
+
+int StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp) {
+  // Get the CHUNK and decide if this event also goes into a PRE/POST file
+  int chunk_id = timestamp/fFullChunkLength;
+  bool nextpre = (chunk_id+1)* fFullChunkLength - timestamp < fChunkOverlap;
+  // Minor mess to maintain the same width of file names and do the pre/post stuff
+  // If not in pre/post
+  std::string chunk_index = std::to_string(chunk_id);
+  while(chunk_index.size() < fChunkNameLength)
+    chunk_index.insert(0, "0");
+
+  if(!nextpre){
+    if(fFragments.count(chunk_index) == 0){
+      fFragments[chunk_index] = new std::string();
+    }
+    fFragments[chunk_index]->append(fragment);
+    fFragmentSize[chunk_index] += fragment.size();
+  } else {
+    std::string nextchunk_index = std::to_string(chunk_id+1);
+    while(nextchunk_index.size() < fChunkNameLength)
+      nextchunk_index.insert(0, "0");
+
+    if(fFragments.count(nextchunk_index+"_pre") == 0){
+      fFragments[nextchunk_index+"_pre"] = new std::string();
+    }
+    fFragments[nextchunk_index+"_pre"]->append(fragment);
+    fFragmentSize[nextchunk_index+"_pre"] += fragment.size();
+
+    if(fFragments.count(chunk_index+"_post") == 0){
+      fFragments[chunk_index+"_post"] = new std::string();
+    }
+    fFragments[chunk_index+"_post"]->append(fragment);
+    fFragmentSize[chunk_index+"_post"] += fragment.size();
+  }
+  return chunk_id;
 }
 
 
 int StraxInserter::ReadAndInsertData(){
-  using namespace std::chrono;
   fThreadId = std::this_thread::get_id();
   fActive = fRunning = true;
-  bool haddata=false;
   std::list<data_packet*> b;
   data_packet* dp;
   fBufferLength = 0;
-  system_clock::time_point proc_start, proc_end;
-  microseconds sleep_time(10);
+  std::chrono::microseconds sleep_time(10);
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
     while(fActive == true){
-      if (fDataSource->GetData(b)) {
-        haddata = true;
+      if (fDataSource->GetData(&b)) {
         fBufferLength = b.size();
         fBufferCounter[int(b.size())]++;
-        for (auto& dp : b) {
-          proc_start = system_clock::now();
-          ParseDocuments(dp);
-          fBytesProcessed += dp->size;
-          delete dp;
-          proc_end = system_clock::now();
+        for (auto dp_ : b) {
+          ParseDocuments(dp_);
           fBufferLength--;
-          fProcTime += duration_cast<microseconds>(proc_end - proc_start);
         }
         b.clear();
       } else {
@@ -420,21 +445,13 @@ int StraxInserter::ReadAndInsertData(){
   } else {
     while (fActive == true) {
       if (fDataSource->GetData(dp)) {
-        haddata = true;
         fBufferCounter[1]++;
-        proc_start = system_clock::now();
         ParseDocuments(dp);
-        fBytesProcessed += dp->size;
-        delete dp;
-        proc_end = system_clock::now();
-        fProcTime += duration_cast<microseconds>(proc_end - proc_start);
       } else {
         std::this_thread::sleep_for(sleep_time);
       }
     }
   }
-  if(haddata)
-    WriteOutFiles(1000000, true);
   fRunning = false;
   return 0;
 }
