@@ -33,7 +33,6 @@ StraxInserter::StraxInserter(){
   fFullChunkLength = fChunkLength+fChunkOverlap;
   fFragmentsProcessed = 0;
   fEventsProcessed = 0;
-  fDataPacketsProcessed = 0;
 }
 
 StraxInserter::~StraxInserter(){
@@ -56,15 +55,14 @@ StraxInserter::~StraxInserter(){
         fThreadId, fBufferLength.load());
     fForceQuit = true;
   }
-  return;
-  char prefix = ' ';
-  float num = 0.;
+  long total_dps = std::accumulate(fBufferCounter.begin(), fBufferCounter.end(), 0,
+      [&](long tot, auto& p){return tot + p.second;});
   std::map<std::string, long> counters {
     {"bytes", fBytesProcessed},
     {"fragments", fFragmentsProcessed},
     {"events", fEventsProcessed},
-    {"datapackets", fDataPacketsProcessed}};
-  fOptions->SaveBenchmarkData(fThreadId, counters, fBufferCounter,
+    {"data_packets", total_dps}};
+  fOptions->SaveBenchmarkData(counters, fBufferCounter,
       fProcTime.count(), fCompTime.count());
 }
 
