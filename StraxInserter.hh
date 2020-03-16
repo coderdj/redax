@@ -84,7 +84,7 @@ private:
   std::map<int, int> fFailCounter;
   std::mutex fFC_mutex;
   std::map<int, std::atomic_int> fDataPerChan;
-  std::muxtex fDPC_mutex;
+  std::mutex fDPC_mutex;
   std::map<int, long> fBufferCounter;
   std::atomic_int fBufferLength;
   long fBytesProcessed;

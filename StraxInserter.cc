@@ -304,7 +304,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	u_int32_t samples_in_pulse = channel_words<<1;
 	u_int32_t index_in_pulse = 0;
 	u_int32_t offset = idx<<1;
-	u_int16_t fragment_index = 0;Hmm. Readers 0,1, and 2 all segfaulted at the same ti
+	u_int16_t fragment_index = 0;
 	u_int16_t sw = fmt["ns_per_sample"];
         int fragment_samples = fFragmentBytes>>1;
 	int16_t cl = fOptions->GetChannel(dp->bid, channel);
@@ -375,7 +375,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
   }
   {
     const std::lock_guard<std::mutex> lg(fDPC_mutex);
-    for (auto& p : data_per_channel) fDataPerChan[p.first] += p.second;
+    for (auto& p : data_per_chan) fDataPerChan[p.first] += p.second;
   }
   proc_end = system_clock::now();
   if(smallest_latest_index_seen != -1)
@@ -530,7 +530,7 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   if(end){
     std::for_each(fFragments.begin(), fFragments.end(), [](auto p){if (p.second != nullptr) delete p.second;});
     fFragments.clear();
-    fFragmentSize.clear();
+    fFragmentSize = 0;
     fs::path write_path(fOutputPath);
     std::string filename = fHostname;
     write_path /= "THE_END";
