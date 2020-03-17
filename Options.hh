@@ -63,7 +63,7 @@ class MongoLog;
 class Options{
 
 public:
-  Options(MongoLog *log, std::string name, std::string suri,
+  Options(MongoLog *log, std::string name, std::string hostname, std::string suri,
   	std::string dbname, std::string override_opts);
   ~Options();
 
@@ -86,12 +86,15 @@ public:
   std::vector<u_int16_t> GetThresholds(int board);
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
+  void SaveBenchmarks(std:map<std::string, long>&, std::map<int, long>& double, double);
 private:
   mongocxx::client fClient;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   MongoLog *fLog;
   mongocxx::collection fDAC_collection;
+  std::string fDBname;
+  std::string fHostname;
 };
 
 #endif

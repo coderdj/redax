@@ -31,6 +31,8 @@ StraxInserter::StraxInserter(){
   fFragmentSize = 0;
   fForceQuit = false;
   fFullChunkLength = fChunkLength+fChunkOverlap;
+  fFragmentsProcessed = 0;
+  fEventsProcessed = 0;
 }
 
 StraxInserter::~StraxInserter(){
@@ -52,34 +54,17 @@ StraxInserter::~StraxInserter(){
     fLog->Entry(MongoLog::Warning, "Force-quitting thread %lx: %i events lost",
         fThreadId, fBufferLength.load());
     fForceQuit = true;
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
-  return;
-  char prefix = ' ';
-  float num = 0.;
-  if (fBytesProcessed > (1L<<40)) {
-    prefix = 'T';
-    num = fBytesProcessed/(1024.*1024.*1024.*1024.);
-  } else if (fBytesProcessed > (1L<<30)) {
-    prefix = 'G';
-    num = fBytesProcessed/(1024.*1024.*1024.);
-  } else if (fBytesProcessed > (1<<20)) {
-    prefix = 'M';
-    num = fBytesProcessed/(1024.*1024.);
-  } else if (fBytesProcessed > (1<<10)) {
-    prefix = 'K';
-    num = fBytesProcessed/(1024.);
-  } else {
-    prefix = ' ';
-    num = fBytesProcessed/(1.);
-  }
-  if (fBufferCounter.empty()) return;
-  fLog->Entry(MongoLog::Local, "Processed %.1f %cB in %.1f s, compresssed it in %.1f s",
-      num, prefix, fProcTime.count()*1e-6, fCompTime.count()*1e-6);
-  std::stringstream msg;
-  msg << "BL report: ";
-  for (auto p : fBufferCounter)
-    msg << p.first << " 0x" << std::hex << p.second << std::dec << " | ";
-  fLog->Entry(MongoLog::Local, msg.str());
+  long total_dps = std::accumulate(fBufferCounter.begin(), fBufferCounter.end(), 0,
+      [&](long tot, auto& p){return tot + p.second;});
+  std::map<std::string, long> counters {
+    {"bytes", fBytesProcessed},
+    {"fragments", fFragmentsProcessed},
+    {"events", fEventsProcessed},
+    {"data_packets", total_dps}};
+  fOptions->SaveBenchmarks(counters, fBufferCounter,
+      fProcTime.count(), fCompTime.count());
 }
 
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
@@ -199,6 +184,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
       bool board_fail = buff[idx+1]&0x4000000; // & (buff[idx+1]>>27)
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
+      fEventsProcessed++;
 
       if(board_fail){
         const std::lock_guard<std::mutex> lg(fFC_mutex);
@@ -334,6 +320,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 					    (fragment_index*fragment_samples));
 	    samples_this_fragment = max_sample-index_in_pulse;
 	  }
+          fFragmentsProcessed++;
 
 	  u_int64_t time_this_fragment = Time64 + fragment_samples*sw*fragment_index;
 	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
