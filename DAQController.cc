@@ -221,7 +221,7 @@ void DAQController::End(){
     std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
     fBuffer.clear();
   }
-
+  fOptions = NULL;
   std::cout<<"Finished end"<<std::endl;
 }
 
@@ -635,7 +635,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       }
       if (std::any_of(bytes_read.begin(), bytes_read.end(), [=](auto p) {
             return (0 <= p.second) && (p.second <= 16);})) { // header-only readouts???
-        fLog->Entry(MongoLog::Local, "Undersized readout");
+        fLog->Entry(MongoLog::Local, "Board %i undersized readout", p.first);
         step--;
         steps_repeated++;
         std::for_each(buffers.begin(), buffers.end(), [](auto p){delete[] p.second;});
@@ -737,8 +737,6 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
             }
             cal_values[bid]["slope"][ch] = slope = (C*D - E*F)/(B*C - F*F);
             cal_values[bid]["yint"][ch] = yint = (B*E - D*F)/(B*C - F*F);
-            //fLog->Entry(MongoLog::Debug, "Bd %i ch %i calibration %.3f/%.1f",
-            //    bid, ch, slope, yint);
 	    dac_values[bid][ch] = (target_baseline-yint)/slope;
           }
         }
@@ -762,9 +760,9 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
             int adjustment = off_by * cal_values[bid]["slope"][ch];
             if (abs(adjustment) < min_adjustment)
               adjustment = std::copysign(min_adjustment, adjustment);
-            fLog->Entry(MongoLog::Local,
-                "Bd %i ch %i dac %04x bl %.1f adjust %i step %i", bid, ch,
-                dac_values[bid][ch], bl_per_channel[bid][ch][step], adjustment, step);
+            //fLog->Entry(MongoLog::Local,
+            //    "Bd %i ch %i dac %04x bl %.1f adjust %i step %i", bid, ch,
+            //    dac_values[bid][ch], bl_per_channel[bid][ch][step], adjustment, step);
             dac_values[bid][ch] += adjustment;
           } // for channels
         } // for digis
@@ -780,14 +778,13 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       break;
     }
   } // end iterations
-  //for (unsigned d = 0; d < digis_this_link; d++) {
-  for (auto d : digis) {
-    for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
-      bid = d->bid();
-      fLog->Entry(MongoLog::Local, "Bd %i ch %i diff %i", bid, ch,
-	(target_baseline-cal_values[bid]["yint"][ch])/cal_values[bid]["slope"][ch] - dac_values[bid][ch]);
-    }
-  }
+  //for (auto d : digis) {
+  //  for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
+  //    bid = d->bid();
+  //    fLog->Entry(MongoLog::Local, "Bd %i ch %i diff %i", bid, ch,
+//	(target_baseline-cal_values[bid]["yint"][ch])/cal_values[bid]["slope"][ch] - dac_values[bid][ch]);
+  //  }
+  //}
   if (fail) return -2;
   if (std::any_of(channel_finished.begin(), channel_finished.end(),
     	[&](auto& p){return std::any_of(p.second.begin(), p.second.end(), [=](int i){
