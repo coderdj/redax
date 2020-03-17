@@ -382,7 +382,7 @@ void SaveBenchmarks(std::map<std::string, long>& byte_counter,
   std::string run_id = GetString("run_identifier", "latest");
   auto search_doc = document{} << "run" << run_id << finalize;
   auto update_doc = document{};
-  update_doc << "$set" << "run" << run_id;
+  update_doc << "$set" << open_document << "run" << run_id << close_document;
   update_doc << "$push" << open_document;
   update_doc << "host" << fHostname;
   update_doc << "bytes" << byte_counter["bytes"];

@@ -183,6 +183,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
       u_int32_t channels_in_event = __builtin_popcount(channel_mask);
       bool board_fail = buff[idx+1]&0x4000000; // & (buff[idx+1]>>27)
       u_int32_t event_time = buff[idx+3]&0xFFFFFFFF;
+      fEventsProcessed++;
 
       if(board_fail){
         const std::lock_guard<std::mutex> lg(fFC_mutex);
@@ -318,6 +319,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 					    (fragment_index*fragment_samples));
 	    samples_this_fragment = max_sample-index_in_pulse;
 	  }
+          fFragmentsProcessed++;
 
 	  u_int64_t time_this_fragment = Time64 + fragment_samples*sw*fragment_index;
 	  char *pulseTime = reinterpret_cast<char*> (&time_this_fragment);
