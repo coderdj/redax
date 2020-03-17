@@ -10,10 +10,11 @@
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
 
-Options::Options(MongoLog *log, std::string options_name,
+Options::Options(MongoLog *log, std::string options_name, std::string hostname,
           std::string suri, std::string dbname, std::string override_opts){
   bson_value = NULL;
   fLog = log;
+  fHostname = hostname;
   mongocxx::uri uri{suri};
   fClient = mongocxx::client{uri};
   fDBname = dbname;
@@ -383,6 +384,7 @@ void SaveBenchmarks(std::map<std::string, long>& byte_counter,
   auto update_doc = document{};
   update_doc << "$set" << "run" << run_id;
   update_doc << "$push" << open_document;
+  update_doc << "host" << fHostname;
   update_doc << "bytes" << byte_counter["bytes"];
   update_doc << "fragments" << byte_counter["fragments"];
   update_doc << "events" << byte_counter["events"];

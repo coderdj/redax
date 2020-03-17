@@ -63,7 +63,7 @@ class MongoLog;
 class Options{
 
 public:
-  Options(MongoLog *log, std::string name, std::string suri,
+  Options(MongoLog *log, std::string name, std::string hostname, std::string suri,
   	std::string dbname, std::string override_opts);
   ~Options();
 
@@ -94,6 +94,7 @@ private:
   MongoLog *fLog;
   mongocxx::collection fDAC_collection;
   std::string fDBname;
+  std::string fHostname;
 };
 
 #endif
