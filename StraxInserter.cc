@@ -63,7 +63,7 @@ StraxInserter::~StraxInserter(){
     {"fragments", fFragmentsProcessed},
     {"events", fEventsProcessed},
     {"data_packets", total_dps}};
-  fOptions->SaveBenchmarkData(counters, fBufferCounter,
+  fOptions->SaveBenchmarks(counters, fBufferCounter,
       fProcTime.count(), fCompTime.count());
 }
 
