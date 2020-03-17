@@ -510,13 +510,17 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
     std::map<int, std::map<std::string, std::vector<double>>> &cal_values) {
   using std::vector;
   using namespace std::chrono_literals;
-  int max_iter(2);
-  unsigned max_steps(20), ch_this_digi(0);
-  int adjustment_threshold(10), convergence_threshold(3), min_adjustment(0xA);
-  int rebin_factor(1); // log base 2
-  int nbins(1 << (14-rebin_factor)), bins_around_max(3), bid(0);
-  int triggers_per_step(3), steps_repeated(0), max_repeated_steps(10);
-  std::chrono::milliseconds ms_between_triggers(10);
+  int max_iter = fOptions->GetInt("baseline_max_iterations", 2);
+  unsigned ch_this_digi(0), max_steps = fOptions->GetInt("baseline_max_steps", 20);
+  int adjustment_threshold = fOptions->GetInt("baseline_adjustment_threshold", 10);
+  int convergence_threshold = fOptions->GetInt("baseline_convergence_threshold", 3);
+  int min_adjustment = fOptions->GetInt("baseline_min_adjustment", 0xA);
+  int rebin_factor = fOptions->GetInt("baseline_rebin_log2", 1); // log base 2
+  int bins_around_max = fOptions->GetInt("baseline_bins_around_max", 3);
+  int nbins(1 << (14-rebin_factor)), bid(0);
+  int steps_repeated(0), max_repeated_steps(10);
+  int triggers_per_step = fOptions->GetInt("baseline_triggers_per_step", 3);
+  std::chrono::milliseconds ms_between_triggers(fOptions->GetInt("baseline_ms_between_triggers", 10));
   vector<int> hist(nbins);
   vector<long> DAC_cal_points = {60000, 30000, 6000}; // arithmetic overflow
   std::map<int, vector<int>> channel_finished;
@@ -536,7 +540,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
 
   bool done(false), redo_iter(false), fail(false), calibrate(true);
   double counts_total(0), counts_around_max(0), B,C,D,E,F, slope, yint, baseline;
-  double fraction_around_max(0.8);
+  double fraction_around_max = fOptions->GetDouble("baseline_fraction_around_max", 0.8);
   u_int32_t words_in_event, channel_mask, words_per_channel, idx;
   u_int16_t val0, val1;
   int channels_in_event;
@@ -648,7 +652,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       for (auto d : digis) {
         bid = d->bid();
         idx = 0;
-        while ((idx * sizeof(u_int32_t) < bytes_read[bid])) {
+        while (((int)idx * sizeof(u_int32_t) < bytes_read[bid])) {
           if ((buffers[bid][idx]>>28) == 0xA) {
             words_in_event = buffers[bid][idx]&0xFFFFFFF;
             if (words_in_event == 4) {
