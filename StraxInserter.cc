@@ -54,6 +54,7 @@ StraxInserter::~StraxInserter(){
     fLog->Entry(MongoLog::Warning, "Force-quitting thread %lx: %i events lost",
         fThreadId, fBufferLength.load());
     fForceQuit = true;
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
   }
   long total_dps = std::accumulate(fBufferCounter.begin(), fBufferCounter.end(), 0,
       [&](long tot, auto& p){return tot + p.second;});
