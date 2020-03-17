@@ -248,7 +248,7 @@ int main(int argc, char** argv){
 	      fOptions = NULL;
 	    }
 	    fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
-				   suri, dbname, override_json);
+				   hostname, suri, dbname, override_json);
 	    std::vector<int> links;
 	    if(controller->InitializeElectronics(fOptions, links) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
