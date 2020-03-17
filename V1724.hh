@@ -19,7 +19,7 @@ class V1724{
   int ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v=nullptr);
   int WriteRegister(unsigned int reg, unsigned int value);
   unsigned int ReadRegister(unsigned int reg);
-  int GetClockCounter(u_int32_t timestamp);
+  int GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num);
   int End();
 
   int bid(){
@@ -42,7 +42,7 @@ class V1724{
   bool EnsureStopped(int ntries, int sleep);
   int CheckErrors();
   u_int32_t GetAcquisitionStatus();
-  u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
+  u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size, u_int32_t& num);
 
   std::map<std::string, int> DataFormatDefinition;
 
@@ -76,6 +76,7 @@ protected:
   // Stuff for clock reset tracking
   u_int32_t clock_counter;
   u_int32_t last_time;
+  u_int32_t last_event_num;
   bool seen_under_5;
   bool seen_over_15;
 

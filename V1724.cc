@@ -128,6 +128,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   fBaseAddress=address;
   clock_counter = 0;
   last_time = 0;
+  last_event_num = 0;
   seen_over_15 = false;
   seen_under_5 = true; // starts run as true
   u_int32_t word(0);
@@ -169,17 +170,20 @@ int V1724::Reset() {
   return ret;
 }
 
-u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
+u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size, u_int32_t& num){
   u_int32_t idx = 0;
   while(idx < size/sizeof(u_int32_t)){
-    if(buff[idx]>>28==0xA)
+    if(buff[idx]>>28==0xA){
+      num = buff[idx+2]&0xFFFFFF;
       return buff[idx+3]&0x7FFFFFFF;
+    }
     idx++;
   }
+  num = 0;
   return 0xFFFFFFFF;
 }
 
-int V1724::GetClockCounter(u_int32_t timestamp){
+int V1724::GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num){
   // The V1724 has a 31-bit on board clock counter that counts 10ns samples.
   // So it will reset every 21 seconds. We need to count the resets or we
   // can't run longer than that. But it's not as simple as incementing a
@@ -203,6 +207,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
     else if(timestamp >= 5e8 && timestamp < 15e8 && seen_under_5){
       seen_under_5 = false;
       last_time = timestamp;
+      last_event_num = this_event_num;
       return clock_counter;
     }
 
@@ -210,12 +215,14 @@ int V1724::GetClockCounter(u_int32_t timestamp){
     else if(timestamp >= 15e8 && !seen_under_5){
       seen_over_15 = true;
       last_time = timestamp;
+      last_event_num = this_event_num;
       return clock_counter;
     }
 
     // Case 5. Anything else where the clock is progressing correctly
     else{
       last_time = timestamp;
+      last_event_num = this_event_num;
       return clock_counter;
     }
   }
@@ -228,6 +235,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
       seen_under_5 = true;
       seen_over_15 = false;
       last_time = timestamp;
+      last_event_num = this_event_num;
       clock_counter++;
       return clock_counter;
     }
@@ -238,12 +246,17 @@ int V1724::GetClockCounter(u_int32_t timestamp){
     }
   }
   else{
-    fLog->Entry(MongoLog::Warning,
-      "Board %i something odd in your clock counters. t_new: %i, last_time: %i, over_15: %i, under_5: %i",
-		fBID, timestamp, last_time, seen_over_15, seen_under_5);
+    if (last_event_num == this_event_num && last_event_num != 0)
+      fLog->Entry(MongoLog::Warning,
+        "Board %i has odd clock counters. ts: %x, over_15: %i, under_5: %i, event %x",
+		fBID, timestamp, seen_over_15, seen_under_5, last_event_num);
+    else
+      fLog->Entry(MongoLog::Warning,
+          "Board %i has odd clock counters. ts: %x, over_15: %i, under_5: %i, last event %x, this event %x",
+          fBID, timestamp, seen_over_15, seen_under_5, last_event_num, this_event_num);
     // Counter equal to last time, so we're happy and keep the same counter
     return clock_counter;
-  }  
+  }
 }
 
 int V1724::WriteRegister(unsigned int reg, unsigned int value){

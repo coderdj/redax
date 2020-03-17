@@ -29,6 +29,7 @@ StraxInserter::StraxInserter(){
   fThreadId = std::this_thread::get_id();
   fBytesProcessed = 0;
   fFragmentSize = 0;
+  fForceQuit = false;
   fFullChunkLength = fChunkLength+fChunkOverlap;
 }
 
@@ -45,7 +46,13 @@ StraxInserter::~StraxInserter(){
     if (counter_short >= 500)
       fLog->Entry(MongoLog::Message, "Thread %lx taking a while to stop, still has %i evts",
           fThreadId, fBufferLength.load());
+    counter_short = 0;
   } while (fRunning && fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
+  if (fRunning) {
+    fLog->Entry(MongoLog::Warning, "Force-quitting thread %lx: %i events lost",
+        fThreadId, fBufferLength.load());
+    fForceQuit = true;
+  }
   return;
   char prefix = ' ';
   float num = 0.;
@@ -425,29 +432,34 @@ int StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp)
 int StraxInserter::ReadAndInsertData(){
   fThreadId = std::this_thread::get_id();
   fActive = fRunning = true;
-  std::list<data_packet*> b;
-  data_packet* dp;
   fBufferLength = 0;
   std::chrono::microseconds sleep_time(10);
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
     while(fActive == true){
+      std::list<data_packet*> b;
       if (fDataSource->GetData(&b)) {
         fBufferLength = b.size();
         fBufferCounter[int(b.size())]++;
-        for (auto dp_ : b) {
+        for (auto& dp_ : b) {
           ParseDocuments(dp_);
           fBufferLength--;
+          dp_ = nullptr;
+          if (fForceQuit) break;
         }
+        if (fForceQuit) for (auto& dp_ : b) if (dp_ != nullptr) delete dp_;
         b.clear();
       } else {
         std::this_thread::sleep_for(sleep_time);
       }
     }
   } else {
+    data_packet* dp;
     while (fActive == true) {
       if (fDataSource->GetData(dp)) {
+        fBufferLength = 1;
         fBufferCounter[1]++;
         ParseDocuments(dp);
+        fBufferLength = 0;
       } else {
         std::this_thread::sleep_for(sleep_time);
       }
