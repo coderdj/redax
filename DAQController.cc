@@ -234,10 +234,10 @@ void DAQController::ReadData(int link){
     fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
     std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
     fBuffer.clear();
-    fBufferLength = 0;
-    fDataRate = 0;
-    fBufferSize = 0;
   }
+  fBufferLength = 0;
+  fDataRate = 0;
+  fBufferSize = 0;
   fBufferMutex.unlock();
   
   u_int32_t board_status = 0;
