@@ -277,12 +277,16 @@ class MongoConnect():
         if mode is None:
             return None
         doc = self.collections["options"].find_one({"name": mode})
+        fields_to_exclude = ['name', 'detector', 'description', 'user', '_id']
         try:
             newdoc = {**dict(doc)}
             if "includes" in doc.keys():
                 for i in doc['includes']:
                     incdoc = self.collections["options"].find_one({"name": i})
-                    newdoc = {**dict(newdoc), **dict(incdoc)}
+                    for field in fields_to_exclude:
+                        if field in incdoc:
+                            del incdoc[field]
+                    newdoc.update(incdoc)
             return newdoc
         except Exception as E:
             # LOG ERROR
@@ -302,13 +306,12 @@ class MongoConnect():
             return [], []
         cc = []
         hostlist = []
-        #self.log.debug([(b['type'], b['host']) for b in doc['boards']])
         for b in doc['boards']:
             if 'V17' in b['type'] and b['host'] not in hostlist:
                 hostlist.append(b['host'])
             elif b['type'] == 'V2718':
                 cc.append(b['host'])
-        self.log.debug("Hosts %s, cc %s" % (hostlist, cc))
+        #self.log.debug("Hosts %s, cc %s" % (hostlist, cc))
         return hostlist, cc
 
     def GetNextRunNumber(self):
@@ -420,7 +423,7 @@ class MongoConnect():
         # Make a data entry so bootstrax can find the thing
         if 'strax_output_path' in ini:
             run_doc['data'] = [{
-		'type': 'live',
+                'type': 'live',
                 'host': 'daq',
                 'location': ini['strax_output_path']
             }]

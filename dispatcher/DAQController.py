@@ -229,19 +229,18 @@ class DAQController():
             host_list, cc = self.mongo.GetHostsForMode(run_mode)
             for c in cc:
                 host_list.append(c)
-	    self.log.debug('Sending ARM to %s' % detector)
+            self.log.debug('Sending ARM to %s' % detector)
             self.mongo.SendCommand("arm", host_list, self.goal_state[detector]['user'],
                                    detector, self.goal_state[detector]['mode'])
             self.arm_command_sent[detector] = datetime.datetime.utcnow()
         else:
             # If an arm command has been sent, have a look if it timed out
-            self.CheckTimeouts(detector)
+            self.CheckArmTimeout(detector)
         return
 
     def StartDetector(self, detector):
         '''
-        Start the detector given. If there is a crate controller involved then this is a 
-        two-stage process. 
+        Start the detector given. Checks for link status
         '''
         if (detector not in self.start_command_sent.keys() or
             self.start_command_sent[detector] is None):
@@ -255,15 +254,15 @@ class DAQController():
             run = self.mongo.InsertRunDoc(detector, self.goal_state)
             for c in cc:
                 host_list.append(c)
-	    self.log.debug('Sending START to %s' % detector)
+            self.log.debug('Sending START to %s' % detector)
             self.mongo.SendCommand("start", host_list, self.goal_state[detector]['user'],
                                    detector, self.goal_state[detector]['mode'])
             self.start_command_sent[detector] = datetime.datetime.utcnow()
         else:
-            self.CheckTimeouts(detector)
+            self.CheckStartTimeout(detector)
         return
 
-    def StopDetector(self, detector):
+    def StopDetector(self, detector, delay=5):
         '''
         Stop the detector given. If there is a crate controller involved then this is a
         two-stage process.
@@ -272,25 +271,90 @@ class DAQController():
         # Little different than before. We want to stop all associated readers and ccs,
         # but we can't get them from the run mode (this may have changed) and will get them
         # from the config of the dispatcher, which we cache.
-        readers, cc = self.mongo.GetConfiguredNodes(detector, self.goal_state['tpc']['link_mv'],
-                                                    self.goal_state['tpc']['link_nv'])
+        readers, cc = self.mongo.GetConfiguredNodes(detector,
+                self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
 
-        # Set all timeouts to nothing
-        self.arm_command_sent[detector] = None
-        self.start_command_sent[detector] = None
-
-        # We do not need to check the 'stop_command_sent' because this function is
-        # exclusively called through the CheckTimeouts wrapper
-	self.log.debug('Sending STOP to %s' % detector)
-        self.mongo.SendCommand("stop", cc, self.goal_state[detector]['user'],
-                               detector, self.goal_state[detector]['mode'])
-        self.mongo.SendCommand("stop", readers, self.goal_state[detector]['user'],
-                               detector, self.goal_state[detector]['mode'], 5)
+        dt = 0
+        nowtime = datetime.datetime.utcnow()
         try:
-            self.mongo.SetStopTime(self.latest_status[detector]['number'])
-        except Exception as E:
-            self.log.warning("Wanted to stop run but no associated number, got %s exception: %s" % (type(E), E))
+            dt = (nowtime - self.stop_command_sent[detector]).total_seconds()
+        except KeyError, TypeError:
+            pass
+        if dt < self.stop_timeout:
+
+            # Set all timeouts to nothing
+            self.arm_command_sent[detector] = None
+            self.start_command_sent[detector] = None
+            self.stop_command_sent[detector] = nowtime
+
+            # We do not need to check the 'stop_command_sent' because this function is
+            # exclusively called through the CheckTimeouts wrapper
+            self.log.debug('Sending STOP to %s' % detector)
+            self.mongo.SendCommand("stop", cc, self.goal_state[detector]['user'],
+                               detector, self.goal_state[detector]['mode'])
+            self.mongo.SendCommand("stop", readers, self.goal_state[detector]['user'],
+                               detector, self.goal_state[detector]['mode'], delay)
+            try:
+                self.mongo.SetStopTime(self.latest_status[detector]['number'])
+            except Exception as E:
+                self.log.warning("Wanted to stop run but no associated number, got %s exception: %s" % (type(E), E))
+        else:
+            self.CheckStopTimeout(detector)
         return
+
+    def CheckArmTimeout(self, detector):
+        nowtime = datetime.datetime.utcnow()
+        dt = 0
+        try:
+            dt = (nowtime - self.arm_command_sent[detector]).total_seconds()
+        except KeyError, TypeError:
+            # either detector not in arm_command_sent, or it's None
+            pass
+        if dt >= self.arm_timeout:
+            self.StopDetector(detector)
+            self.mongo.LogError("dispatcher",
+                                "Took more than %i seconds to arm, indicating a possible timeout"%
+                                self.arm_timeout,
+                                "WARNING", "ARM_TIMEOUT")
+        else:
+            self.log.debug("Last issued ARM to %s %i seconds ago" % (detector, int(dt)))
+
+    def CheckStartTimeout(self, detector):
+        nowtime = datetime.datetime.utcnow()
+        dt = 0
+        try:
+            dt = (nowtime - self.start_command_sent[detector]).total_seconds()
+        except KeyError, TypeError:
+            # either detector not in start_command_sent, or it's None
+            pass
+        if dt >= self.start_timeout:
+            self.StopDetector(detector)
+            self.mongo.LogError("dispatcher",
+                                "Took more than %i seconds to start, indicating a possible timeout"%
+                                self.start_timeout,
+                                "WARNING", "START_TIMEOUT")
+        else:
+            self.log.debug("Last issued START to %s %i seconds ago" % (detector, int(dt)))
+
+    def CheckStopTimeout(self, detector):
+        nowtime = datetime.datetime.utcnow()
+        dt = 0
+        try:
+            dt = (nowtime - self.stop_command_sent[detector]).total_seconds()
+        except KeyError, TypeError:
+            # either detector not in start_command_sent or it's None
+            pass
+        if dt >= (self.error_stop_count[detector]+1)*self.stop_timeout):
+            if self.error_stop_count[detector] >= self.stop_retries:
+                self.mongo.LogError("dispatcher",
+                                    ("Dispatcher control loop detects a timeout that is not solved " +
+                                     "with a STOP command"),
+                                    'ERROR',
+                                    "STOP_TIMEOUT")
+            elif self.error_stop_count[detector] < self.stop_retries:
+                self.StopDetector(detector)
+                self.log.debug('Working on a stop timeout for %s' % detector)
+                self.error_stop_count[detector] += 1
 
     def CheckTimeouts(self, detector):
         ''' 
@@ -324,7 +388,7 @@ class DAQController():
         # Case 2: we're not timing out at all, send the stop command
         if (detector not in self.stop_command_sent.keys() or self.stop_command_sent[detector] is None):
             sendstop = True
-	    self.log.debug('Stopping %s, Case 2' % detector)
+            self.log.debug('Stopping %s, Case 2' % detector)
             self.stop_command_sent[detector] = nowtime
             self.error_stop_count[detector] = 0
 
@@ -337,23 +401,12 @@ class DAQController():
         # 3a: ARM timeout
         if (detector in self.arm_command_sent.keys() and self.arm_command_sent[detector] != None and
             (nowtime-self.arm_command_sent[detector]).total_seconds() > self.arm_timeout):
-            self.arm_command_sent[detector] = None
-            sendstop = True
-            self.stop_command_sent[detector] = nowtime
-            self.mongo.LogError("dispatcher",
-                                "Took more than %i seconds to arm, indicating a possible timeout"%
-                                self.arm_timeout,
-                                "WARNING", "ARM_TIMEOUT")
         # 3b: START timeout
         elif (detector in self.start_command_sent.keys() and self.start_command_sent[detector]!=None and
               (nowtime-self.start_command_sent[detector]).total_seconds() > self.start_timeout):
             self.start_command_sent[detector] = None
             sendstop = True
             self.stop_command_sent[detector] = nowtime
-            self.mongo.LogError("dispatcher",
-                                "Took more than %i seconds to start, indicating a possible timeout"%
-                                self.start_timeout,
-                                "WARNING", "START_TIMEOUT")
         # 3c: STOP timeout. And this is where the thing can get stuck so we gotta toss an
         # error if it goes on too long
         elif (detector in self.stop_command_sent.keys() and self.stop_command_sent[detector] != None and
@@ -370,7 +423,7 @@ class DAQController():
                 sendstop = False
             elif self.error_stop_count[detector] < self.stop_retries:
                 sendstop = True
-		self.log.debug('Working on a stop timeout for %s' % detector)
+                self.log.debug('Working on a stop timeout for %s' % detector)
                 self.error_stop_count[detector] += 1
 
         if sendstop:
