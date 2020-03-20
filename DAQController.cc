@@ -644,7 +644,8 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               p.first, p.second);
         step--;
         steps_repeated++;
-        std::for_each(buffers.begin(), buffers.end(), [](auto p){delete[] p.second;});
+        for (auto p : buffers)
+            if (bytes_read[p.first] > 0) delete[] p.second;
         continue;
       }
 
