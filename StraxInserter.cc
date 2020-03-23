@@ -472,6 +472,8 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   system_clock::time_point comp_start, comp_end;
   std::vector<std::string> idx_to_clear;
   for (auto& iter : fFragments) {
+    if (iter.first == "")
+        break; // not sure why, but this sometimes happens during bad shutdowns
     std::string chunk_index = iter.first;
     std::string idnr = chunk_index.substr(0, fChunkNameLength);
     int idnrint = std::stoi(idnr);
@@ -524,12 +526,12 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   } // End for through fragments
   // clear now because c++ sometimes overruns its buffers
   for (auto s : idx_to_clear) {
-    fFragments.erase(s);
+    if (fFragments.count(s) != 0) fFragments.erase(s);
   }
-  
 
   if(end){
-    std::for_each(fFragments.begin(), fFragments.end(), [](auto p){if (p.second != nullptr) delete p.second;});
+    for (auto& p : fFragments)
+        if (p.second != nullptr) delete p.second;
     fFragments.clear();
     fFragmentSize = 0;
     fs::path write_path(fOutputPath);

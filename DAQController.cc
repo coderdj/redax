@@ -105,7 +105,7 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   if (fOptions->GetString("baseline_dac_mode") == "cached")
     fOptions->GetDAC(dac_values, BIDs);
   std::vector<std::thread*> init_threads;
-
+  fMaxEventsPerThread = fOptions->GetInt("max_events_per_thread", 1024);
   std::map<int,int> rets;
   // Parallel digitizer programming to speed baselining
   for( auto& link : fDigitizers ) {
@@ -343,7 +343,7 @@ int DAQController::GetData(std::list<data_packet*>* retQ, unsigned num){
   if (fBuffer.size() == 0) {
     return 0;
   }
-  if (num == 0) num = std::max(16, fBufferLength >> 4);
+  if (num == 0) num = std::max(16, std::min(fMaxEventsPerThread, fBufferLength >> 4));
   do {
     dp = fBuffer.front();
     fBuffer.pop_front();
