@@ -75,6 +75,7 @@ private:
   std::string fHostname;
   MongoLog *fLog;
   Options *fOptions;
+  int fMaxEventsPerThread;
 
   // For reporting to frontend
   std::atomic_int fBufferSize;
