@@ -41,6 +41,7 @@ class MongoConnect():
 
         # Translation to human-readable statuses
         self.statuses = ['Idle', 'Arming', 'Armed', 'Running', 'Error', 'Timeout', 'Unknown']
+        self.st = dict(zip(self.statuses, range(len(self.statuses))))
         self.loglevels = {"DEBUG": 0, "MESSAGE": 1, "WARNING": 2, "ERROR": 3, "FATAL": 4}
 
         # Each collection we actually interact with is stored here
@@ -160,6 +161,7 @@ class MongoConnect():
 
         whattimeisit = datetime.datetime.utcnow().timestamp()
         for detector in self.latest_status.keys():
+            status_list = []
             status = None
             rate = 0
             mode = None
@@ -181,26 +183,10 @@ class MongoConnect():
                 elif 'run_mode' in doc.keys() and doc['run_mode'] != mode:
                     mode = 'undefined'
 
-                # If we haven't set the status yet we automatically set it here
-                if status == None:
-                    try:
-                        status = doc['status']
-                    except:
-                        status = 6
-
-                # Otherwise we only really care if the status for this node is different
-                elif status != doc['status']:
-
-                    # Someone is failing or we already set a timeout condition, continue
-                    if status == 4 or doc['status'] == 4:
-                        status = 4
-                        continue
-                    elif status == 5:
-                        continue
-                    # Otherwise we're in unknown territory ;-)
-                    else:
-                        status = 6
-                        continue
+                try:
+                    status = doc['status']
+                except KeyError:
+                    status = 6
 
                 # Now check if this guy is timing out
                 if "_id" in doc.keys():
@@ -208,27 +194,34 @@ class MongoConnect():
                     if (whattimeisit - gentime) > self.timeout:
                         status = 5
 
+                status_list.append(status)
+
             # If we have a crate controller check on it too
             for controller in self.latest_status[detector]['controller'].keys():
                 doc = self.latest_status[detector]['controller'][controller]
                 # Copy above. I guess it would be possible to have no readers
-                if status == None:
+                try:
                     status = doc['status']
-                elif status in doc.keys() and status != doc['status']:
-                    if status == 4 or doc['status'] == 4:
-                        status = 4
-                        continue
-                    elif status == 5:
-                        continue
-                    else:
-                        status = 6
-                        continue
-                elif "status" not in doc.keys():
+                except KeyError:
                     status = 6
                 if "_id" in doc.keys():
                     gentime = doc['_id'].generation_time.timestamp()
                     if (whattimeisit-gentime) > self.timeout:
                         status = 5
+                status_list.append(status)
+
+            # Now we aggregate the statuses
+            for stat in ['Error','Timeout','Unknown']:
+                if self.st[stat] in status_list:
+                    status = self.st[stat]
+                    break
+            else:
+                for stat in ['Idle','Arming','Armed','Running']:
+                    if all([self.st[stat] == x for x in status_list]):
+                        status = self.st[stat]
+                    break
+                else:
+                    status = self.st['Unknown']
 
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
