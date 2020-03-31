@@ -364,12 +364,12 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	
 	  fragment_index++;
 	  index_in_pulse = max_sample;
-          if (bForceQuit == true) break;
+          if (fForceQuit == true) break;
 	} // while in pulse
 	idx+=channel_words;
-        if (bForceQuit == true) break;
+        if (fForceQuit == true) break;
       } // channel loop
-      if (bForceQuit == true) break;
+      if (fForceQuit == true) break;
     } // if header
     else
       idx++;
