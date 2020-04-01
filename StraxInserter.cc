@@ -56,6 +56,10 @@ StraxInserter::~StraxInserter(){
     fForceQuit = true;
     std::this_thread::sleep_for(std::chrono::seconds(2));
   }
+  while (fRunning) {
+    fLog->Entry(MongoLog::Message, "Still waiting for thread %lx to stop", fThreadId);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  }
   long total_dps = std::accumulate(fBufferCounter.begin(), fBufferCounter.end(), 0,
       [&](long tot, auto& p){return tot + p.second;});
   std::map<std::string, long> counters {
@@ -360,11 +364,13 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	
 	  fragment_index++;
 	  index_in_pulse = max_sample;
-	}
-	// Go to next channel
+          if (fForceQuit == true) break;
+	} // while in pulse
 	idx+=channel_words;
-      }
-    }
+        if (fForceQuit == true) break;
+      } // channel loop
+      if (fForceQuit == true) break;
+    } // if header
     else
       idx++;
   }
