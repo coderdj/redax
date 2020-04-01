@@ -52,6 +52,7 @@ public:
   int OpenProcessingThreads();
   void CloseProcessingThreads();
   long GetStraxBufferSize();
+  int GetBufferSize() {return fBufferSize.load();}
 
   void GetDataFormat(std::map<int, std::map<std::string, int>>&);
 

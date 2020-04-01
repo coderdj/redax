@@ -220,6 +220,8 @@ void DAQController::End(){
 		fBuffer.size());
     std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
     fBuffer.clear();
+    fBufferLength = 0;
+    fBufferSize = 0;
   }
   fOptions = NULL;
   std::cout<<"Finished end"<<std::endl;

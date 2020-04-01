@@ -36,6 +36,7 @@ void UpdateStatus(std::string suri, std::string dbname, DAQController* controlle
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
 	"buffer_length" << controller->GetBufferLength() <<
+        "buffer_size" << controller->GetBufferSize()/1e6 <<
         "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
 	"run_mode" << controller->run_mode() <<
 	"channels" << bsoncxx::builder::stream::open_document <<
