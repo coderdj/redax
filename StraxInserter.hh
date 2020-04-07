@@ -56,7 +56,7 @@ public:
 private:
   void ParseDocuments(data_packet *dp);
   void WriteOutFiles(int smallest_index_seen, bool end=false);
-  void GenerateArtificialDeadtime(int64_t timestamp);
+  void GenerateArtificialDeadtime(int64_t timestamp, int16_t bid);
   int AddFragmentToBuffer(std::string& fragment, int64_t timestamp);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
