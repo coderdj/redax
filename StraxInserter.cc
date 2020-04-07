@@ -125,20 +125,21 @@ void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
   return;
 }
 
-void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp) {
+void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp, int16_t bid) {
   std::string fragment;
   fragment.append((char*)&timestamp, sizeof(timestamp));
   int32_t length = fFragmentBytes>>1;
   fragment.append((char*)&length, sizeof(length));
   int16_t sw = 10;
   fragment.append((char*)&sw, sizeof(sw));
-  int16_t channel = 799; // TODO add MV and NV support
+  int16_t channel = 790; // TODO add MV and NV support
   fragment.append((char*)&channel, sizeof(channel));
   fragment.append((char*)&length, sizeof(length));
   int16_t fragment_i = 0;
   fragment.append((char*)&fragment_i, sizeof(fragment_i));
   int16_t baseline = 0;
   fragment.append((char*)&baseline, sizeof(baseline));
+  fragment.append((char*)&bid, sizeof(bid));
   int8_t zero = 0;
   while ((int)fragment.size() < fFragmentBytes+fStraxHeaderSize)
     fragment.append((char*)&zero, sizeof(zero));
@@ -192,6 +193,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 
       if(board_fail){
         const std::lock_guard<std::mutex> lg(fFC_mutex);
+        // would generate deadtime here but no timestamp
         fDataSource->CheckError(dp->bid);
 	fFailCounter[dp->bid]++;
         idx += event_header_words;
@@ -277,8 +279,6 @@ void StraxInserter::ParseDocuments(data_packet* dp){
               dp->bid, idx);
           whoops = true;
         }
-        if (whoops) // some data got lost somewhere
-          break;
 
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
 	// 48 bits this line would be different
@@ -287,12 +287,15 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 
 	 if (fmt["channel_time_msb_idx"] == 2) { 
 	   Time64 = fmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
-	 }
-	 else { 
+	 } else {
 	   Time64 = fmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
 					      iBitShift) + channel_time); // in ns
-	   }
-	
+	}
+
+        if (whoops) { // some data got lost somewhere
+          GenerateAritificialDeadtime(Time64, dp->bid);
+          break; // loop over channels
+        }
 
 	// We're now at the first sample of the channel's waveform. This
 	// will be beautiful. First we reinterpret the channel as 16
