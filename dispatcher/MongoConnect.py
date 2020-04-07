@@ -223,6 +223,8 @@ class MongoConnect():
                 else:
                     status = self.st['Unknown']
 
+            self.log.debug("Status list for %s: %s = %s" % (detector, status_list, status))
+
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
@@ -326,7 +328,7 @@ class MongoConnect():
         '''
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
-        self.log.debug("SEND COMMAND %s to %s"%(command, detector))
+        #self.log.debug("SEND COMMAND %s to %s"%(command, detector))
         number = None
         n_id = None
         if command == 'arm':

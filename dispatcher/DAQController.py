@@ -182,7 +182,7 @@ class DAQController():
                     (latest_status['neutron_veto']['status'] == self.st['ERROR'] or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.log.info("TPC has error!")
-                self.ControlDetector('stop', 'tpc')
+                self.ControlDetector(command='stop', detector='tpc')
 
 
             # Maybe someone is timing out or we're in some weird mixed state
@@ -217,13 +217,6 @@ class DAQController():
                     self.CheckTimeouts(detector)
 
         return
-
-
-    def ArmDetector(self, detector):
-        '''
-        Arm the detector given. The arm parameters are stored in the self.goal_state object
-        '''
-        return self.ControlDetector(command='arm', detector=detector)
 
 
     def ControlDetector(self, command, detector):
