@@ -281,6 +281,7 @@ void DAQController::ReadData(int link){
           delete dp;
           dp = nullptr;
 	}
+        fStatus = DAXHelpers::Error;
 	break;
       }
       if(dp->size>0){
