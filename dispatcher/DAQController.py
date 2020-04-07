@@ -296,7 +296,6 @@ class DAQController():
         if dt < local_timeouts[command]:
             self.log.debug('%i is within the %i second timeout for a %s command' %
                     (dt, local_timeouts[command], command))
-            self.error_stop_count[detector] = 0
         else:
             # timing out, maybe send stop?
             if command == 'stop':
