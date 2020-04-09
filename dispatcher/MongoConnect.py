@@ -22,6 +22,12 @@ Requires: Initialize it with the following config:
 The environment variables MONGO_PASSWORD and RUNS_MONGO_PASSWORD must be set!
 '''
 
+def _all(values, target):
+    ret = True
+    for value in values:
+        ret &= (value == target)
+    return ret
+
 class MongoConnect():
 
     def __init__(self, config, log):
@@ -211,13 +217,13 @@ class MongoConnect():
                 status_list.append(status)
 
             # Now we aggregate the statuses
-            for stat in ['Error','Timeout','Unknown']:
+            for stat in ['Arming', 'Error','Timeout','Unknown']:
                 if self.st[stat] in status_list:
                     status = self.st[stat]
                     break
             else:
-                for stat in ['Idle','Arming','Armed','Running']:
-                    if all([self.st[stat] == x for x in status_list]):
+                for stat in ['Idle','Armed','Running']:
+                    if _all(status_list, self.st[stat]):
                         status = self.st[stat]
                     break
                 else:
