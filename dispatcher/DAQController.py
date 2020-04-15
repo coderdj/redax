@@ -1,6 +1,7 @@
 import datetime
 import os
 import json
+import enum
 '''
 DAQ Controller Brain Class
 D. Coderre, 12. Mar. 2019
@@ -12,6 +13,16 @@ any action needs to be taken to get the DAQ into the target state. It also handl
 resetting of runs (the ~hourly stop/start) during normal operations.
 '''
 
+class STATUS(enum.Enum):
+    IDLE = 0
+    ARMING = 1
+    ARMED = 2
+    RUNNING = 3
+    ERROR = 4
+    TIMEOUT = 5
+    UNKNOWN = 6
+
+
 class DAQController():
 
     def __init__(self, config, mongo_connector, log):
@@ -19,17 +30,6 @@ class DAQController():
         self.mongo = mongo_connector
         self.goal_state = {}
         self.latest_status = {}
-
-        # Handy lookup table so code is more readable
-        self.st = {
-            "IDLE": 0,
-            "ARMING": 1,
-            "ARMED": 2,
-            "RUNNING": 3,
-            "ERROR": 4,
-            "TIMEOUT": 5,
-            "UNDECIDED": 6
-        }
 
         # Timeouts. There are a few things that we want to wait for that might take time.
         # The keys for these dicts will be detector identifiers.
@@ -78,7 +78,7 @@ class DAQController():
         self.latest_status = latest_status
 
         for det in latest_status.keys():
-            if latest_status[det]['status'] == self.st['IDLE']:
+            if latest_status[det]['status'] == STATUS.IDLE:
                 self.error_stop_count[det] = 0
 
         '''
@@ -90,8 +90,8 @@ class DAQController():
         if we try to activate it.
         '''
         # 1a - deal with TPC and also with MV and NV, but only if they're linked
-        active_states = [self.st['ARMING'], self.st['ARMED'], self.st['RUNNING'], self.st['UNDECIDED'],
-                         self.st['ERROR'], self.st['TIMEOUT']]
+        active_states = [STATUS.ARMING, STATUS.ARMED, STATUS.RUNNING, STATUS.UNKNOWN,
+                         STATUS.ERROR, STATUS.TIMEOUT]
         if goal_state['tpc']['active'] == 'false':
 
             # Send stop command if we have to
@@ -138,12 +138,12 @@ class DAQController():
             # Maybe we have nothing to do except check the run turnover
             if (
                     # TPC running!
-                    (latest_status['tpc']['status'] == self.st['RUNNING']) and
+                    (latest_status['tpc']['status'] == STATUS.RUNNING) and
                     # MV either unlinked or running
-                    (latest_status['muon_veto']['status'] == self.st['RUNNING'] or
+                    (latest_status['muon_veto']['status'] == STATUS.RUNNING or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV either unlinked or running
-                    (latest_status['neutron_veto']['status'] == self.st['RUNNING'] or
+                    (latest_status['neutron_veto']['status'] == STATUS.RUNNING or
                      goal_state['tpc']['link_nv'] == 'false')
             ):
                 self.log.debug("Checking run turnover TPC")
@@ -152,12 +152,12 @@ class DAQController():
             # Maybe we're already ARMED and should start a run
             elif (
                     # TPC ARMED
-                    (latest_status['tpc']['status'] == self.st['ARMED']) and
+                    (latest_status['tpc']['status'] == STATUS.ARMED) and
                     # MV ARMED or UNLINKED
-                    (latest_status['muon_veto']['status'] == self.st['ARMED'] or
+                    (latest_status['muon_veto']['status'] == STATUS.ARMED or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV ARMED or UNLINKED
-                    (latest_status['neutron_veto']['status'] == self.st['ARMED'] or
+                    (latest_status['neutron_veto']['status'] == STATUS.ARMED or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.log.info("Starting TPC")
                 self.ControlDetector(command='start', detector='tpc')
@@ -165,35 +165,35 @@ class DAQController():
             # Maybe we're IDLE and should arm a run
             elif (
                     # TPC IDLE
-                    (latest_status['tpc']['status'] == self.st['IDLE']) and
+                    (latest_status['tpc']['status'] == STATUS.IDLE) and
                     # MV IDLE or UNLINKED
-                    (latest_status['muon_veto']['status'] == self.st['IDLE'] or
+                    (latest_status['muon_veto']['status'] == STATUS.IDLE or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV IDLE or UNLINKED
-                    (latest_status['neutron_veto']['status'] == self.st['IDLE'] or
+                    (latest_status['neutron_veto']['status'] == STATUS.IDLE or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.log.info("Arming TPC")
                 self.ControlDetector(command='arm', detector='tpc')
 
             elif (
                     # TPC ARMING
-                    (latest_status['tpc']['status'] == self.st['ARMING']) and
+                    (latest_status['tpc']['status'] == STATUS.ARMING) and
                     # MV ARMING or UNLINKED
-                    (latest_status['muon_veto']['status'] == self.st['ARMING'] or
+                    (latest_status['muon_veto']['status'] == STATUS.ARMING or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV ARMING or UNLINKED
-                    (latest_status['neutron_veto']['status'] == self.st['ARMING'] or
+                    (latest_status['neutron_veto']['status'] == STATUS.ARMING or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.CheckTimeouts(detector='tpc', command='arm')
 
             elif (
                     # TPC ERROR
-                    (latest_status['tpc']['status'] == self.st['ERROR']) and
+                    (latest_status['tpc']['status'] == STATUS.ERROR) and
                     # MV ERROR or UNLINKED
-                    (latest_status['muon_veto']['status'] == self.st['ERROR'] or
+                    (latest_status['muon_veto']['status'] == STATUS.ERROR or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV ERROR or UNLINKED
-                    (latest_status['neutron_veto']['status'] == self.st['ERROR'] or
+                    (latest_status['neutron_veto']['status'] == STATUS.ERROR or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.log.info("TPC has error!")
                 self.ControlDetector(command='stop', detector='tpc', force=True)
@@ -219,13 +219,13 @@ class DAQController():
             if (goal_state[detector]['active'] == 'true' and linked == 'false'):
 
                 # Same logic as before but simpler cause we don't have to check for links
-                if latest_status[detector]['status'] == self.st['RUNNING']:
+                if latest_status[detector]['status'] == STATUS.RUNNING:
                     self.CheckRunTurnover(detector)
-                elif latest_status[detector]['status'] == self.st['ARMED']:
+                elif latest_status[detector]['status'] == STATUS.ARMED:
                     self.ControlDetector(command='start', detector=detector)
-                elif latest_status[detector]['status'] == self.st['IDLE']:
+                elif latest_status[detector]['status'] == STATUS.IDLE:
                     self.ControlDetector(command='arm', detector=detector)
-                elif latest_status[detector]['status'] == self.st['ERROR']:
+                elif latest_status[detector]['status'] == STATUS.ERROR:
                     self.ControlDetector(command='stop', detector=detector, force=True)
                 else:
                     self.CheckTimeouts(detector)

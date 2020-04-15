@@ -2,6 +2,7 @@ from pymongo import MongoClient
 import datetime
 import os
 import json
+from DAQController import STATUS
 '''
 MongoDB Connectivity Class for XENONnT DAQ Dispatcher
 D. Coderre, 12. Mar. 2019
@@ -21,6 +22,12 @@ Requires: Initialize it with the following config:
 
 The environment variables MONGO_PASSWORD and RUNS_MONGO_PASSWORD must be set!
 '''
+
+def _all(iterable, target):
+    ret = True
+    for elem in iterable:
+        ret &= (elem == target)
+    return ret
 
 class MongoConnect():
 
@@ -184,15 +191,15 @@ class MongoConnect():
                     mode = 'undefined'
 
                 try:
-                    status = doc['status']
+                    status = STATUS(doc['status'])
                 except KeyError:
-                    status = 6
+                    status = STATUS.UNKNOWN
 
                 # Now check if this guy is timing out
                 if "_id" in doc.keys():
                     gentime = doc['_id'].generation_time.timestamp()
                     if (whattimeisit - gentime) > self.timeout:
-                        status = 5
+                        status = STATUS.TIMEOUT
 
                 status_list.append(status)
 
@@ -201,9 +208,9 @@ class MongoConnect():
                 doc = self.latest_status[detector]['controller'][controller]
                 # Copy above. I guess it would be possible to have no readers
                 try:
-                    status = doc['status']
+                    status = STATUS(doc['status'])
                 except KeyError:
-                    status = 6
+                    status = STATUS.UNKNOWN
                 if "_id" in doc.keys():
                     gentime = doc['_id'].generation_time.timestamp()
                     if (whattimeisit-gentime) > self.timeout:
@@ -211,21 +218,22 @@ class MongoConnect():
                 status_list.append(status)
 
             # Now we aggregate the statuses
-            for stat in ['Error','Timeout','Unknown']:
-                if self.st[stat] in status_list:
-                    status = self.st[stat]
+            for stat in ['ARMING','ERROR','TIMEOUT','UNKNOWN']:
+                if STATUS[stat] in status_list:
+                    status = STATUS[stat]
                     break
             else:
-                for stat in ['Idle','Arming','Armed','Running']:
-                    if all([self.st[stat] == x for x in status_list]):
-                        status = self.st[stat]
+                for stat in ['IDLE','ARMED','RUNNING']:
+                    if _all(status_list, STATUS[stat]):
+                        status = STATUS[stat]
                     break
                 else:
-                    status = self.st['Unknown']
+                    status = STATUS['UNKNOWN']
 
-            self.log.debug("Status list for %s: %s = %s" % (detector, status_list, status))
+            self.log.debug("Status list for %s: %s = %s" % (
+                detector, [x.name for x in status_list], status.name))
 
-            self.latest_status[detector]['status'] = status
+            self.latest_status[detector]['status'] = status.value
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
             self.latest_status[detector]['buffer'] = buff
