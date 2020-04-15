@@ -23,10 +23,10 @@ Requires: Initialize it with the following config:
 The environment variables MONGO_PASSWORD and RUNS_MONGO_PASSWORD must be set!
 '''
 
-def _all(iterable, target):
+def _all(values, target):
     ret = True
-    for elem in iterable:
-        ret &= (elem == target)
+    for value in values:
+        ret &= (value == target)
     return ret
 
 class MongoConnect():

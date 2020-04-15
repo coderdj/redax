@@ -33,7 +33,7 @@ class DAQController():
 
         # Timeouts. There are a few things that we want to wait for that might take time.
         # The keys for these dicts will be detector identifiers.
-        detectors = list(config['DEFAULT']['MasterDAQConfig'].keys())
+        detectors = list(json.loads(config['DEFAULT']['MasterDAQConfig']).keys())
         self.last_command = {k:{d : datetime.datetime.utcnow() for d in detectors}
                                 for k in ['arm','start','stop']}
         self.error_stop_count = {d : 0 for d in detectors}
