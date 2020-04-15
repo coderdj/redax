@@ -293,7 +293,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	}
 
         if (whoops) { // some data got lost somewhere
-          GenerateAritificialDeadtime(Time64, dp->bid);
+          GenerateArtificialDeadtime(Time64, dp->bid);
           break; // loop over channels
         }
 

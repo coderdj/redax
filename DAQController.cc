@@ -524,7 +524,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   int steps_repeated(0), max_repeated_steps(10);
   int triggers_per_step = fOptions->GetInt("baseline_triggers_per_step", 3);
   std::chrono::milliseconds ms_between_triggers(fOptions->GetInt("baseline_ms_between_triggers", 10));
-  std::array<int, 0x4000> hist(nbins);
+  std::array<int, 0x4000> hist;
   vector<long> DAC_cal_points = {60000, 30000, 6000}; // arithmetic overflow
   std::map<int, vector<int>> channel_finished;
   std::map<int, u_int32_t*> buffers;
