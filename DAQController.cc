@@ -13,6 +13,7 @@
 #include <chrono>
 #include <cmath>
 #include <numeric>
+#include <array>
 
 // Status:
 // 0-idle
@@ -523,7 +524,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   int steps_repeated(0), max_repeated_steps(10);
   int triggers_per_step = fOptions->GetInt("baseline_triggers_per_step", 3);
   std::chrono::milliseconds ms_between_triggers(fOptions->GetInt("baseline_ms_between_triggers", 10));
-  vector<int> hist(nbins);
+  std::array<int, 0x4000> hist(nbins);
   vector<long> DAC_cal_points = {60000, 30000, 6000}; // arithmetic overflow
   std::map<int, vector<int>> channel_finished;
   std::map<int, u_int32_t*> buffers;
@@ -541,13 +542,14 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   }
 
   bool done(false), redo_iter(false), fail(false), calibrate(true);
-  double counts_total(0), counts_around_max(0), B,C,D,E,F, slope, yint, baseline;
+  int counts_total(0), counts_around_max(0);
+  double B,C,D,E,F, slope, yint, baseline;
   double fraction_around_max = fOptions->GetDouble("baseline_fraction_around_max", 0.8);
   u_int32_t words_in_event, channel_mask, words_per_channel, idx;
   u_int16_t val0, val1;
   int channels_in_event;
-  auto beg_it = hist.begin(), max_it = hist.begin(), end_it = hist.end();
-  auto max_start = max_it, max_end = max_it;
+  auto hist_start = hist.begin(), hist_end = hist.end();
+  auto max_it = hist.begin(), max_start = hist.begin(), max_end = hist.begin();
 
   for (int iter = 0; iter < max_iter; iter++) {
     if (done || fail) break;
@@ -574,7 +576,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       }
       // prep
       if (step < DAC_cal_points.size()) {
-	if (!calibrate) continue;
+        if (!calibrate) continue;
         for (auto d : digis)
           dac_values[d->bid()].assign(d->GetNumChannels(), (int)DAC_cal_points[step]);
       }
@@ -663,22 +665,22 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               continue;
             }
             channel_mask = buffers[bid][idx+1]&0xFF;
-	    if (d->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
-	      channel_mask = ( ((buffers[bid][idx+2]>>24)&0xFF)<<8 ) | (buffers[bid][idx+1]&0xFF); 
-	    }
+            if (d->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
+              channel_mask = ( ((buffers[bid][idx+2]>>24)&0xFF)<<8 ) | (buffers[bid][idx+1]&0xFF); 
+            }
             if (channel_mask == 0) { // should be impossible?
               idx += 4;
               continue;
             }
             channels_in_event = std::bitset<16>(channel_mask).count();
-	    words_per_channel = (words_in_event - 4)/channels_in_event;
+            words_per_channel = (words_in_event - 4)/channels_in_event;
             words_per_channel -= d->DataFormatDefinition["channel_header_words"];
 
             idx += 4;
             for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
               if (!(channel_mask & (1 << ch))) continue;
               idx += d->DataFormatDefinition["channel_header_words"];
-              hist.assign(hist.size(), 0);
+              hist.fill(0);
               for (unsigned w = 0; w < words_per_channel; w++) {
                 val0 = buffers[bid][idx+w]&0xFFFF;
                 val1 = (buffers[bid][idx+w]>>16)&0xFFFF;
@@ -687,16 +689,16 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
                 hist[val1 >> rebin_factor]++;
               }
               idx += words_per_channel;
-              max_it = std::max_element(beg_it, end_it);
-              max_start = std::max(max_it - bins_around_max, beg_it);
-              max_end = std::min(max_it + bins_around_max+1, end_it);
-              counts_total = std::accumulate(beg_it, end_it, 0.);
-              counts_around_max = std::accumulate(max_start, max_end, 0.);
-              if (counts_around_max/counts_total < fraction_around_max) {
+              max_it = std::max_element(hist_start, hist_end);
+              max_start = std::max(max_it - bins_around_max, hist_start);
+              max_end = std::min(max_it + bins_around_max+1, hist_end);
+              counts_total = std::accumulate(hist_start, hist_end, 0);
+              counts_around_max = std::accumulate(max_start, max_end, 0);
+              if (counts_around_max < fraction_around_max*counts_total) {
                 fLog->Entry(MongoLog::Local,
-                    "Bd %i ch %i: %d out of %d counts around max %i",
+                    "Bd %i ch %i: %i out of %i counts around max %i",
                     bid, ch, counts_around_max, counts_total,
-                    (max_it - beg_it)<<rebin_factor);
+                    std::distance(max_it, hist_start)<<rebin_factor);
                 redo_iter = true;
               }
               if (counts_total/words_per_channel < 1.5) //25% zeros
@@ -704,7 +706,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               baseline = 0;
               // calculated weighted average
               for (auto it = max_start; it < max_end; it++)
-                baseline += ((it - beg_it)<<rebin_factor)*(*it);
+                baseline += (std::distance(it, hist_start)<<rebin_factor)*(*it);
               baseline /= counts_around_max;
               bl_per_channel[bid][ch][step] = baseline;
             } // for each channel
@@ -746,7 +748,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
             }
             cal_values[bid]["slope"][ch] = slope = (C*D - E*F)/(B*C - F*F);
             cal_values[bid]["yint"][ch] = yint = (B*E - D*F)/(B*C - F*F);
-	    dac_values[bid][ch] = (target_baseline-yint)/slope;
+            dac_values[bid][ch] = (target_baseline-yint)/slope;
           }
         }
         calibrate = false;
@@ -765,7 +767,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
               channel_finished[bid][ch]++;
               continue;
             }
-	    channel_finished[bid][ch] = std::max(0, channel_finished[bid][ch]-1);
+            channel_finished[bid][ch] = std::max(0, channel_finished[bid][ch]-1);
             int adjustment = off_by * cal_values[bid]["slope"][ch];
             if (abs(adjustment) < min_adjustment)
               adjustment = std::copysign(min_adjustment, adjustment);
@@ -787,16 +789,18 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       break;
     }
   } // end iterations
-  //for (auto d : digis) {
-  //  for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
-  //    bid = d->bid();
-  //    fLog->Entry(MongoLog::Local, "Bd %i ch %i diff %i", bid, ch,
-//	(target_baseline-cal_values[bid]["yint"][ch])/cal_values[bid]["slope"][ch] - dac_values[bid][ch]);
-  //  }
-  //}
+  for (auto d : digis) {
+    for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
+      bid = d->bid();
+      fLog->Entry(MongoLog::Local, "Bd %i ch %i exp %x act %x", bid, ch,
+        (target_baseline-cal_values[bid]["yint"][ch])/cal_values[bid]["slope"][ch],
+        dac_values[bid][ch]);
+    }
+  }
   if (fail) return -2;
   if (std::any_of(channel_finished.begin(), channel_finished.end(),
-    	[&](auto& p){return std::any_of(p.second.begin(), p.second.end(), [=](int i){
-      	  return i < convergence_threshold;});})) return -1;
+      [&](auto& p){return std::any_of(p.second.begin(), p.second.end(), [=](int i){
+        return i < convergence_threshold;});}))
+    return -1;
   return 0;
 }
