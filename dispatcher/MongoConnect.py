@@ -140,7 +140,7 @@ class MongoConnect():
         '''
         for detector in self.latest_status.keys():
             doc = {
-                "status": self.latest_status[detector]['status'],
+                "status": self.latest_status[detector]['status'].value,
                 "number": -1,
                 "detector": detector,
                 "rate": self.latest_status[detector]['rate'],
@@ -233,7 +233,7 @@ class MongoConnect():
             self.log.debug("Status list for %s: %s = %s" % (
                 detector, [x.name for x in status_list], status.name))
 
-            self.latest_status[detector]['status'] = status.value
+            self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
             self.latest_status[detector]['buffer'] = buff

@@ -45,9 +45,7 @@ class DAQController():
         self.stop_retries = int(config['DEFAULT']['RetryReset'])
 
         self.log = log
-
-        # to give detectors a few more seconds to breathe between runs
-        self.skip_one_cycle = {d : False for d in detectors}
+        self.time_between_commands = int(config['DEFAULT']['TimeBetweenCommands'])
 
     def SolveProblem(self, latest_status, goal_state):
         '''
@@ -243,12 +241,17 @@ class DAQController():
         except (KeyError, TypeError):
             dt = 2*self.timeouts[command]
 
-        if dt > self.timeouts[command] or force:
+        # make sure we don't rush things
+        if command == 'start':
+            dt_last = (now - self.last_command['arm'][detector]).total_seconds()
+        elif command == 'arm':
+            dt_last = (now - self.last_command['stop'][detector]).total_seconds()
+        else:
+            dt_last = self.time_between_commands*2
+
+        if (dt > self.timeouts[command] and dt_last > self.time_between_commands) or force:
             run_mode = self.goal_state[detector]['mode']
             if command in ['start','arm']:
-                if command == 'arm' and self.skip_one_cycle[detector] == True:
-                    self.skip_one_cycle[detector] = False
-                    return
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
                 delay = 0
                 if command == 'start':
@@ -271,7 +274,9 @@ class DAQController():
             self.last_command[command][detector] = now
 
         else:
-            self.CheckTimeouts(detector=detector, command=command)
+            self.log.debug('Can\'t send %s to %s, timeout at %i/%i' % (
+                command, detector, dt, self.timeouts[command]))
+            #self.CheckTimeouts(detector=detector, command=command)
 
 
     def CheckTimeouts(self, detector, command = None):
@@ -290,8 +295,7 @@ class DAQController():
         if command is None: # not specified, we figure out it here
             command_times = [(cmd,doc[detector]) for cmd,doc in self.last_command.items()]
             command = sorted(command_times, key=lambda x : x[1])[-1][0]
-            self.log.debug('Most recent command for %s is %s' % 
-                    (detector, command))
+            self.log.debug('Most recent command for %s is %s' % (detector, command))
         else:
             self.log.debug('Checking %s timeout for %s' % (command, detector))
 
@@ -309,8 +313,8 @@ class DAQController():
                 if self.error_stop_count[detector] >= self.stop_retries:
                     # failed too many times, issue error
                     self.mongo.LogError("dispatcher",
-                                        ("Dispatcher control loop detects a timeout that is not solved " +
-                                         "with a STOP command"),
+                                        ("Dispatcher control loop detects a timeout that STOP " +
+                                         "can't solve"),
                                         'ERROR',
                                         "STOP_TIMEOUT")
                     self.error_stop_count[detector] = 0
