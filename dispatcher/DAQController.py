@@ -105,16 +105,19 @@ class DAQController():
                     (latest_status['neutron_veto']['status']  in active_states and
                      goal_state['tpc']['link_nv'] == 'true')
             ):
-                self.CheckTimeouts('tpc')
+                self.ControlDetector(detector='tpc', command='stop')
+                #self.CheckTimeouts('tpc')
 
         # 1b - deal with MV but only if MV not linked to TPC
         if goal_state['tpc']['link_mv'] == 'false' and goal_state['muon_veto']['active'] == 'false':
             if latest_status['muon_veto']['status']  in active_states:
-                self.CheckTimeouts('muon_veto')
+                self.ControlDetector(detector='muon_veto', command='stop')
+                #self.CheckTimeouts('muon_veto')
         # 1c - deal with NV but only if NV not linked to TPC
         if goal_state['tpc']['link_nv'] == 'false' and goal_state['neutron_veto']['active'] == 'false':
             if latest_status['neutron_veto']['status']  in active_states:
-                self.CheckTimeouts('neutron_veto')
+                self.ControlDetector(detector='neutron_veto', command='stop')
+                #self.CheckTimeouts('neutron_veto')
 
         '''
         CASE 2: DETECTORS ARE ACTIVE
@@ -173,6 +176,17 @@ class DAQController():
                 self.ControlDetector(command='arm', detector='tpc')
 
             elif (
+                    # TPC ARMING
+                    (latest_status['tpc']['status'] == self.st['ARMING']) and
+                    # MV ARMING or UNLINKED
+                    (latest_status['muon_veto']['status'] == self.st['ARMING'] or
+                     goal_state['tpc']['link_mv'] == 'false') and
+                    # NV ARMING or UNLINKED
+                    (latest_status['neutron_veto']['status'] == self.st['ARMING'] or
+                     goal_state['tpc']['link_nv'] == 'false')):
+                self.CheckTimeouts(detector='tpc', command='arm')
+
+            elif (
                     # TPC ERROR
                     (latest_status['tpc']['status'] == self.st['ERROR']) and
                     # MV ERROR or UNLINKED
@@ -182,7 +196,7 @@ class DAQController():
                     (latest_status['neutron_veto']['status'] == self.st['ERROR'] or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.log.info("TPC has error!")
-                self.ControlDetector(command='stop', detector='tpc')
+                self.ControlDetector(command='stop', detector='tpc', force=True)
 
 
             # Maybe someone is timing out or we're in some weird mixed state
@@ -212,14 +226,14 @@ class DAQController():
                 elif latest_status[detector]['status'] == self.st['IDLE']:
                     self.ControlDetector(command='arm', detector=detector)
                 elif latest_status[detector]['status'] == self.st['ERROR']:
-                    self.ControlDetector(command='stop', detector=detector)
+                    self.ControlDetector(command='stop', detector=detector, force=True)
                 else:
                     self.CheckTimeouts(detector)
 
         return
 
 
-    def ControlDetector(self, command, detector):
+    def ControlDetector(self, command, detector, force=False):
         '''
         Issues the command to the detector if allowed by the timeout
         '''
@@ -229,7 +243,7 @@ class DAQController():
         except (KeyError, TypeError):
             dt = 2*self.timeouts[command]
 
-        if dt > self.timeouts[command]:
+        if dt > self.timeouts[command] or force:
             run_mode = self.goal_state[detector]['mode']
             if command in ['start','arm']:
                 if command == 'arm' and self.skip_one_cycle[detector] == True:
