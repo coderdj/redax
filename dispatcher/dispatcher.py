@@ -54,8 +54,6 @@ while(1):
 
     # Print an update
     for detector in latest_status.keys():
-        if goal_state[detector]['active'] == 'false':
-            logger.debug("Detector %s INACTIVE"%detector)
         logger.debug("Detector %s should be %sACTIVE and is %s"%(
                 detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
                 latest_status[detector]['status'].name))

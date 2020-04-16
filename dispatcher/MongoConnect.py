@@ -226,12 +226,13 @@ class MongoConnect():
                 for stat in ['IDLE','ARMED','RUNNING']:
                     if _all(status_list, STATUS[stat]):
                         status = STATUS[stat]
-                    break
+                        break
                 else:
                     status = STATUS['UNKNOWN']
 
-            self.log.debug("Status list for %s: %s = %s" % (
-                detector, [x.name for x in status_list], status.name))
+            if detector == 'tpc':
+                self.log.debug("Status list for %s: %s = %s" % (
+                    detector, [x.name for x in status_list], status.name))
 
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
