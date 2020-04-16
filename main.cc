@@ -10,6 +10,7 @@
 #include <limits.h>
 #include <chrono>
 #include <thread>
+#include <atomic>
 
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
