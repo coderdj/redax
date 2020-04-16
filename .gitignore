@@ -13,3 +13,6 @@ ccontrol
 # DAQ logs
 *.log
 log_*
+
+# python caches
+*__pycache__*

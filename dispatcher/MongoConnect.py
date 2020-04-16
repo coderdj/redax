@@ -36,7 +36,6 @@ class MongoConnect():
         # Define DB connectivity. Log is separate to make it easier to split off if needed
         dbn = config['DEFAULT']['ControlDatabaseName']
         rdbn = config['DEFAULT']['RunsDatabaseName']
-        print("Initializing with DB name %s"%dbn)
         self.dax_db = MongoClient(
             config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])[dbn]
         self.log_db = MongoClient(
@@ -46,9 +45,6 @@ class MongoConnect():
 
         self.latest_settings = {}
 
-        # Translation to human-readable statuses
-        self.statuses = ['Idle', 'Arming', 'Armed', 'Running', 'Error', 'Timeout', 'Unknown']
-        self.st = dict(zip(self.statuses, range(len(self.statuses))))
         self.loglevels = {"DEBUG": 0, "MESSAGE": 1, "WARNING": 2, "ERROR": 3, "FATAL": 4}
 
         # Each collection we actually interact with is stored here
