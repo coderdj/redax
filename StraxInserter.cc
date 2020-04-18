@@ -383,7 +383,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 int StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp) {
   // Get the CHUNK and decide if this event also goes into a PRE/POST file
   int chunk_id = timestamp/fFullChunkLength;
-  bool nextpre = (chunk_id+1)* fFullChunkLength - timestamp < fChunkOverlap;
+  bool nextpre = (chunk_id+1)* fFullChunkLength - timestamp <= fChunkOverlap;
   // Minor mess to maintain the same width of file names and do the pre/post stuff
   // If not in pre/post
   std::string chunk_index = std::to_string(chunk_id);
