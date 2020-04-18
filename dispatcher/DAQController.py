@@ -229,7 +229,7 @@ class DAQController():
             host_list, cc = self.mongo.GetHostsForMode(run_mode)
             for c in cc:
                 host_list.append(c)
-	    self.log.debug('Sending ARM to %s' % detector)
+            self.log.debug('Sending ARM to %s' % detector)
             self.mongo.SendCommand("arm", host_list, self.goal_state[detector]['user'],
                                    detector, self.goal_state[detector]['mode'])
             self.arm_command_sent[detector] = datetime.datetime.utcnow()
@@ -255,7 +255,7 @@ class DAQController():
             run = self.mongo.InsertRunDoc(detector, self.goal_state)
             for c in cc:
                 host_list.append(c)
-	    self.log.debug('Sending START to %s' % detector)
+            self.log.debug('Sending START to %s' % detector)
             self.mongo.SendCommand("start", host_list, self.goal_state[detector]['user'],
                                    detector, self.goal_state[detector]['mode'])
             self.start_command_sent[detector] = datetime.datetime.utcnow()
@@ -281,7 +281,7 @@ class DAQController():
 
         # We do not need to check the 'stop_command_sent' because this function is
         # exclusively called through the CheckTimeouts wrapper
-	self.log.debug('Sending STOP to %s' % detector)
+        self.log.debug('Sending STOP to %s' % detector)
         self.mongo.SendCommand("stop", cc, self.goal_state[detector]['user'],
                                detector, self.goal_state[detector]['mode'])
         self.mongo.SendCommand("stop", readers, self.goal_state[detector]['user'],
@@ -324,7 +324,7 @@ class DAQController():
         # Case 2: we're not timing out at all, send the stop command
         if (detector not in self.stop_command_sent.keys() or self.stop_command_sent[detector] is None):
             sendstop = True
-	    self.log.debug('Stopping %s, Case 2' % detector)
+            self.log.debug('Stopping %s, Case 2' % detector)
             self.stop_command_sent[detector] = nowtime
             self.error_stop_count[detector] = 0
 
@@ -370,7 +370,7 @@ class DAQController():
                 sendstop = False
             elif self.error_stop_count[detector] < self.stop_retries:
                 sendstop = True
-		self.log.debug('Working on a stop timeout for %s' % detector)
+                self.log.debug('Working on a stop timeout for %s' % detector)
                 self.error_stop_count[detector] += 1
 
         if sendstop:
