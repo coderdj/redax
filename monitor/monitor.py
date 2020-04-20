@@ -15,7 +15,6 @@ ev = threading.Event()
 
 signal.signal(signal.SIGINT, lambda num, frame : ev.set())
 signal.signal(signal.SIGTERM, lambda num, frame : ev.set())
-signal.signal(signal.SIGBREAK, lambda num, frame : ev.set())
 
 while not ev.is_set():
 
