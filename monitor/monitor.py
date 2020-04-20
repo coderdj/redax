@@ -34,7 +34,7 @@ while not ev.is_set():
 
     # DISK
     disk = {}
-    pattern = '^/(data[0-9])?$'
+    pattern = '^/(data[0-9]?)?$'
     for partition in psutil.disk_partitions():
         mount = partition.mountpoint
         if re.match(pattern, mount) is not None:
