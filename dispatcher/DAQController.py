@@ -350,20 +350,18 @@ class DAQController():
         # If no stop after configured, return
         try:
             _ = int(self.goal_state[detector]['stop_after'])
-        except:
+        except Exception as e:
+            self.log.info('No run duration specified for %s? (%s)' % (detector, e))
             return
 
         try:
             number = self.latest_status[detector]['number']
         except:
             # dirty workaround just in case there was a dispatcher crash
-            self.latest_status[detector]['number'] = self.mongo.GetNextRunNumber() - 1
-            number = self.latest_status[detector]['number']
+            number = self.latest_status[detector]['number'] = self.mongo.GetNextRunNumber() - 1
         start_time = self.mongo.GetRunStart(number)
         nowtime = datetime.datetime.utcnow()
         run_length = int(self.goal_state[detector]['stop_after'])*60
-        if ((nowtime-start_time).total_seconds() > run_length and
-            (nowtime - self.last_command['stop'][detector]).total_seconds() > self.timeouts['stop']):
+        if (nowtime-start_time).total_seconds() > run_length:
             self.log.info('Stopping run for %s' % detector)
-            self.last_command['stop'][detector] = nowtime
             self.ControlDetector(detector=detector, command='stop')
