@@ -24,7 +24,7 @@ The environment variables MONGO_PASSWORD and RUNS_MONGO_PASSWORD must be set!
 '''
 
 def _all(values, target):
-    ret = True
+    ret = len(values) > 0
     for value in values:
         ret &= (value == target)
     return ret
