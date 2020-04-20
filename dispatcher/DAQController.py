@@ -88,7 +88,7 @@ class DAQController():
         if we try to activate it.
         '''
         # 1a - deal with TPC and also with MV and NV, but only if they're linked
-        active_states = [STATUS.ARMING, STATUS.ARMED, STATUS.RUNNING, STATUS.UNKNOWN,
+        active_states = [STATUS.ARMING, STATUS.ARMED, STATUS.RUNNING,
                          STATUS.ERROR, STATUS.TIMEOUT]
         if goal_state['tpc']['active'] == 'false':
 

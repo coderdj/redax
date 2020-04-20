@@ -229,6 +229,8 @@ class MongoConnect():
             if detector == 'tpc':
                 self.log.debug("Status list for %s: %s = %s" % (
                     detector, [x.name for x in status_list], status.name))
+            elif detector == 'neutron_veto':
+                status = STATUS.IDLE
 
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
