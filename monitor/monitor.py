@@ -1,7 +1,6 @@
 from pymongo import MongoClient
 import os
 import psutil
-import time
 timeout = 2
 import socket
 import re
@@ -12,7 +11,7 @@ client = MongoClient("mongodb://daq:%s@xenon1t-daq:27020/daq"%os.environ["MONGO_
 db = client['daq']
 collection = db['system_monitor']
 
-ev = threading.event()
+ev = threading.Event()
 
 signal.signal(signal.SIGINT, lambda num, frame : ev.set())
 signal.signal(signal.SIGTERM, lambda num, frame : ev.set())
