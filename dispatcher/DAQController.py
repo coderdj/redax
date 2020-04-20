@@ -144,7 +144,6 @@ class DAQController():
                     (latest_status['neutron_veto']['status'] == STATUS.RUNNING or
                      goal_state['tpc']['link_nv'] == 'false')
             ):
-                self.log.debug("Checking run turnover TPC")
                 self.CheckRunTurnover('tpc')
 
             # Maybe we're already ARMED and should start a run
@@ -362,6 +361,9 @@ class DAQController():
         start_time = self.mongo.GetRunStart(number)
         nowtime = datetime.datetime.utcnow()
         run_length = int(self.goal_state[detector]['stop_after'])*60
-        if (nowtime-start_time).total_seconds() > run_length:
+        run_duration = (nowtime - start_time).total_seconds()
+        self.log.debug('Checking run turnover for %s: %i/%i' % (detector, run_duration, run_length))
+        if run_duration > run_length:
             self.log.info('Stopping run for %s' % detector)
             self.ControlDetector(detector=detector, command='stop')
+
