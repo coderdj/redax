@@ -54,7 +54,11 @@ StraxInserter::~StraxInserter(){
     fLog->Entry(MongoLog::Warning, "Force-quitting thread %lx: %i events lost",
         fThreadId, fBufferLength.load());
     fForceQuit = true;
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
+  }
+  while (fRunning) {
+    fLog->Entry(MongoLog::Message, "Still waiting for thread %lx to stop", fThreadId);
+    std::this_thread::sleep_for(std::chrono::seconds(2));
   }
   long total_dps = std::accumulate(fBufferCounter.begin(), fBufferCounter.end(), 0,
       [&](long tot, auto& p){return tot + p.second;});
@@ -121,20 +125,21 @@ void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
   return;
 }
 
-void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp) {
+void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp, int16_t bid) {
   std::string fragment;
   fragment.append((char*)&timestamp, sizeof(timestamp));
   int32_t length = fFragmentBytes>>1;
   fragment.append((char*)&length, sizeof(length));
   int16_t sw = 10;
   fragment.append((char*)&sw, sizeof(sw));
-  int16_t channel = 799; // TODO add MV and NV support
+  int16_t channel = 790; // TODO add MV and NV support
   fragment.append((char*)&channel, sizeof(channel));
   fragment.append((char*)&length, sizeof(length));
   int16_t fragment_i = 0;
   fragment.append((char*)&fragment_i, sizeof(fragment_i));
   int16_t baseline = 0;
   fragment.append((char*)&baseline, sizeof(baseline));
+  fragment.append((char*)&bid, sizeof(bid));
   int8_t zero = 0;
   while ((int)fragment.size() < fFragmentBytes+fStraxHeaderSize)
     fragment.append((char*)&zero, sizeof(zero));
@@ -188,6 +193,7 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 
       if(board_fail){
         const std::lock_guard<std::mutex> lg(fFC_mutex);
+        // would generate deadtime here but no timestamp
         fDataSource->CheckError(dp->bid);
 	fFailCounter[dp->bid]++;
         idx += event_header_words;
@@ -273,8 +279,6 @@ void StraxInserter::ParseDocuments(data_packet* dp){
               dp->bid, idx);
           whoops = true;
         }
-        if (whoops) // some data got lost somewhere
-          break;
 
 	// Exercise for reader. This is for our 30-bit trigger clock. If yours was, say,
 	// 48 bits this line would be different
@@ -283,12 +287,15 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 
 	 if (fmt["channel_time_msb_idx"] == 2) { 
 	   Time64 = fmt["ns_per_clk"]*( ( (unsigned long)channel_timeMSB<<(int)32) + channel_time); 
-	 }
-	 else { 
+	 } else {
 	   Time64 = fmt["ns_per_clk"]*(((unsigned long)clock_counters[channel] <<
 					      iBitShift) + channel_time); // in ns
-	   }
-	
+	}
+
+        if (whoops) { // some data got lost somewhere
+          GenerateArtificialDeadtime(Time64, dp->bid);
+          break; // loop over channels
+        }
 
 	// We're now at the first sample of the channel's waveform. This
 	// will be beautiful. First we reinterpret the channel as 16
@@ -360,11 +367,13 @@ void StraxInserter::ParseDocuments(data_packet* dp){
 	
 	  fragment_index++;
 	  index_in_pulse = max_sample;
-	}
-	// Go to next channel
+          if (fForceQuit == true) break;
+	} // while in pulse
 	idx+=channel_words;
-      }
-    }
+        if (fForceQuit == true) break;
+      } // channel loop
+      if (fForceQuit == true) break;
+    } // if header
     else
       idx++;
   }
@@ -472,6 +481,8 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   system_clock::time_point comp_start, comp_end;
   std::vector<std::string> idx_to_clear;
   for (auto& iter : fFragments) {
+    if (iter.first == "")
+        break; // not sure why, but this sometimes happens during bad shutdowns
     std::string chunk_index = iter.first;
     std::string idnr = chunk_index.substr(0, fChunkNameLength);
     int idnrint = std::stoi(idnr);
@@ -524,12 +535,12 @@ void StraxInserter::WriteOutFiles(int smallest_index_seen, bool end){
   } // End for through fragments
   // clear now because c++ sometimes overruns its buffers
   for (auto s : idx_to_clear) {
-    fFragments.erase(s);
+    if (fFragments.count(s) != 0) fFragments.erase(s);
   }
-  
 
   if(end){
-    std::for_each(fFragments.begin(), fFragments.end(), [](auto p){if (p.second != nullptr) delete p.second;});
+    for (auto& p : fFragments)
+        if (p.second != nullptr) delete p.second;
     fFragments.clear();
     fFragmentSize = 0;
     fs::path write_path(fOutputPath);

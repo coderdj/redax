@@ -52,6 +52,7 @@ public:
   int OpenProcessingThreads();
   void CloseProcessingThreads();
   long GetStraxBufferSize();
+  int GetBufferSize() {return fBufferSize.load();}
 
   void GetDataFormat(std::map<int, std::map<std::string, int>>&);
 
@@ -75,6 +76,7 @@ private:
   std::string fHostname;
   MongoLog *fLog;
   Options *fOptions;
+  int fMaxEventsPerThread;
 
   // For reporting to frontend
   std::atomic_int fBufferSize;
