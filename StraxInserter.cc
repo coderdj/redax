@@ -74,7 +74,7 @@ StraxInserter::~StraxInserter(){
     {"events", fEventsProcessed},
     {"data_packets", total_dps}};
   fOptions->SaveBenchmarks(counters, fBufferCounter,
-      fProcTimeDP.count(), fProcTimeEv,count(), fProcTimeCh.count(), fCompTime.count());
+      fProcTimeDP.count(), fProcTimeEv.count(), fProcTimeCh.count(), fCompTime.count());
   fLog->Entry(MongoLog::Local, "Thread %lx did%s see bit[30]", fThreadId, fSawBit30 ? "" : " not");
 }
 
@@ -167,10 +167,10 @@ void StraxInserter::ProcessDatapacket(data_packet* dp){
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
       ev_start = system_clock::now();
       idx = ProcessEvent(buff+idx, total_words-idx, dp->clock_counter, dp->header_time, dp->bid);
-      eb_end = system_clock::now();
+      ev_end = system_clock::now();
       fProcTimeEv += duration_cast<microseconds>(ev_end - ev_start);
     }
-    if (bForceQuit) break;
+    if (fForceQuit) break;
   }
   proc_end = system_clock::now();
   fProcTimeDP += duration_cast<microseconds>(proc_end - proc_start);
@@ -233,8 +233,6 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   long channel_time = (clock_counter<<31) + event_time;
   long channel_timeMSB = 0;
   u_int16_t baseline_ch = 0;
-  long this_ch_counter = clock_counter;
-  bool whoops = false;
   std::map<std::string, int> fmt = fFmt[bid];
 
   // Presence of a channel header indicates non-default firmware (DPP-DAW) so override
@@ -255,7 +253,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
     fSawBit30 |= (channel_time & (1 << 30));
 
     if (fmt["channel_time_msb_idx"] == 2) {
-      channel_timeMSB = (buff[2]&0xFFFF)<<32;
+      channel_timeMSB = long(buff[2]&0xFFFF)<<32;
       baseline_ch = (buff[2]>>16)&0x3FFF;
     }
 
@@ -290,11 +288,9 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
 
   u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff+fmt["channel_header_words"]);
   u_int32_t samples_in_pulse = channel_words<<1;
-  u_int32_t index_in_pulse = 0;
-  u_int32_t offset = idx<<1;
   u_int16_t sw = fmt["ns_per_sample"];
   int fragment_samples = fFragmentBytes>>1;
-  int16_t cl = fOptions->GetChannel(dp->bid, channel);
+  int16_t cl = fOptions->GetChannel(bid, channel);
   // Failing to discern which channel we're getting data from seems serious enough to throw
   if(cl==-1)
     throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
@@ -309,14 +305,14 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
       samples_this_fragment = samples_in_pulse - frag_i*fragment_samples;
     fFragmentsProcessed++;
 
-    u_int64_t time_this_fragment = Time64 + fragment_samples*sw*fragment_index;
+    u_int64_t time_this_fragment = Time64 + fragment_samples*sw*frag_i;
     fragment.append((char*)&time_this_fragment, sizeof(time_this_fragment));
     fragment.append((char*)&samples_this_fragment, sizeof(samples_this_fragment));
     fragment.append((char*)&sw, sizeof(sw));
     fragment.append((char*)&cl, sizeof(cl));
     fragment.append((char*)&samples_in_pulse, sizeof(samples_in_pulse));
     fragment.append((char*)&frag_i, sizeof(frag_i));
-    fragment.append((char*)*baseline_ch, sizeof(baseline_ch));
+    fragment.append((char*)&baseline_ch, sizeof(baseline_ch));
 
     // Copy the raw buffer
     fragment.append((char*)(payload + frag_i*fragment_samples), samples_this_fragment*2);
@@ -333,7 +329,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   return channel_words;
 }
 
-StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp) {
+void StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp) {
   // Get the CHUNK and decide if this event also goes into a PRE/POST file
   int chunk_id = timestamp/fFullChunkLength;
   bool nextpre = (chunk_id+1)* fFullChunkLength - timestamp <= fChunkOverlap;
@@ -377,7 +373,7 @@ int StraxInserter::ReadAndInsertData(){
         fBufferLength = b.size();
         fBufferCounter[int(b.size())]++;
         for (auto& dp_ : b) {
-          ParseDocuments(dp_);
+          ProcessDatapacket(dp_);
           fBufferLength--;
           dp_ = nullptr;
           if (fForceQuit) break;
@@ -395,7 +391,7 @@ int StraxInserter::ReadAndInsertData(){
       if (fDataSource->GetData(dp)) {
         fBufferLength = 1;
         fBufferCounter[1]++;
-        ParseDocuments(dp);
+        ProcessDatapacket(dp);
         fBufferLength = 0;
         WriteOutFiles();
       } else {

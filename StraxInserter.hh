@@ -55,11 +55,11 @@ public:
   
 private:
   void ProcessDatapacket(data_packet *dp);
-  uint32_t ProcessEvent(uint32_t*, unsigned, int, uint32_t, int);
+  uint32_t ProcessEvent(uint32_t*, unsigned, long, uint32_t, int);
   int ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int);
   void WriteOutFiles(bool end=false);
   void GenerateArtificialDeadtime(int64_t timestamp, int16_t bid);
-  int AddFragmentToBuffer(std::string& fragment, int64_t timestamp);
+  void AddFragmentToBuffer(std::string& fragment, int64_t timestamp);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
   std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
