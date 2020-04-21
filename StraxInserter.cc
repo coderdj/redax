@@ -166,10 +166,11 @@ void StraxInserter::ProcessDatapacket(data_packet* dp){
 
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
       ev_start = system_clock::now();
-      idx = ProcessEvent(buff+idx, total_words-idx, dp->clock_counter, dp->header_time, dp->bid);
+      idx += ProcessEvent(buff+idx, total_words-idx, dp->clock_counter, dp->header_time, dp->bid);
       ev_end = system_clock::now();
       fProcTimeEv += duration_cast<microseconds>(ev_end - ev_start);
-    }
+    } else
+      idx++;
     if (fForceQuit) break;
   }
   proc_end = system_clock::now();
@@ -248,7 +249,6 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
             bid, channel, channel_words, fmt["channel_header_words"]);
       return -1;
     }
-    channel_words -= fmt["channel_header_words"];
     channel_time = buff[1]&0xFFFFFFFF;
     fSawBit30 |= (channel_time & (1 << 30));
 
@@ -287,7 +287,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   }
 
   u_int16_t *payload = reinterpret_cast<u_int16_t*>(buff+fmt["channel_header_words"]);
-  u_int32_t samples_in_pulse = channel_words<<1;
+  u_int32_t samples_in_pulse = (channel_words-fmt["channel_header_words"])<<1;
   u_int16_t sw = fmt["ns_per_sample"];
   int fragment_samples = fFragmentBytes>>1;
   int16_t cl = fOptions->GetChannel(bid, channel);
