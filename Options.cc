@@ -377,7 +377,7 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
 
 void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
     std::map<int, long>& buffer_counter,
-    double proc_time_us, double comp_time_us) {
+    double proc_time_dp_us, double proc_time_ev_us, double proc_time_ch_us, double comp_time_us) {
   using namespace bsoncxx::builder::stream;
   std::string run_id = GetString("run_identifier", "latest");
   auto search_doc = document{} << "run" << run_id << finalize;
@@ -389,7 +389,9 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
   update_doc << "fragments" << byte_counter["fragments"];
   update_doc << "events" << byte_counter["events"];
   update_doc << "data_packets" << byte_counter["data_packets"];
-  update_doc << "processing_time_us" << proc_time_us;
+  update_doc << "processing_time_dp_us" << proc_time_dp_us;
+  update_doc << "processing_time_ev_us" << proc_time_ev_us;
+  update_doc << "processing_time_ch_us" << proc_time_ch_us;
   update_doc << "compression_time_us" << comp_time_us;
   update_doc << "buffer_xfers" << open_document;
   for (auto& p : buffer_counter) {
