@@ -36,6 +36,7 @@ StraxInserter::StraxInserter(){
   fFullChunkLength = fChunkLength+fChunkOverlap;
   fFragmentsProcessed = 0;
   fEventsProcessed = 0;
+  somebool=true;
 }
 
 StraxInserter::~StraxInserter(){
@@ -196,6 +197,7 @@ uint32_t StraxInserter::ProcessEvent(uint32_t* buff, unsigned total_words, long 
   if (fmt["channel_mask_msb_idx"] != -1) channel_mask |= ( ((buff[2]>>24)&0xFF)<<8);
 
   u_int32_t event_time = buff[3]&0xFFFFFFFF;
+  if (somebool) fLog->Entry(MongoLog::Local, "Thread %lx first ts %lx", fThreadId, event_time);
   fEventsProcessed++;
 
   if(buff[1]&0x4000000){ // board fail
@@ -276,6 +278,11 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   } // channel_header_words > 0
 
   int64_t Time64 = fmt["ns_per_clk"]*(channel_timeMSB + channel_time); // in ns
+  if (somebool) {
+    fLog->Entry(MongoLog::Local, "Thread %lx first ch time %li",
+        fThreadId, Time64);
+    somebool = false;
+  }
 
   // let's sanity-check the data first to make sure we didn't get CAENed
   for (unsigned w = fmt["channel_header_words"]; w < channel_words; w++) {
@@ -344,20 +351,21 @@ void StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp
       fFragments[chunk_index] = new std::string();
     }
     fFragments[chunk_index]->append(fragment);
+    fTimeLastSeen[chunk_index] = system_clock::now();
   } else {
-    std::string nextchunk_index = std::to_string(chunk_id+1);
-    while(nextchunk_index.size() < fChunkNameLength)
-      nextchunk_index.insert(0, "0");
+    std::string nextchunk_index = GetStringFormat(chunk_id+1);
 
     if(fFragments.count(nextchunk_index+"_pre") == 0){
       fFragments[nextchunk_index+"_pre"] = new std::string();
     }
     fFragments[nextchunk_index+"_pre"]->append(fragment);
+    fTimeLastSeen[nextchunk_index+"_pre"] = system_clock::now();
 
     if(fFragments.count(chunk_index+"_post") == 0){
       fFragments[chunk_index+"_post"] = new std::string();
     }
     fFragments[chunk_index+"_post"]->append(fragment);
+    fTimeLastSeen[chunk_index+"_post"] = system_clock::now();
   }
 }
 

@@ -90,10 +90,11 @@ private:
   std::mutex fDPC_mutex;
   std::map<int, long> fBufferCounter;
   std::atomic_int fBufferLength;
+  std::map<std::string, std::chrono::system_clock::time_point> fTimeLastSeen;
   long fBytesProcessed;
   long fFragmentsProcessed;
   long fEventsProcessed;
-  bool fSawBit30;
+  bool fSawBit30, somebool;
 
   std::chrono::microseconds fProcTimeDP, fProcTimeEv, fProcTimeCh, fCompTime;
   std::thread::id fThreadId;
