@@ -11,6 +11,7 @@
 #include <sstream>
 #include <list>
 #include <bitset>
+#include <iomanip>
 
 namespace fs=std::experimental::filesystem;
 using namespace std::chrono;
@@ -386,9 +387,9 @@ int StraxInserter::ReadAndInsertData(){
       } else {
         std::this_thread::sleep_for(sleep_time);
       }
-      if (++counter % 100 == 0 && fFragments.size() > 0) {
+      if (((++counter) % 1000 == 0) && (fFragments.size() > 0)) {
         std::stringstream msg;
-        msg << "Current chunks for thread " << fThreadId;
+        msg << "Current chunks " << std::hex<<fThreadId<<std::dec;
         for (auto& it : fFragments) msg << ' ' << it.first;
         fLog->Entry(MongoLog::Local, msg.str());
       }
