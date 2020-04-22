@@ -386,7 +386,7 @@ int StraxInserter::ReadAndInsertData(){
       } else {
         std::this_thread::sleep_for(sleep_time);
       }
-      if (++counter % 100 == 0) {
+      if (++counter % 100 == 0 && fFragments.size() > 0) {
         std::stringstream msg;
         msg << "Current chunks for thread " << fThreadId;
         for (auto& it : fFragments) msg << ' ' << it.first;
