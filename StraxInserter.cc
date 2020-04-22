@@ -234,7 +234,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   u_int32_t channel_words = (words_in_event-event_header_words) / channels_in_event;
   long channel_time = (clock_counter<<31) + event_time;
   long channel_timeMSB = 0;
-  u_int16_t baseline_ch = 0;
+  u_int16_t baseline_ch = clock_counter;
   std::map<std::string, int> fmt = fFmt[bid];
 
   // Presence of a channel header indicates non-default firmware (DPP-DAW) so override
@@ -311,7 +311,8 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
     fragment.append((char*)&samples_this_fragment, sizeof(samples_this_fragment));
     fragment.append((char*)&sw, sizeof(sw));
     fragment.append((char*)&cl, sizeof(cl));
-    fragment.append((char*)&samples_in_pulse, sizeof(samples_in_pulse));
+    fragment.append((char*)&header_time, sizeof(header_time));
+    //fragment.append((char*)&samples_in_pulse, sizeof(samples_in_pulse));
     fragment.append((char*)&frag_i, sizeof(frag_i));
     fragment.append((char*)&baseline_ch, sizeof(baseline_ch));
 
@@ -434,8 +435,8 @@ void StraxInserter::WriteOutFiles(bool end){
         continue; // not sure why, but this sometimes happens during bad shutdowns
     std::string chunk_index = iter.first;
     if (std::stoi(chunk_index) > write_lte && !end) continue;
-    fLog->Entry(MongoLog::Local, "Thread %lx max %i current %i buffer %i write_lte %i",
-        fThreadId, max_chunk, std::stoi(chunk_index), fBufferNumChunks, write_lte);
+    //fLog->Entry(MongoLog::Local, "Thread %lx max %i current %i buffer %i write_lte %i",
+    //    fThreadId, max_chunk, std::stoi(chunk_index), fBufferNumChunks, write_lte);
 
     comp_start = system_clock::now();
     if(!fs::exists(GetDirectoryPath(chunk_index, true)))
@@ -468,6 +469,7 @@ void StraxInserter::WriteOutFiles(bool end){
 
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
     writefile.write(out_buffer, wsize);
+    fLog->Entry(MongoLog::Local, "Thread %lx wrote chunk %s", fThreadId, chunk_index);
     delete[] out_buffer;
     writefile.close();
 
