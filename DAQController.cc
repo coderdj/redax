@@ -552,8 +552,6 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   u_int32_t words_in_event, channel_mask, words_per_channel, idx;
   u_int16_t val0, val1;
   int channels_in_event;
-  auto hist_start = hist.begin(), hist_end = hist.end();
-  auto max_it = hist.begin(), max_start = hist.begin(), max_end = hist.begin();
 
   for (int iter = 0; iter < max_iter; iter++) {
     if (done || fail) break;
