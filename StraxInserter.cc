@@ -176,7 +176,7 @@ void StraxInserter::ProcessDatapacket(data_packet* dp){
   }
   proc_end = system_clock::now();
   fProcTimeDP += duration_cast<microseconds>(proc_end - proc_start);
-
+  fBytesProcessed += dp->size;
   delete dp;
 }
 

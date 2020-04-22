@@ -184,7 +184,7 @@ u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size, u_int32_t& num){
   while(idx < size/sizeof(u_int32_t)){
     if(buff[idx]>>28==0xA){
       num = buff[idx+2]&0xFFFFFF;
-      if (fBID == 1410) {
+      if (fBID == 1410 && (buff[idx+1]&0x2)) {
         fRO.push_back(clock_counter);
         fEV.push_back(buff[idx+3]);
         fCH.push_back(buff[idx+5]);
