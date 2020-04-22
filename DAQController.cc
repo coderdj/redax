@@ -520,11 +520,9 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
   int min_adjustment = fOptions->GetInt("baseline_min_adjustment", 0xA);
   int rebin_factor = fOptions->GetInt("baseline_rebin_log2", 1); // log base 2
   int bins_around_max = fOptions->GetInt("baseline_bins_around_max", 3);
-  int nbins(1 << (14-rebin_factor)), bid(0);
-  int steps_repeated(0), max_repeated_steps(10);
+  int steps_repeated(0), max_repeated_steps(10), bid(0);
   int triggers_per_step = fOptions->GetInt("baseline_triggers_per_step", 3);
   std::chrono::milliseconds ms_between_triggers(fOptions->GetInt("baseline_ms_between_triggers", 10));
-  std::array<int, 0x4000> hist;
   vector<long> DAC_cal_points = {60000, 30000, 6000}; // arithmetic overflow
   std::map<int, vector<int>> channel_finished;
   std::map<int, u_int32_t*> buffers;
@@ -666,7 +664,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
             }
             channel_mask = buffers[bid][idx+1]&0xFF;
             if (d->DataFormatDefinition["channel_mask_msb_idx"] != -1) {
-              channel_mask = ( ((buffers[bid][idx+2]>>24)&0xFF)<<8 ) | (buffers[bid][idx+1]&0xFF); 
+              channel_mask |= ( ((buffers[bid][idx+2]>>24)&0xFF)<<8 );
             }
             if (channel_mask == 0) { // should be impossible?
               idx += 4;
@@ -680,7 +678,7 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
             for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
               if (!(channel_mask & (1 << ch))) continue;
               idx += d->DataFormatDefinition["channel_header_words"];
-              hist.fill(0);
+              vector<int> hist(0x4000, 0);
               for (unsigned w = 0; w < words_per_channel; w++) {
                 val0 = buffers[bid][idx+w]&0xFFFF;
                 val1 = (buffers[bid][idx+w]>>16)&0xFFFF;
@@ -689,24 +687,27 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
                 hist[val1 >> rebin_factor]++;
               }
               idx += words_per_channel;
-              max_it = std::max_element(hist_start, hist_end);
-              max_start = std::max(max_it - bins_around_max, hist_start);
-              max_end = std::min(max_it + bins_around_max+1, hist_end);
-              counts_total = std::accumulate(hist_start, hist_end, 0);
+              auto max_it = std::max_element(hist.begin(), hist.end());
+              auto max_start = std::max(max_it - bins_around_max, hist.begin());
+              auto max_end = std::min(max_it + bins_around_max+1, hist.end());
+              counts_total = std::accumulate(hist.begin(), hist.end(), 0);
               counts_around_max = std::accumulate(max_start, max_end, 0);
               if (counts_around_max < fraction_around_max*counts_total) {
                 fLog->Entry(MongoLog::Local,
                     "Bd %i ch %i: %i out of %i counts around max %i",
                     bid, ch, counts_around_max, counts_total,
-                    std::distance(max_it, hist_start)<<rebin_factor);
+                    std::distance(hist.begin(), max_it)<<rebin_factor);
                 redo_iter = true;
               }
-              if (counts_total/words_per_channel < 1.5) //25% zeros
+              if (counts_total < 1.5*words_per_channel) {//25% zeros
                 redo_iter = true;
+                fLog->Entry(MongoLog::Local, "Bd %i ch %i too many skipped samples", bid, ch);
+              }
+              vector<int> bin_ids(std::distance(max_start, max_end), 0);
+              std::iota(bin_ids.begin(), bin_ids.end(), std::distance(hist.begin(), max_start));
               baseline = 0;
               // calculated weighted average
-              for (auto it = max_start; it < max_end; it++)
-                baseline += (std::distance(it, hist_start)<<rebin_factor)*(*it);
+              baseline = std::inner_product(max_start, max_end, bin_ids.begin(), 0) << rebin_factor;
               baseline /= counts_around_max;
               bl_per_channel[bid][ch][step] = baseline;
             } // for each channel

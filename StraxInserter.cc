@@ -424,7 +424,9 @@ void StraxInserter::WriteOutFiles(bool end){
     if (iter.first == "")
         continue; // not sure why, but this sometimes happens during bad shutdowns
     std::string chunk_index = iter.first;
-    if (std::stoi(iter.first) > write_lte && !end) continue;
+    if (std::stoi(chunk_index) > write_lte && !end) continue;
+    fLog->Entry(MongoLog::Local, "Thread %lx max %i current %i buffer %i write_lte %i",
+        fThreadId, max_chunk, std::stoi(chunk_index), fBufferNumChunks, write_lte);
 
     comp_start = system_clock::now();
     if(!fs::exists(GetDirectoryPath(chunk_index, true)))
