@@ -197,7 +197,6 @@ uint32_t StraxInserter::ProcessEvent(uint32_t* buff, unsigned total_words, long 
   if (fmt["channel_mask_msb_idx"] != -1) channel_mask |= ( ((buff[2]>>24)&0xFF)<<8);
 
   u_int32_t event_time = buff[3]&0xFFFFFFFF;
-  if (somebool) fLog->Entry(MongoLog::Local, "Thread %lx first ts %lx", fThreadId, event_time);
   fEventsProcessed++;
 
   if(buff[1]&0x4000000){ // board fail
@@ -278,11 +277,6 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   } // channel_header_words > 0
 
   int64_t Time64 = fmt["ns_per_clk"]*(channel_timeMSB + channel_time); // in ns
-  if (somebool) {
-    fLog->Entry(MongoLog::Local, "Thread %lx first ch time %li",
-        fThreadId, Time64);
-    somebool = false;
-  }
 
   // let's sanity-check the data first to make sure we didn't get CAENed
   for (unsigned w = fmt["channel_header_words"]; w < channel_words; w++) {
@@ -374,6 +368,7 @@ int StraxInserter::ReadAndInsertData(){
   fActive = fRunning = true;
   fBufferLength = 0;
   std::chrono::microseconds sleep_time(10);
+  int counter = 0;
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
     while(fActive == true){
       std::list<data_packet*> b;
@@ -391,6 +386,12 @@ int StraxInserter::ReadAndInsertData(){
         WriteOutFiles();
       } else {
         std::this_thread::sleep_for(sleep_time);
+      }
+      if (++counter % 100 == 0) {
+        std::stringstream msg;
+        msg << "Current chunks for thread " << fThreadId;
+        for (auto& it : fFragments) msg << ' ' << it.first;
+        fLog->Entry(MongoLog::Local, msg.str());
       }
     }
   } else {
@@ -471,9 +472,9 @@ void StraxInserter::WriteOutFiles(bool end){
     writefile.close();
 
     // shenanigans or skulduggery?
-    if(fs::exists(GetFilePath(chunk_index, false))) {
+    /*if(fs::exists(GetFilePath(chunk_index, false))) {
       fLog->Entry(MongoLog::Warning, "Chunk %s already exists????", chunk_index.c_str());
-    }
+    }*/
 
     // Move this chunk from *_TEMP to the same path without TEMP
     if(!fs::exists(GetDirectoryPath(chunk_index, false)))
