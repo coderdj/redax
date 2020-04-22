@@ -83,7 +83,7 @@ protected:
   MongoLog *fLog;
 
   float fBLTSafety, fBufferSafety;
-
+  std::vector<uint32_t> fRO, fEV, fCH;
 };
 
 
