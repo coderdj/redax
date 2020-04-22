@@ -232,7 +232,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   u_int32_t channel_words = (words_in_event-event_header_words) / channels_in_event;
   long channel_time = (clock_counter<<31) + event_time;
   long channel_timeMSB = 0;
-  u_int16_t baseline_ch = clock_counter;
+  u_int16_t baseline_ch = 0;
   std::map<std::string, int> fmt = fFmt[bid];
 
   // Presence of a channel header indicates non-default firmware (DPP-DAW) so override
