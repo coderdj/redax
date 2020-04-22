@@ -94,7 +94,6 @@ private:
   long fBytesProcessed;
   long fFragmentsProcessed;
   long fEventsProcessed;
-  bool fSawBit30;
 
   std::chrono::microseconds fProcTimeDP, fProcTimeEv, fProcTimeCh, fCompTime;
   std::thread::id fThreadId;

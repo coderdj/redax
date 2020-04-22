@@ -76,7 +76,6 @@ StraxInserter::~StraxInserter(){
     {"data_packets", total_dps}};
   fOptions->SaveBenchmarks(counters, fBufferCounter,
       fProcTimeDP.count(), fProcTimeEv.count(), fProcTimeCh.count(), fCompTime.count());
-  fLog->Entry(MongoLog::Local, "Thread %lx did%s see bit[30]", fThreadId, fSawBit30 ? "" : " not");
 }
 
 int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
@@ -111,7 +110,6 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
     return -1;
   }
 
-  fSawBit30 = false;
   return 0;
 }
 
@@ -196,7 +194,7 @@ uint32_t StraxInserter::ProcessEvent(uint32_t* buff, unsigned total_words, long 
   u_int32_t channel_mask = (buff[1]&0xFF);
   if (fmt["channel_mask_msb_idx"] != -1) channel_mask |= ( ((buff[2]>>24)&0xFF)<<8);
 
-  u_int32_t event_time = buff[3]&0xFFFFFFFF;
+  u_int32_t event_time = buff[3]&0x7FFFFFFF;
   fEventsProcessed++;
 
   if(buff[1]&0x4000000){ // board fail
@@ -250,8 +248,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
             bid, channel, channel_words, fmt["channel_header_words"]);
       return -1;
     }
-    channel_time = buff[1]&0xFFFFFFFF;
-    fSawBit30 |= (channel_time & (1 << 30));
+    channel_time = buff[1]&0x7FFFFFFF;
 
     if (fmt["channel_time_msb_idx"] == 2) {
       channel_timeMSB = long(buff[2]&0xFFFF)<<32;
@@ -311,8 +308,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
     fragment.append((char*)&samples_this_fragment, sizeof(samples_this_fragment));
     fragment.append((char*)&sw, sizeof(sw));
     fragment.append((char*)&cl, sizeof(cl));
-    fragment.append((char*)&header_time, sizeof(header_time));
-    //fragment.append((char*)&samples_in_pulse, sizeof(samples_in_pulse));
+    fragment.append((char*)&samples_in_pulse, sizeof(samples_in_pulse));
     fragment.append((char*)&frag_i, sizeof(frag_i));
     fragment.append((char*)&baseline_ch, sizeof(baseline_ch));
 

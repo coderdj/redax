@@ -72,15 +72,6 @@ V1724::~V1724(){
     }
   }
   fLog->Entry(MongoLog::Local, msg.str());
-  if (fBID == 1410) {
-    std::ofstream fout("/live_data/xenonnt_data/1410_timestamps.bin", std::ios::binary);
-    for (unsigned i = 0; i < fRO.size(); i++) {
-      fout.write((char*)(fRO.data()+i), 4);
-      fout.write((char*)(fEV.data()+i), 4);
-      fout.write((char*)(fCH.data()+i), 4);
-    }
-    fout.close();
-  }
 }
 
 int V1724::SINStart(){
@@ -184,11 +175,6 @@ u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size, u_int32_t& num){
   while(idx < size/sizeof(u_int32_t)){
     if(buff[idx]>>28==0xA){
       num = buff[idx+2]&0xFFFFFF;
-      if (fBID == 1410 && (buff[idx+1]&0x2)) {
-        fRO.push_back(clock_counter);
-        fEV.push_back(buff[idx+3]);
-        fCH.push_back(buff[idx+5]);
-      }
       return buff[idx+3]&0x7FFFFFFF;
     }
     idx++;
