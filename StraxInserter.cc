@@ -36,7 +36,6 @@ StraxInserter::StraxInserter(){
   fFullChunkLength = fChunkLength+fChunkOverlap;
   fFragmentsProcessed = 0;
   fEventsProcessed = 0;
-  somebool=true;
 }
 
 StraxInserter::~StraxInserter(){
