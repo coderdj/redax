@@ -388,12 +388,12 @@ int StraxInserter::ReadAndInsertData(){
       } else {
         std::this_thread::sleep_for(sleep_time);
       }
-      if (((++counter) % 1000 == 0) && (fFragments.size() > 0)) {
+      /*if (((++counter) % 1000 == 0) && (fFragments.size() > 0)) {
         std::stringstream msg;
         msg << "Current chunks " << std::hex<<fThreadId<<std::dec;
         for (auto& it : fFragments) msg << ' ' << it.first;
         fLog->Entry(MongoLog::Local, msg.str());
-      }
+      }*/
     }
   } else {
     data_packet* dp;
