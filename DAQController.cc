@@ -482,6 +482,12 @@ void DAQController::InitLink(std::vector<V1724*>& digis,
     fLog->Entry(MongoLog::Local, "Board %i survived baseline mode. Going into register setting",
 		bid);
 
+    if (digi->Reset()) {
+      fLog->Entry(MongoLog::Error, "Could not reset digi %i", bid);
+      ret = -2;
+      return;
+    }
+
     for(auto regi : fOptions->GetRegisters(bid)){
       unsigned int reg = DAXHelpers::StringToHex(regi.reg);
       unsigned int val = DAXHelpers::StringToHex(regi.val);
