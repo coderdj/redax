@@ -122,7 +122,7 @@ int main(int argc, char** argv){
 	 delete options;
 	 options = NULL;
        }
-       options = new Options(logger, mode, mongo_uri, dbname, override_json);
+       options = new Options(logger, mode, hostname, mongo_uri, dbname, override_json);
 	 
        // Initialise the V2178, V1495 and DDC10...etc.      
        if(fHandler->DeviceArm(run, options) != 0){
