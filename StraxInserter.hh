@@ -54,10 +54,12 @@ public:
   int GetBufferLength() {return fBufferLength.load();}
   
 private:
-  void ParseDocuments(data_packet *dp);
-  void WriteOutFiles(int smallest_index_seen, bool end=false);
+  void ProcessDatapacket(data_packet *dp);
+  uint32_t ProcessEvent(uint32_t*, unsigned, long, uint32_t, int);
+  int ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int);
+  void WriteOutFiles(bool end=false);
   void GenerateArtificialDeadtime(int64_t timestamp, int16_t bid);
-  int AddFragmentToBuffer(std::string& fragment, int64_t timestamp);
+  void AddFragmentToBuffer(std::string& fragment, int64_t timestamp);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
   std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
@@ -69,6 +71,7 @@ private:
   int64_t fChunkOverlap; // ns
   int fFragmentBytes; // This is in BYTES
   int fStraxHeaderSize; // in BYTES too
+  int fBufferNumChunks;
   unsigned fChunkNameLength;
   int64_t fFullChunkLength;
   std::string fOutputPath, fHostname;
@@ -87,12 +90,12 @@ private:
   std::mutex fDPC_mutex;
   std::map<int, long> fBufferCounter;
   std::atomic_int fBufferLength;
+  std::map<std::string, std::chrono::system_clock::time_point> fTimeLastSeen;
   long fBytesProcessed;
   long fFragmentsProcessed;
   long fEventsProcessed;
 
-  std::chrono::microseconds fProcTime;
-  std::chrono::microseconds fCompTime;
+  std::chrono::microseconds fProcTimeDP, fProcTimeEv, fProcTimeCh, fCompTime;
   std::thread::id fThreadId;
 };
 

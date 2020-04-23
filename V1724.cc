@@ -1,6 +1,5 @@
 #include "V1724.hh"
 #include <numeric>
-#include <array>
 #include <algorithm>
 #include <bitset>
 #include <cmath>
@@ -15,6 +14,7 @@
 #include <sstream>
 #include <list>
 #include <utility>
+#include <fstream>
 
 
 V1724::V1724(MongoLog  *log, Options *options){
