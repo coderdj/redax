@@ -365,7 +365,6 @@ int StraxInserter::ReadAndInsertData(){
   fActive = fRunning = true;
   fBufferLength = 0;
   std::chrono::microseconds sleep_time(10);
-  int counter = 0;
   if (fOptions->GetString("buffer_type", "dual") == "dual") {
     while(fActive == true){
       std::list<data_packet*> b;
@@ -384,12 +383,6 @@ int StraxInserter::ReadAndInsertData(){
       } else {
         std::this_thread::sleep_for(sleep_time);
       }
-      /*if (((++counter) % 1000 == 0) && (fFragments.size() > 0)) {
-        std::stringstream msg;
-        msg << "Current chunks " << std::hex<<fThreadId<<std::dec;
-        for (auto& it : fFragments) msg << ' ' << it.first;
-        fLog->Entry(MongoLog::Local, msg.str());
-      }*/
     }
   } else {
     data_packet* dp;
