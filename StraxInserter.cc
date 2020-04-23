@@ -470,9 +470,10 @@ void StraxInserter::WriteOutFiles(bool end){
     writefile.close();
 
     // shenanigans or skulduggery?
-    /*if(fs::exists(GetFilePath(chunk_index, false))) {
-      fLog->Entry(MongoLog::Warning, "Chunk %s already exists????", chunk_index.c_str());
-    }*/
+    if(fs::exists(GetFilePath(chunk_index, false))) {
+      fLog->Entry(MongoLog::Warning, "Chunk %s from thread %lx already exists? Data loss warning",
+          chunk_index.c_str(), fThreadId);
+    }
 
     // Move this chunk from *_TEMP to the same path without TEMP
     if(!fs::exists(GetDirectoryPath(chunk_index, false)))
