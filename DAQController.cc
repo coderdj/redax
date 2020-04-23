@@ -266,6 +266,7 @@ void DAQController::ReadData(int link){
         fCheckFails[digi->bid()] = false;
         err_val = fBoardMap[digi->bid()]->CheckErrors();
 	fLog->Entry(MongoLog::Local, "Error %i from board %i", err_val, digi->bid());
+        fStatus = DAXHelpers::Error; // stop command will be issued soon
         if (err_val == -1) {
 
         } else {
@@ -283,6 +284,7 @@ void DAQController::ReadData(int link){
           delete dp;
           dp = nullptr;
 	}
+        fStatus = DAXHelpers::Error;
 	break;
       }
       if(dp->size>0){

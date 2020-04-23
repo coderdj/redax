@@ -2,6 +2,7 @@ from pymongo import MongoClient
 import datetime
 import os
 import json
+from DAQController import STATUS
 '''
 MongoDB Connectivity Class for XENONnT DAQ Dispatcher
 D. Coderre, 12. Mar. 2019
@@ -22,6 +23,12 @@ Requires: Initialize it with the following config:
 The environment variables MONGO_PASSWORD and RUNS_MONGO_PASSWORD must be set!
 '''
 
+def _all(values, target):
+    ret = len(values) > 0
+    for value in values:
+        ret &= (value == target)
+    return ret
+
 class MongoConnect():
 
     def __init__(self, config, log):
@@ -29,7 +36,6 @@ class MongoConnect():
         # Define DB connectivity. Log is separate to make it easier to split off if needed
         dbn = config['DEFAULT']['ControlDatabaseName']
         rdbn = config['DEFAULT']['RunsDatabaseName']
-        print("Initializing with DB name %s"%dbn)
         self.dax_db = MongoClient(
             config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])[dbn]
         self.log_db = MongoClient(
@@ -39,8 +45,6 @@ class MongoConnect():
 
         self.latest_settings = {}
 
-        # Translation to human-readable statuses
-        self.statuses = ['Idle', 'Arming', 'Armed', 'Running', 'Error', 'Timeout', 'Unknown']
         self.loglevels = {"DEBUG": 0, "MESSAGE": 1, "WARNING": 2, "ERROR": 3, "FATAL": 4}
 
         # Each collection we actually interact with is stored here
@@ -132,7 +136,7 @@ class MongoConnect():
         '''
         for detector in self.latest_status.keys():
             doc = {
-                "status": self.latest_status[detector]['status'],
+                "status": self.latest_status[detector]['status'].value,
                 "number": -1,
                 "detector": detector,
                 "rate": self.latest_status[detector]['rate'],
@@ -160,6 +164,7 @@ class MongoConnect():
 
         whattimeisit = datetime.datetime.utcnow().timestamp()
         for detector in self.latest_status.keys():
+            status_list = []
             status = None
             rate = 0
             mode = None
@@ -181,54 +186,51 @@ class MongoConnect():
                 elif 'run_mode' in doc.keys() and doc['run_mode'] != mode:
                     mode = 'undefined'
 
-                # If we haven't set the status yet we automatically set it here
-                if status == None:
-                    try:
-                        status = doc['status']
-                    except:
-                        status = 6
-
-                # Otherwise we only really care if the status for this node is different
-                elif status != doc['status']:
-
-                    # Someone is failing or we already set a timeout condition, continue
-                    if status == 4 or doc['status'] == 4:
-                        status = 4
-                        continue
-                    elif status == 5:
-                        continue
-                    # Otherwise we're in unknown territory ;-)
-                    else:
-                        status = 6
-                        continue
+                try:
+                    status = STATUS(doc['status'])
+                except KeyError:
+                    status = STATUS.UNKNOWN
 
                 # Now check if this guy is timing out
                 if "_id" in doc.keys():
                     gentime = doc['_id'].generation_time.timestamp()
                     if (whattimeisit - gentime) > self.timeout:
-                        status = 5
+                        status = STATUS.TIMEOUT
+
+                status_list.append(status)
 
             # If we have a crate controller check on it too
             for controller in self.latest_status[detector]['controller'].keys():
                 doc = self.latest_status[detector]['controller'][controller]
                 # Copy above. I guess it would be possible to have no readers
-                if status == None:
-                    status = doc['status']
-                elif status in doc.keys() and status != doc['status']:
-                    if status == 4 or doc['status'] == 4:
-                        status = 4
-                        continue
-                    elif status == 5:
-                        continue
-                    else:
-                        status = 6
-                        continue
-                elif "status" not in doc.keys():
-                    status = 6
+                try:
+                    status = STATUS(doc['status'])
+                except KeyError:
+                    status = STATUS.UNKNOWN
                 if "_id" in doc.keys():
                     gentime = doc['_id'].generation_time.timestamp()
                     if (whattimeisit-gentime) > self.timeout:
                         status = 5
+                status_list.append(status)
+
+            # Now we aggregate the statuses
+            for stat in ['ARMING','ERROR','TIMEOUT','UNKNOWN']:
+                if STATUS[stat] in status_list:
+                    status = STATUS[stat]
+                    break
+            else:
+                for stat in ['IDLE','ARMED','RUNNING']:
+                    if _all(status_list, STATUS[stat]):
+                        status = STATUS[stat]
+                        break
+                else:
+                    status = STATUS['UNKNOWN']
+
+            if detector == 'tpc':
+                self.log.debug("Status list for %s: %s = %s" % (
+                    detector, [x.name for x in status_list], status.name))
+            elif detector == 'neutron_veto':
+                status = STATUS.IDLE
 
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
@@ -277,12 +279,16 @@ class MongoConnect():
         if mode is None:
             return None
         doc = self.collections["options"].find_one({"name": mode})
+        fields_to_exclude = ['name', 'detector', 'description', 'user', '_id']
         try:
             newdoc = {**dict(doc)}
             if "includes" in doc.keys():
                 for i in doc['includes']:
                     incdoc = self.collections["options"].find_one({"name": i})
-                    newdoc = {**dict(newdoc), **dict(incdoc)}
+                    for field in fields_to_exclude:
+                        if field in incdoc:
+                            del incdoc[field]
+                    newdoc.update(incdoc)
             return newdoc
         except Exception as E:
             # LOG ERROR
@@ -302,13 +308,12 @@ class MongoConnect():
             return [], []
         cc = []
         hostlist = []
-        #self.log.debug([(b['type'], b['host']) for b in doc['boards']])
         for b in doc['boards']:
             if 'V17' in b['type'] and b['host'] not in hostlist:
                 hostlist.append(b['host'])
             elif b['type'] == 'V2718':
                 cc.append(b['host'])
-        self.log.debug("Hosts %s, cc %s" % (hostlist, cc))
+        #self.log.debug("Hosts %s, cc %s" % (hostlist, cc))
         return hostlist, cc
 
     def GetNextRunNumber(self):
@@ -330,7 +335,7 @@ class MongoConnect():
         '''
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
-        self.log.debug("SEND COMMAND %s to %s"%(command, detector))
+        #self.log.debug("SEND COMMAND %s to %s"%(command, detector))
         number = None
         n_id = None
         if command == 'arm':
@@ -420,7 +425,7 @@ class MongoConnect():
         # Make a data entry so bootstrax can find the thing
         if 'strax_output_path' in ini:
             run_doc['data'] = [{
-		'type': 'live',
+                'type': 'live',
                 'host': 'daq',
                 'location': ini['strax_output_path']
             }]

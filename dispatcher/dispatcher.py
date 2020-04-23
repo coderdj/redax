@@ -6,7 +6,7 @@ import logging
 import logging.handlers
 
 from MongoConnect import MongoConnect
-from DAQController import DAQController
+from DAQController import DAQController, STATUS
 
 # Parse command line
 parser = argparse.ArgumentParser(description='Manage the DAQ')
@@ -30,8 +30,6 @@ logger.setLevel(getattr(logging, args.log))
 print("Config arm timeout: %i"%int(config["DEFAULT"]["ArmCommandTimeout"]))
 # Declare database object
 MongoConnector = MongoConnect(config, logger)
-state_codes = ["IDLE", "ARMING", "ARMED", "RUNNING", "ERROR", "TIMEOUT", "UNDECIDED"]
-pending_commands = []
 
 # Declare a 'brain' object. This will cache info about the DAQ state in order to
 # solve the want/have decisions. The deciding functions also go here. It needs a
@@ -56,9 +54,7 @@ while(1):
 
     # Print an update
     for detector in latest_status.keys():
-        if goal_state[detector]['active'] == 'false':
-            logger.debug("Detector %s INACTIVE"%detector)
-        else:
-            logger.debug("Detector %s should be ACTIVE and is %s"%(
-                detector, state_codes[latest_status[detector]['status']]))
+        logger.debug("Detector %s should be %sACTIVE and is %s"%(
+                detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
+                latest_status[detector]['status'].name))
     time.sleep(int(config["DEFAULT"]['PollFrequency']))
