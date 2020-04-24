@@ -114,7 +114,8 @@ int main(int argc, char** argv){
   DAQController *controller = new DAQController(logger, hostname);
   std::vector<std::thread*> readoutThreads;
   std::thread status_update(&UpdateStatus, suri, dbname, controller);
-  
+  using namespace std::chrono;
+
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
   while(b_run == true){
@@ -132,8 +133,8 @@ int main(int argc, char** argv){
       
       mongocxx::cursor cursor = control.find 
 	(
-	 bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged" <<
-	 bsoncxx::builder::stream::open_document << "$ne" << hostname <<
+	 bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged." + hostname <<
+	 bsoncxx::builder::stream::open_document << "$exists" << 0 <<
 	 bsoncxx::builder::stream::close_document << 
 	 bsoncxx::builder::stream::finalize, opts
 	 );
@@ -147,8 +148,9 @@ int main(int argc, char** argv){
 	  (
 	   bsoncxx::builder::stream::document{} << "_id" << (doc)["_id"].get_oid() <<
 	   bsoncxx::builder::stream::finalize,
-	   bsoncxx::builder::stream::document{} << "$push" <<
-	   bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
+	   bsoncxx::builder::stream::document{} << "$set" <<
+	   bsoncxx::builder::stream::open_document << "acknowledged." + hostname <<
+           duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() <<
 	   bsoncxx::builder::stream::close_document <<
 	   bsoncxx::builder::stream::finalize
 	   );

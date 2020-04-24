@@ -5,6 +5,7 @@
 #include <iostream>
 #include <limits.h>
 #include <unistd.h>
+#include <chrono>
 
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
@@ -57,6 +58,7 @@ int main(int argc, char** argv){
   
   // Holds session data
   CControl_Handler *fHandler = new CControl_Handler(logger, hostname);  
+  using namespace std::chrono;
 
   while(1){
 
@@ -66,8 +68,8 @@ int main(int argc, char** argv){
     opts.sort(order.view());
     mongocxx::cursor cursor = control.find
       (
-       bsoncxx::builder::stream::document{}<< "host" << hostname <<"acknowledged" <<
-       bsoncxx::builder::stream::open_document << "$ne" << hostname <<
+       bsoncxx::builder::stream::document{}<< "host" << hostname <<"acknowledged." + hostname <<
+       bsoncxx::builder::stream::open_document << "$exists" << 0 <<
        bsoncxx::builder::stream::close_document << bsoncxx::builder::stream::finalize,
        opts
        );
@@ -78,8 +80,9 @@ int main(int argc, char** argv){
         control.update_one
           (bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
             bsoncxx::builder::stream::finalize,
-            bsoncxx::builder::stream::document{} << "$push" <<
-            bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
+            bsoncxx::builder::stream::document{} << "$set" <<
+            bsoncxx::builder::stream::open_document << "acknowledged." + hostname <<
+            duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() <<
             bsoncxx::builder::stream::close_document <<
             bsoncxx::builder::stream::finalize
             );
