@@ -187,16 +187,16 @@ int main(int argc, char** argv){
 	      }
 	    }
 
-	    logger->Entry(MongoLog::Message, "Received start command from user %s",
-			  user.c_str());
+	    //logger->Entry(MongoLog::Message, "Received start command from user %s",
+	//		  user.c_str());
 	  }
 	  else
 	    logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state");
 	}
 	else if(command == "stop"){
 	  // "stop" is also a general reset command and can be called any time
-	  logger->Entry(MongoLog::Message, "Received stop command from user %s",
-			user.c_str());
+	  //logger->Entry(MongoLog::Message, "Received stop command from user %s",
+	//		user.c_str());
 	  if(controller->Stop()!=0)
 	    logger->Entry(MongoLog::Error,
 			  "DAQ failed to stop. Will continue clearing program memory.");
@@ -276,7 +276,6 @@ int main(int argc, char** argv){
 		throw std::runtime_error("Error while arming");
 	      }
 	      for(unsigned int i=0; i<links.size(); i++){
-		std::cout<<"Starting readout thread for link "<<links[i]<<std::endl;
 		std:: thread *readoutThread = new std::thread
 		  (
 		   &DAQController::ReadData, controller, links[i]);
@@ -294,7 +293,6 @@ int main(int argc, char** argv){
       std::cout<<"Can't connect to DB so will continue what I'm doing"<<std::endl;
     }
 
-    // Insert some information on this readout node back to the monitor DB
     controller->CheckErrors();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
