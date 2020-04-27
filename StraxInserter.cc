@@ -334,6 +334,23 @@ void StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp
   // Minor mess to maintain the same width of file names and do the pre/post stuff
   // If not in pre/post
   std::string chunk_index = GetStringFormat(chunk_id);
+  int min_chunk(0), max_chunk(1);
+  const auto [min_chunk_, max_chunk_] = std::minmax_element(fFragments.begin(), fFragments.end(), 
+      [&](auto& l, auto& r) {return std::stoi(l.first) < std::stoi(r.first);});
+  if (fFragments.size() > 0) {
+    min_chunk = std::stoi((*min_chunk_).first);
+    max_chunk = std::stoi((*max_chunk_).first);
+  }
+
+  if (min_chunk - chunk_id > fWarnIfChunkOlderThan) {
+    const short* channel = (const short*)(fragment.data()+14);
+    fLog->Entry(MongoLog::Warning,
+        "Thread %lx got data from channel %i that's %i chunks behind the buffer, it might get lost",
+        fThreadID, *channel, min_chunk - chunk_id);
+  } else if (chunk_id - max_chunk > 2) {
+    fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s)"
+        fThreadId, chunk_id - max_chunk - 1);
+  }
 
   fFragmentSize += fragment.size();
 
@@ -458,14 +475,13 @@ void StraxInserter::WriteOutFiles(bool end){
 
     std::ofstream writefile(GetFilePath(chunk_index, true), std::ios::binary);
     writefile.write(out_buffer, wsize);
-//    fLog->Entry(MongoLog::Local, "Thread %lx wrote chunk %s", fThreadId, chunk_index.c_str());
     delete[] out_buffer;
     writefile.close();
 
     // shenanigans or skulduggery?
     if(fs::exists(GetFilePath(chunk_index, false))) {
-      fLog->Entry(MongoLog::Warning, "Chunk %s from thread %lx already exists? Data loss warning",
-          chunk_index.c_str(), fThreadId);
+      fLog->Entry(MongoLog::Warning, "Chunk %s from thread %lx already exists? %li vs %li bytes",
+          chunk_index.c_str(), fThreadId, fs::file_size(GetFilePath(chunk_index, false)), wsize);
     }
 
     // Move this chunk from *_TEMP to the same path without TEMP
