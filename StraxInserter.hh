@@ -72,6 +72,7 @@ private:
   int fFragmentBytes; // This is in BYTES
   int fStraxHeaderSize; // in BYTES too
   int fBufferNumChunks;
+  int fWarnIfChunkOlderThan;
   unsigned fChunkNameLength;
   int64_t fFullChunkLength;
   std::string fOutputPath, fHostname;

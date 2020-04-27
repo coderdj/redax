@@ -97,6 +97,7 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
 
   fProcTimeDP = fProcTimeEv = fProcTimeCh = fCompTime = microseconds(0);
   fBufferNumChunks = fOptions->GetInt("strax_buffer_num_chunks", 2);
+  fWarnIfChunkOlderThan = fOptions->GetInt("strax_chunk_phase_limit", 2);
 
   std::string output_path = fOptions->GetString("strax_output_path", "./");
   try{
@@ -346,7 +347,7 @@ void StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp
     const short* channel = (const short*)(fragment.data()+14);
     fLog->Entry(MongoLog::Warning,
         "Thread %lx got data from channel %i that's %i chunks behind the buffer, it might get lost",
-        fThreadID, *channel, min_chunk - chunk_id);
+        fThreadId, *channel, min_chunk - chunk_id);
   } else if (chunk_id - max_chunk > 2) {
     fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s)"
         fThreadId, chunk_id - max_chunk - 1);
