@@ -349,7 +349,7 @@ void StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp
         "Thread %lx got data from channel %i that's %i chunks behind the buffer, it might get lost",
         fThreadId, *channel, min_chunk - chunk_id);
   } else if (chunk_id - max_chunk > 2) {
-    fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s)"
+    fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s)",
         fThreadId, chunk_id - max_chunk - 1);
   }
 
