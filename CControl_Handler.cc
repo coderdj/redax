@@ -165,7 +165,7 @@ int CControl_Handler::DeviceStop(){
 
 // Reporting back on the status of V2718, V1495, DDC10 etc...
 bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
-  using namespace std::chrono
+  using namespace std::chrono;
  
   // Updating the status doc
   bsoncxx::builder::stream::document builder{};
