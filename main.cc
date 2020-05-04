@@ -28,11 +28,13 @@ void UpdateStatus(std::string suri, std::string dbname, DAQController* controlle
   mongocxx::uri uri(suri);
   mongocxx::client c(uri);
   mongocxx::collection status = c[dbname]["status"];
+  using namespace std::chrono;
   while (b_run == true) {
     try{
       // Put in status update document
       auto insert_doc = bsoncxx::builder::stream::document{};
       insert_doc << "host" << hostname <<
+        "time" << duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count()<<
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
 	"buffer_length" << controller->GetBufferLength() <<

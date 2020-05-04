@@ -7,6 +7,7 @@
 #include "V1495.hh"
 #include <vector>
 #include <bsoncxx/builder/stream/document.hpp>
+#include <chrono>
 
 CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
   fOptions = NULL;
@@ -164,57 +165,62 @@ int CControl_Handler::DeviceStop(){
 
 // Reporting back on the status of V2718, V1495, DDC10 etc...
 bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
+  using namespace std::chrono
  
   // Updating the status doc
   bsoncxx::builder::stream::document builder{};
-  builder << "host" << hostname << "type" << "ccontrol" << "status" << fStatus;
+  builder << "host" << hostname << "type" << "ccontrol" << "status" << fStatus <<
+    "time" << duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
   auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
 
   if(fV2718 != NULL){
+    auto crate_options = fV2718->GetCrateOptions();
     in_array << bsoncxx::builder::stream::open_document
 	     << "run_number" << fCurrentRun
              << "type" << "V2718"
-	     << "s_in" << fV2718->GetCrateOptions().s_in
-	     << "neutron_veto" << fV2718->GetCrateOptions().neutron_veto
-	     << "muon_veto" << fV2718->GetCrateOptions().muon_veto
-	     << "led_trigger" << fV2718->GetCrateOptions().led_trigger
-	     << "pulser_freq" << fV2718->GetCrateOptions().pulser_freq
+	     << "s_in" << crate_options.s_in
+	     << "neutron_veto" << crate_options.neutron_veto
+	     << "muon_veto" << crate_options.muon_veto
+	     << "led_trigger" << crate_options.led_trigger
+	     << "pulser_freq" << crate_options.pulser_freq
 	     << bsoncxx::builder::stream::close_document;
   }
   // DDC10 parameters might change for future updates of the XENONnT HEV
   if(fDDC10 != NULL){
+    auto hev_options = fDDC10->GetHEVOptions();
     in_array << bsoncxx::builder::stream::open_document
              << "type" << "DDC10"
-	     << "Address" << fDDC10->GetHEVOptions().address
-             << "required" << fDDC10->GetHEVOptions().required
-             << "signal_threshold" << fDDC10->GetHEVOptions().signal_threshold
-             << "sign" << fDDC10->GetHEVOptions().sign
-             << "rise_time_cut" << fDDC10->GetHEVOptions().rise_time_cut
-             << "inner_ring_factor" << fDDC10->GetHEVOptions().inner_ring_factor
-             << "outer_ring_factor" << fDDC10->GetHEVOptions().outer_ring_factor
-             << "integration_threshold" << fDDC10->GetHEVOptions().integration_threshold
-             << "parameter_0" << fDDC10->GetHEVOptions().parameter_0
-             << "parameter_1" << fDDC10->GetHEVOptions().parameter_1
-             << "parameter_2" << fDDC10->GetHEVOptions().parameter_2
-             << "parameter_3" << fDDC10->GetHEVOptions().parameter_3
-             << "window" << fDDC10->GetHEVOptions().window
-             << "prescaling" << fDDC10->GetHEVOptions().prescaling
-             << "component_status" << fDDC10->GetHEVOptions().component_status
-             << "width_cut" << fDDC10->GetHEVOptions().width_cut
-             << "delay" << fDDC10->GetHEVOptions().delay
+	     << "Address" << hev_options.address
+             << "required" << hev_options.required
+             << "signal_threshold" << hev_options.signal_threshold
+             << "sign" << hev_options.sign
+             << "rise_time_cut" << hev_options.rise_time_cut
+             << "inner_ring_factor" << hev_options.inner_ring_factor
+             << "outer_ring_factor" << hev_options.outer_ring_factor
+             << "integration_threshold" << hev_options.integration_threshold
+             << "parameter_0" << hev_options.parameter_0
+             << "parameter_1" << hev_options.parameter_1
+             << "parameter_2" << hev_options.parameter_2
+             << "parameter_3" << hev_options.parameter_3
+             << "window" << hev_options.window
+             << "prescaling" << hev_options.prescaling
+             << "component_status" << hev_options.component_status
+             << "width_cut" << hev_options.width_cut
+             << "delay" << hev_options.delay
              << bsoncxx::builder::stream::close_document;
   }
   // Write the settings for the Muon Veto V1495 board into status doc 
   if(fV1495 != NULL){
+    auto registers = fOptions->GetRegisters(fBID);
      in_array << bsoncxx::builder::stream::open_document
 	      << "type" << "V1495"
-	      << "Module reset" << fOptions->GetRegisters(fBID)[0].val
-	      << "Mask A" << fOptions->GetRegisters(fBID)[1].val
-	      << "Mask B" << fOptions->GetRegisters(fBID)[2].val
-	      << "Mask D" << fOptions->GetRegisters(fBID)[3].val
-	      << "Majority Threshold" << fOptions->GetRegisters(fBID)[4].val
-	      << "Coincidence Window" << fOptions->GetRegisters(fBID)[5].val
-	      << "NIM/TTL CTRL" << fOptions->GetRegisters(fBID)[6].val
+	      << "Module reset" << registers[0].val
+	      << "Mask A" << registers[1].val
+	      << "Mask B" << registers[2].val
+	      << "Mask D" << registers[3].val
+	      << "Majority Threshold" << registers[4].val
+	      << "Coincidence Window" << registers[5].val
+	      << "NIM/TTL CTRL" << registers[6].val
 	      << bsoncxx::builder::stream::close_document; 
   }
   
