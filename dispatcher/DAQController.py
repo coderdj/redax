@@ -46,6 +46,7 @@ class DAQController():
 
         self.log = log
         self.time_between_commands = int(config['DEFAULT']['TimeBetweenCommands'])
+        self.can_force_stop={k:True for k in detectors}
 
     def SolveProblem(self, latest_status, goal_state):
         '''
@@ -77,6 +78,7 @@ class DAQController():
 
         for det in latest_status.keys():
             if latest_status[det]['status'] == STATUS.IDLE:
+                self.can_force_stop[det] = True
                 self.error_stop_count[det] = 0
 
         '''
@@ -193,7 +195,9 @@ class DAQController():
                     (latest_status['neutron_veto']['status'] == STATUS.ERROR or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.log.info("TPC has error!")
-                self.ControlDetector(command='stop', detector='tpc', force=True)
+                self.ControlDetector(command='stop', detector='tpc',
+                        force=self.can_force_stop['tpc'])
+                self.can_force_stop['tpc']=False
 
 
             # Maybe someone is timing out or we're in some weird mixed state
@@ -223,7 +227,9 @@ class DAQController():
                 elif latest_status[detector]['status'] == STATUS.IDLE:
                     self.ControlDetector(command='arm', detector=detector)
                 elif latest_status[detector]['status'] == STATUS.ERROR:
-                    self.ControlDetector(command='stop', detector=detector, force=True)
+                    self.ControlDetector(command='stop', detector=detector,
+                            force=self.can_force_stop[detector])
+                    self.can_force_stop[detector] = False
                 else:
                     self.CheckTimeouts(detector)
 
