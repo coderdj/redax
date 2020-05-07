@@ -379,7 +379,11 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
     std::map<int, long>& buffer_counter,
     double proc_time_dp_us, double proc_time_ev_us, double proc_time_ch_us, double comp_time_us) {
   using namespace bsoncxx::builder::stream;
-  int run_id = std::stoi(GetString("run_identifier", "latest"));
+  int run_id = -1;
+  try{
+    run_id = std::stoi(GetString("run_identifier", "latest"));
+  } catch (...) {
+  }
   auto search_doc = document{} << "run" << run_id << finalize;
   auto update_doc = document{};
   update_doc << "$set" << open_document << "run" << run_id << close_document;
