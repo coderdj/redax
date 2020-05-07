@@ -293,7 +293,6 @@ int main(int argc, char** argv){
       std::cout<<"Can't connect to DB so will continue what I'm doing"<<std::endl;
     }
 
-    controller->CheckErrors();
     std::this_thread::sleep_for(std::chrono::milliseconds(1));
   }
   status_update.join();

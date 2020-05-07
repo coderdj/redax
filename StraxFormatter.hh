@@ -1,5 +1,5 @@
-#ifndef _STRAXINSERTER_HH_
-#define _STRAXINSERTER_HH_
+#ifndef _STRAXFORMATTER_HH_
+#define _STRAXFORMATTER_HH_
 
 #include <cstdlib>
 #include <cstdint>
@@ -9,7 +9,6 @@
 //#include <sys/types.h>
 #include <map>
 #include <mutex>
-#include <experimental/filesystem>
 #include <numeric>
 #include <atomic>
 #include <vector>
@@ -33,14 +32,14 @@ struct data_packet{
 };
 
 
-class StraxInserter{
+class StraxFormatter{
   /*
     Reformats raw data into strax format
   */
   
 public:
-  StraxInserter();
-  ~StraxInserter();
+  StraxFormatter();
+  ~StraxFormatter();
   
   int  Initialize(Options *options, MongoLog *log, 
 		  DAQController *dataSource, std::string hostname);
@@ -57,32 +56,16 @@ private:
   void ProcessDatapacket(data_packet *dp);
   uint32_t ProcessEvent(uint32_t*, unsigned, long, uint32_t, int);
   int ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int);
-  void WriteOutFiles(bool end=false);
   void GenerateArtificialDeadtime(int64_t timestamp, int16_t bid);
   void AddFragmentToBuffer(std::string& fragment, int64_t timestamp);
 
-  std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
-  std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
-  std::string GetStringFormat(int id);
-  void CreateMissing(u_int32_t back_from_id);
-  int fMissingVerified;
-
-  int64_t fChunkLength; // ns
-  int64_t fChunkOverlap; // ns
   int fFragmentBytes; // This is in BYTES
   int fStraxHeaderSize; // in BYTES too
-  int fBufferNumChunks;
-  int fWarnIfChunkOlderThan;
-  unsigned fChunkNameLength;
-  int64_t fFullChunkLength;
-  std::string fOutputPath, fHostname;
   Options *fOptions;
   MongoLog *fLog;
   DAQController *fDataSource;
   std::atomic_bool fActive, fRunning, fForceQuit;
   bool fErrorBit;
-  std::string fCompressor;
-  std::map<std::string, std::string*> fFragments;
   std::atomic_long fFragmentSize;
   std::map<int, std::map<std::string, int>> fFmt;
   std::map<int, int> fFailCounter;
@@ -91,7 +74,6 @@ private:
   std::mutex fDPC_mutex;
   std::map<int, long> fBufferCounter;
   std::atomic_int fBufferLength;
-  std::map<std::string, std::chrono::system_clock::time_point> fTimeLastSeen;
   long fBytesProcessed;
   long fFragmentsProcessed;
   long fEventsProcessed;
