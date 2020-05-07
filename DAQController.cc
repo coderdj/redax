@@ -22,7 +22,7 @@
 // 3-running
 // 4-error
 
-const int MaxBoardsPerLink(8);
+const int MAX_THREADS = std::thread::hardware_concurrency();
 
 DAQController::DAQController(MongoLog *log, std::string hostname){
   fLog=log;
@@ -372,6 +372,11 @@ int DAQController::GetData(data_packet* &dp) {
   return 1;
 }
 
+void DAQController::AddFragmentToOutputBuffer(std::string&& fragment) {
+  fOutputThreads[fOutputBufferCounter.load()].compressor.AddFragmentToBuffer(fragment);
+  fOutputBufferCounter = (fOutputBufferCounter + 1) % fNumOutputThreads;
+}
+
 bool DAQController::CheckErrors(){
 
   // This checks for errors from the threads by checking the
@@ -390,7 +395,11 @@ bool DAQController::CheckErrors(){
   return false;
 }
 
-int DAQController::OpenProcessingThreads(){
+void DAQController::ManageThreads() {
+  
+}
+
+int DAQController::StartThreads(){
   int ret = 0;
   const std::lock_guard<std::mutex> lg(fPTmutex);
   for(int i=0; i<fNProcessingThreads; i++){
@@ -406,7 +415,7 @@ int DAQController::OpenProcessingThreads(){
   return ret;
 }
 
-void DAQController::CloseProcessingThreads(){
+void DAQController::StopThreads(){
   std::map<int,int> board_fails;
   const std::lock_guard<std::mutex> lg(fPTmutex);
   for(unsigned int i=0; i<fProcessingThreads.size(); i++){
