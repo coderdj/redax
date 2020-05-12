@@ -51,7 +51,7 @@ def CheckStatus():
     
     result = subprocess.check_output(['ceph', 'status'])
     lines = result.decode().split('\n')
-    ret = {}
+    ret = {'time' : time.time()*1000}
     for line in lines:
         
         res_list = [a.strip() for a in line.split(' ') if a != '']
@@ -81,7 +81,7 @@ def CheckStatus():
         #    ret['wt_op_s'] = int(res_list[10])
     return ret
 
-client = MongoClient("mongodb://daq:%s@xenon1t-daq:27020,old-gw:27020/daq"%os.environ["MONGO_PASSWORD_DAQ"])
+client = MongoClient("mongodb://daq:%s@xenon1t-daq:27017/admin"%os.environ["MONGO_PASSWORD_DAQ"])
 db = client['daq']
 coll = db['system_monitor']
 while(1):

@@ -6,8 +6,9 @@ import socket
 import re
 import signal
 import threading
+import time
 
-client = MongoClient("mongodb://daq:%s@xenon1t-daq:27020/daq"%os.environ["DAQ_PASSWORD"])
+client = MongoClient("mongodb://daq:%s@xenon1t-daq:27017/admin"%os.environ["MONGO_PASSWORD_DAQ"])
 db = client['daq']
 collection = db['system_monitor']
 
@@ -18,7 +19,7 @@ signal.signal(signal.SIGTERM, lambda num, frame : ev.set())
 
 while not ev.is_set():
 
-    ret_doc = {'host': socket.gethostname()}
+    ret_doc = {'host': socket.gethostname(), 'time' : time.time()*1000}
 
     # CPU
     ret_doc['cpu_percent'] = psutil.cpu_percent()
