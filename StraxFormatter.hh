@@ -18,6 +18,7 @@
 class DAQController;
 class Options;
 class MongoLog;
+class ThreadPool;
 
 struct data_packet{
   public:
@@ -51,13 +52,15 @@ public:
   void GetDataPerChan(std::map<int, int>& ret);
   void CheckError(int bid);
   int GetBufferLength() {return fBufferLength.load();}
-  
+
 private:
   void ProcessDatapacket(data_packet *dp);
-  uint32_t ProcessEvent(uint32_t*, unsigned, long, uint32_t, int);
-  int ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int);
+  void ProcessEvent(std::string&&, unsigned, long, uint32_t, int);
+  void ProcessChannel(std::string&&, unsigned, int, int, uint32_t, uint32_t, long, int);
   void GenerateArtificialDeadtime(int64_t timestamp, int16_t bid);
   void AddFragmentToBuffer(std::string& fragment, int64_t timestamp);
+
+  int DPtoEvents(const uint32_t*, int);
 
   int fFragmentBytes; // This is in BYTES
   int fStraxHeaderSize; // in BYTES too
