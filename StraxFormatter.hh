@@ -17,6 +17,7 @@
 class DAQController;
 class Options;
 class MongoLog;
+class ThreadPool;
 
 struct data_packet{
   public:
@@ -49,7 +50,7 @@ public:
   void GetDataPerChan(std::map<int, int>& ret);
   void CheckError(int bid);
   int GetBufferLength() {return fBufferLength.load();}
-  
+
 private:
   void ProcessDatapacket(data_packet *dp);
   uint32_t ProcessEvent(uint32_t*, unsigned, long, uint32_t, int);

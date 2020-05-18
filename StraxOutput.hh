@@ -15,6 +15,7 @@
 #include <vector>
 #include <chrono>
 #include <thread>
+#include <list>
 
 class DAQController;
 class Options;
@@ -51,10 +52,9 @@ private:
   Options *fOptions;
   MongoLog *fLog;
   DAQController *fDataSource;
-  std::atomic_bool fActive, fRunning, fForceQuit;
-  bool fErrorBit;
+  std::atomic_bool fActive, fRunning;
   std::string fCompressor;
-  std::map<std::string, std::string*> fFragments;
+  std::map<std::string, std::list<std::string>> fChunks;
 
   std::thread::id fThreadId;
 };

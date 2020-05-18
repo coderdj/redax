@@ -2,6 +2,7 @@
 #include "DAQController.hh"
 #include "MongoLog.hh"
 #include "Options.hh"
+#include "ThreadPool.hh"
 #include <thread>
 #include <cstring>
 #include <cstdarg>
@@ -151,7 +152,7 @@ void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, int16_t bid, 
   AddFragmentToBuffer(fragment, timestamp, et, ro);
 }
 
-void StraxFormatter::ProcessDatapacket(data_packet* dp){
+void StraxFormatter::ProcessDatapacket(std::string&& str, const int& bid, const int& words, const uint32_t& clock_counter, const uint32_t& header_time){
 
   struct timespec dp_start, dp_end, ev_start, ev_end;
 
