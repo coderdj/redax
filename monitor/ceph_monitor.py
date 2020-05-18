@@ -4,6 +4,7 @@ import psutil
 import os
 import time
 from pymongo import MongoClient
+from pymongo.errors import NotMasterError
 timeout=2
 factors = {'k': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12, 'B': 1, 'MiB': 1e6, 'GiB': 1e9,
            'TiB': 1e12, 'kiB': 1e3, 'kB': 1e3, 'objects,': 1}
@@ -94,7 +95,9 @@ while(1):
     stat['ceph_size'] = statvfs.f_frsize * statvfs.f_blocks
     stat['ceph_free'] = statvfs.f_frsize * statvfs.f_bfree
     stat['ceph_available'] = statvfs.f_frsize * statvfs.f_bavail
-    #print(stat)
-    coll.insert(stat)
+    try:
+        coll.insert(stat)
+    except NotMasterError:
+        pass
     time.sleep(timeout)
 

@@ -1,4 +1,5 @@
 from pymongo import MongoClient
+from pymongo.errors import NotMasterError
 import os
 import psutil
 timeout = 2
@@ -42,7 +43,9 @@ while not ev.is_set():
             d = dict(psutil.disk_usage(mount)._asdict())
             disk[mount] = {k:d[k] for k in keep}
     ret_doc['disk'] = disk
-
-    collection.insert(ret_doc)
+    try:
+        collection.insert(ret_doc)
+    except NotMasterError:
+        pass
     ev.wait(timeout)
 
