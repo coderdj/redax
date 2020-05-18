@@ -74,14 +74,19 @@ int main(int argc, char** argv){
     
     for (auto doc : cursor) {
       // Acknowledge the commands
-      control.update_one
-        (bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
-         bsoncxx::builder::stream::finalize,
-         bsoncxx::builder::stream::document{} << "$push" <<
-         bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
-         bsoncxx::builder::stream::close_document <<
-         bsoncxx::builder::stream::finalize
-         );
+      try {
+        control.update_one
+          (bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
+            bsoncxx::builder::stream::finalize,
+            bsoncxx::builder::stream::document{} << "$push" <<
+            bsoncxx::builder::stream::open_document << "acknowledged" << hostname <<
+            bsoncxx::builder::stream::close_document <<
+            bsoncxx::builder::stream::finalize
+            );
+      } catch (...) {
+        std::cout<<"Can't access db, I'll keep doing my thing\n";
+        continue;
+      }
       
       // Strip data from the supplied doc
       int run = -1;
@@ -145,7 +150,11 @@ int main(int argc, char** argv){
     } //end for  
  
     // Report back on what we are doing
-    status.insert_one(fHandler->GetStatusDoc(hostname));
+    try{
+      status.insert_one(fHandler->GetStatusDoc(hostname));
+    } catch(...) {
+      std::cout<<"Couldn't update database, I'll keep doing my thing\n";
+    }
    usleep(1000000);
   }
   return 0;

@@ -261,6 +261,8 @@ class DAQController():
                 delay = 0
                 if command == 'start':
                     run = self.mongo.InsertRunDoc(detector, self.goal_state)
+                    if run == -1:  # runs db having a moment
+                        return
             else: # stop
                 readers, cc = self.mongo.GetConfiguredNodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
