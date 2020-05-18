@@ -147,7 +147,10 @@ class MongoConnect():
             }
             if 'number' in self.latest_status[detector].keys():
                 doc['number'] = self.latest_status[detector]['number']
-            self.collections['aggregate_status'].insert(doc)
+            try:
+                self.collections['aggregate_status'].insert(doc)
+            except NotMasterError:
+                self.log.error('RunsDB snafu')
 
     def AggregateStatus(self):
 
@@ -242,10 +245,14 @@ class MongoConnect():
         # Pull the wanted state per detector from the DB and return a dict
         retdoc = {}
         for detector in self.latest_status.keys():
-            command = self.collections['incoming_commands'].find_one(
-                {"detector": detector})
+            try:
+                command = self.collections['incoming_commands'].find_one(
+                    {"detector": detector})
+            except NotMasterError:
+                self.log.error('Database snafu')
+                return None
             if command is None:
-                print("Error! Wanted to find command for detector %s but it isn't there"%detector)
+                self.log.error("Wanted to find command for detector %s but it isn't there"%detector)
             retdoc[detector] = command
         self.latest_settings = retdoc
         return retdoc
@@ -278,7 +285,11 @@ class MongoConnect():
         '''
         if mode is None:
             return None
-        doc = self.collections["options"].find_one({"name": mode})
+        try:
+            doc = self.collections["options"].find_one({"name": mode})
+        except NotMasterError:
+            self.log.error('Database snafu')
+            return None
         fields_to_exclude = ['name', 'detector', 'description', 'user', '_id']
         try:
             newdoc = {**dict(doc)}
@@ -290,6 +301,8 @@ class MongoConnect():
                             del incdoc[field]
                     newdoc.update(incdoc)
             return newdoc
+        except NotMasterError:
+            self.log.error('Database snafu')
         except Exception as E:
             # LOG ERROR
             self.log.error("Got a %s exception in doc pulling: %s" % (type(E), E))
@@ -317,7 +330,11 @@ class MongoConnect():
         return hostlist, cc
 
     def GetNextRunNumber(self):
-        cursor = self.collections["run"].find().sort("number", -1).limit(1)
+        try:
+            cursor = self.collections["run"].find().sort("number", -1).limit(1)
+        except NotMasterError:
+            self.log.error('Database is having a moment')
+            return -1
         if cursor.count() == 0:
             self.log.info("wtf, first run?")
             return 0
@@ -328,8 +345,11 @@ class MongoConnect():
         Set's the 'end' field of the run doc to the current time if not done yet
         '''
         self.log.info("Updating run %i with end time"%number)
-        self.collections['run'].update_one({"number": int(number), "end": {"$exists": False}},
+        try:
+            self.collections['run'].update_one({"number": int(number), "end": {"$exists": False}},
                                           {"$set": {"end": datetime.datetime.utcnow()}})
+        except NotMasterError:
+            self.log.error("Database having a moment, hope this doesn't crash")
 
     def SendCommand(self, command, host_list, user, detector, mode="", delay=0):
         '''
@@ -360,12 +380,17 @@ class MongoConnect():
         '''
         nowtime = datetime.datetime.utcnow()
         afterlist = []
-        for command in self.outgoing_commands:
+        for i,command in enumerate(self.outgoing_commands):
             if command['createdAt'] <= nowtime:
-                self.collections['outgoing_commands'].insert(command)
+                try:
+                    self.collections['outgoing_commands'].insert(command)
+                except NotMasterError:
+                    self.log.error('Database snafu')
+                    afterlist = afterlist + self.outgoing_commands[i:]
+                    break
             else:
                 afterlist.append(command)
-        self.outgoing_commands = afterlist
+        self.outgoing_commands = sorted(afterlist, key=lambda x : x['createdAt'])
         return
 
     def LogError(self, reporter, message, priority, etype):
@@ -387,7 +412,11 @@ class MongoConnect():
         return
 
     def GetRunStart(self, number):
-        doc = self.collections['run'].find_one({"number": number}, {"start": 1})
+        try:
+            doc = self.collections['run'].find_one({"number": number}, {"start": 1})
+        except NotMasterError:
+            self.log.error('Database is having a moment')
+            return None
         if doc is not None:
             return doc['start']
         return None
@@ -436,5 +465,9 @@ class MongoConnect():
         # outside world to any degree of precision without invoking said GPS time
         run_doc['start'] = datetime.datetime.utcnow()
 
-        self.collections['run'].insert_one(run_doc)
+        try:
+            self.collections['run'].insert_one(run_doc)
+        except NotMasterError:
+            self.log.error('Database having a moment')
+            return -1
         return number

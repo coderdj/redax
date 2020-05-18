@@ -35,8 +35,10 @@ MongoConnector = MongoConnect(config, logger)
 # solve the want/have decisions. The deciding functions also go here. It needs a
 # mongo connector because it has to pull options files
 DAQControl = DAQController(config, MongoConnector, logger)
+sleep_period = int(config['DEFAULT']['PollFrequency'])
 
 while(1):
+    time.sleep(sleep_period)
 
     # Get most recent check-in from all connected hosts
     MongoConnector.GetUpdate()
@@ -44,6 +46,8 @@ while(1):
 
     # Get most recent goal state from database. Users will update this from the website.
     goal_state = MongoConnector.GetWantedState()
+    if goal_state is None:
+        continue
 
     # Decision time. Are we actually in our goal state? If not what should we do?
     DAQControl.SolveProblem(latest_status, goal_state)
@@ -57,4 +61,3 @@ while(1):
         logger.debug("Detector %s should be %sACTIVE and is %s"%(
                 detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
                 latest_status[detector]['status'].name))
-    time.sleep(int(config["DEFAULT"]['PollFrequency']))
