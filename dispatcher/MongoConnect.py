@@ -1,4 +1,5 @@
 from pymongo import MongoClient
+from pymongo.errors import NotMasterError
 import datetime
 import os
 import json
