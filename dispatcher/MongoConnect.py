@@ -1,10 +1,10 @@
 from pymongo import MongoClient
-from pymongo.errors import NotMasterError
 import datetime
 import os
 import json
 from DAQController import STATUS
 import threading
+import time
 
 '''
 MongoDB Connectivity Class for XENONnT DAQ Dispatcher
@@ -113,8 +113,11 @@ class MongoConnect():
 
     def __del__(self):
         self.run = False
-        self.event.set()
-        self.command_thread.join()
+        try:
+            self.event.set()
+            self.command_thread.join()
+        except:
+            pass
 
     def GetUpdate(self):
 
@@ -133,7 +136,7 @@ class MongoConnect():
                         }}
                     ]):
                 latest[doc['_id']] = doc
-        except NotMasterError:
+        except:
             return -1
 
         # Get updates from readers and controller
@@ -169,7 +172,7 @@ class MongoConnect():
                 doc['number'] = self.latest_status[detector]['number']
             try:
                 self.collections['aggregate_status'].insert(doc)
-            except NotMasterError:
+            except:
                 self.log.error('RunsDB snafu')
                 return
 
@@ -193,8 +196,7 @@ class MongoConnect():
             rate = 0
             mode = None
             buff = 0
-            for reader in self.latest_status[detector]['readers'].keys():
-                doc = self.latest_status[detector]['readers'][reader]
+            for doc in self.latest_status[detector]['readers'].values():
                 try:
                     rate += doc['rate']
                 except:
@@ -221,8 +223,7 @@ class MongoConnect():
                 status_list.append(status)
 
             # If we have a crate controller check on it too
-            for controller in self.latest_status[detector]['controller'].keys():
-                doc = self.latest_status[detector]['controller'][controller]
+            for doc in self.latest_status[detector]['controller'].values():
                 # Copy above. I guess it would be possible to have no readers
                 try:
                     status = STATUS(doc['status'])
@@ -259,19 +260,12 @@ class MongoConnect():
 
     def GetWantedState(self):
         # Pull the wanted state per detector from the DB and return a dict
-        retdoc = {}
-        for detector in self.latest_status.keys():
-            try:
-                command = self.collections['incoming_commands'].find_one(
-                    {"detector": detector})
-            except NotMasterError:
-                self.log.error('Database snafu')
-                return None
-            if command is None:
-                self.log.error("Wanted to find command for detector %s but it isn't there"%detector)
-            retdoc[detector] = command
-        self.latest_settings = retdoc
-        return retdoc
+        try:
+            self.latest_settings=dict(zip(self.latest_status.keys(),
+                                          self.collections['incoming_commands'].find()))
+            return self.latest_settings
+        except:
+            return None
 
     def GetConfiguredNodes(self, detector, link_mv, link_nv):
         '''
@@ -303,7 +297,7 @@ class MongoConnect():
             return None
         try:
             doc = self.collections["options"].find_one({"name": mode})
-        except NotMasterError:
+        except:
             self.log.error('Database snafu')
             return None
         fields_to_exclude = ['name', 'detector', 'description', 'user', '_id']
@@ -348,8 +342,8 @@ class MongoConnect():
     def GetNextRunNumber(self):
         try:
             cursor = self.collections["run"].find().sort("number", -1).limit(1)
-        except NotMasterError:
-            self.log.error('Database is having a moment')
+        except:
+            self.log.error('Database is having a moment?')
             return -1
         if cursor.count() == 0:
             self.log.info("wtf, first run?")
@@ -362,12 +356,13 @@ class MongoConnect():
         '''
         self.log.info("Updating run %i with end time"%number)
         try:
+            time.sleep(2)
             endtime = self.GetAckTime(detector, 'stop')
             if endtime is None:
                 endtime = datetime.datetime.utcnow()
             self.collections['run'].update_one({"number": int(number), "end": {"$exists": False}},
                                           {"$set": {"end": endtime}})
-        except NotMasterError:
+        except:
             self.log.error("Database having a moment, hope this doesn't crash")
         return
 
@@ -392,6 +387,8 @@ class MongoConnect():
         try:
             if command == 'arm':
                 number = self.GetNextRunNumber()
+                if number == -1:
+                    return -1
                 n_id = (str(number)).zfill(6)
                 self.latest_status[detector]['number'] = number
             self.collections["command_queue"].insert_one({
@@ -404,11 +401,12 @@ class MongoConnect():
                 "host": host_list,
                 "createdAt": datetime.datetime.utcnow() + datetime.timedelta(seconds=delay)
             })
-        except NotMasterError:
-            pass
+        except:
+            self.log.info('Database issue, dropping command %s to %s' % (command, detector))
+            return -1
         else:
             self.event.set()
-        return
+        return 0
 
     def ProcessCommands(self):
         '''
@@ -427,9 +425,9 @@ class MongoConnect():
                     ret = self.collections['outgoing_commands'].insert_one(next_cmd)
                     self.collections['command_queue'].delete_one({'_id' : oid})
                     self.command_oid[next_cmd['detector']][next_cmd['command']] = ret.inserted_id
-            except NotMasterError:
+            except Exception as e:
                 dt = 10
-                self.log.error("DB down?")
+                self.log.error("DB down? %s" % e)
             self.event.wait(dt)
             self.event.clear()
 
@@ -449,15 +447,15 @@ class MongoConnect():
                 "message": message,
                 "priority": self.loglevels[priority]
             })
-        except NotMasterError:
-            pass
+        except:
+            self.log.error('Database error, can\'t issue error message')
         self.log.info("Error message from %s: %s" % (reporter, message))
         return
 
     def GetRunStart(self, number):
         try:
             doc = self.collections['run'].find_one({"number": number}, {"start": 1})
-        except NotMasterError:
+        except:
             self.log.error('Database is having a moment')
             return None
         if doc is not None and 'start' in doc:
@@ -505,18 +503,15 @@ class MongoConnect():
                 'location': ini['strax_output_path']
             }]
 
-        # Lastly, update the start time. It is possible that one day someone will come looking
-        # to see exactly how our event times get defined. This line shows you why we have a GPS
-        # clock and why you shouldn't trust the event times from strax to be relatable to the
-        # outside world to any degree of precision without invoking said GPS time
         try:
+            time.sleep(2)
             start_time = self.GetAckTime(detector, 'start')
             if start_time is None:
                 start_time = datetime.datetime.utcnow()
             run_doc['start'] = start_time
 
             self.collections['run'].insert_one(run_doc)
-        except NotMasterError:
+        except:
             self.log.error('Database having a moment')
             return -1
         return number

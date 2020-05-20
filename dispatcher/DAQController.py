@@ -259,25 +259,25 @@ class DAQController():
             if command in ['start','arm']:
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
                 delay = 0
-                if command == 'start':
-                    run = self.mongo.InsertRunDoc(detector, self.goal_state)
-                    if run == -1:  # runs db having a moment
-                        return
             else: # stop
                 readers, cc = self.mongo.GetConfiguredNodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
                 delay = 5
                 # TODO smart delay?
-                try:
-                    self.mongo.SetStopTime(self.latest_status[detector]['number'])
-                except Exception as E:
-                    self.log.warning("Wanted to stop run but no associated number, got %s exception: %s" % (type(E), E))
             self.log.debug('Sending %s to %s' % (command.upper(), detector))
-            self.mongo.SendCommand(command, cc, self.goal_state[detector]['user'],
-                    detector, self.goal_state[detector]['mode'])
-            self.mongo.SendCommand(command, readers, self.goal_state[detector]['user'],
-                    detector, self.goal_state[detector]['mode'], delay)
+            if (self.mongo.SendCommand(command, cc, self.goal_state[detector]['user'],
+                    detector, self.goal_state[detector]['mode']) or 
+                self.mongo.SendCommand(command, readers, self.goal_state[detector]['user'],
+                    detector, self.goal_state[detector]['mode'], delay)):
+                # failed
+                return
             self.last_command[command][detector] = now
+            if command == 'start' and self.mongo.InsertRunDoc(detector, self.goal_state):
+                # db having a moment
+                return
+            if command == 'stop' and self.mongo.SetStopTime(self.latest_status[detector]['number']):
+                # db having a moment
+                return
 
         else:
             self.log.debug('Can\'t send %s to %s, timeout at %i/%i' % (
@@ -366,7 +366,11 @@ class DAQController():
         except:
             # dirty workaround just in case there was a dispatcher crash
             number = self.latest_status[detector]['number'] = self.mongo.GetNextRunNumber() - 1
+            if number == -2:  # db issue
+                return
         start_time = self.mongo.GetRunStart(number)
+        if start_time is None:
+            return
         nowtime = datetime.datetime.utcnow()
         run_length = int(self.goal_state[detector]['stop_after'])*60
         run_duration = (nowtime - start_time).total_seconds()

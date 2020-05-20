@@ -66,19 +66,17 @@ int main(int argc, char** argv){
       "_id" << 1 <<bsoncxx::builder::stream::finalize;
     auto opts = mongocxx::options::find{};
     opts.sort(order.view());
-    mongocxx::cursor cursor = control.find
-      (
-       bsoncxx::builder::stream::document{}<< "host" << hostname <<"acknowledged." + hostname <<
-       bsoncxx::builder::stream::open_document << "$exists" << 0 <<
-       bsoncxx::builder::stream::close_document << bsoncxx::builder::stream::finalize,
-       opts
-       );
-    
-    for (auto doc : cursor) {
-      // Acknowledge the commands
-      try {
-        control.update_one
-          (bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
+    try {
+      mongocxx::cursor cursor = control.find(
+         bsoncxx::builder::stream::document{}<< "host" << hostname <<"acknowledged." + hostname <<
+         bsoncxx::builder::stream::open_document << "$exists" << 0 <<
+         bsoncxx::builder::stream::close_document << bsoncxx::builder::stream::finalize,
+         opts
+         );
+      for (auto doc : cursor) {
+        // Acknowledge the commands
+        control.update_one(
+            bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
             bsoncxx::builder::stream::finalize,
             bsoncxx::builder::stream::document{} << "$set" <<
             bsoncxx::builder::stream::open_document << "acknowledged." + hostname <<
@@ -86,79 +84,78 @@ int main(int argc, char** argv){
             bsoncxx::builder::stream::close_document <<
             bsoncxx::builder::stream::finalize
             );
-      } catch (...) {
-        std::cout<<"Can't access db, I'll keep doing my thing\n";
-        continue;
-      }
-      
-      // Strip data from the supplied doc
-      int run = -1;
-      std::string command = "";
-      try{
-	command = doc["command"].get_utf8().value.to_string();
-	if(command == "arm" )
-	  run = doc["number"].get_int32();
-      }
-      catch(const std::exception E){
-        logger->Entry(MongoLog::Warning,
-		      "ccontrol: Received a document from the dispatcher missing [command|number]");
-	continue;
-      }
-      
-     // If the command is arm gonna use the options file to load the V2718, DDC10, etc...settings
-     std::string mode = "";
-     if(command == "arm"){
-       try{
-	 mode = doc["mode"].get_utf8().value.to_string();
-       }
-       catch(const std::exception E){
-	 logger->Entry(MongoLog::Warning, "ccontrol: Received an arm document with no run mode");
-       }
-                                     
-       // Get an override doc from the 'options_override' field if it exists
-       std::string override_json = "";
-       try{
-	 bsoncxx::document::view oopts = doc["options_override"].get_document().view();
-	 override_json = bsoncxx::to_json(oopts);
-       } 
-       catch(const std::exception E){
-	 logger->Entry(MongoLog::Debug, "No override options provided");
-       }	  
-              
-       //Here are our options
-       if(options != NULL) {
-	 delete options;
-	 options = NULL;
-       }
-       options = new Options(logger, mode, hostname, mongo_uri, dbname, override_json);
-	 
-       // Initialise the V2178, V1495 and DDC10...etc.      
-       if(fHandler->DeviceArm(run, options) != 0){
-	 logger->Entry(MongoLog::Error, "Failed to initialize devices");
-       }
 
-     } // end if "arm" command
-     
+        // Strip data from the supplied doc
+        int run = -1;
+        std::string command = "";
+        try{
+          command = doc["command"].get_utf8().value.to_string();
+          if(command == "arm" )
+          run = doc["number"].get_int32();
+        } catch(const std::exception E){
+          logger->Entry(MongoLog::Warning,
+              "ccontrol: Received a document from the dispatcher missing [command|number]");
+          continue;
+        }
 
-    else if(command == "start"){
-       if((fHandler->DeviceStart()) != 0){
-	 logger->Entry(MongoLog::Debug, "Failed to start devices");
-       }
-     } 
-     else if(command == "stop"){
-       if((fHandler->DeviceStop()) != 0){
-	 logger->Entry(MongoLog::Debug, "Failed to stop devices");
-       }
-     } 
-    } //end for  
- 
+        // If the command is arm gonna use the options file to load the V2718, DDC10, etc...settings
+        std::string mode = "";
+        if(command == "arm"){
+          try{
+            mode = doc["mode"].get_utf8().value.to_string();
+          } catch(const std::exception E){
+            logger->Entry(MongoLog::Warning, "ccontrol: Received an arm document with no run mode");
+            continue;
+          }
+
+          // Get an override doc from the 'options_override' field if it exists
+          std::string override_json = "";
+          try{
+            bsoncxx::document::view oopts = doc["options_override"].get_document().view();
+            override_json = bsoncxx::to_json(oopts);
+          } catch(const std::exception E){
+            logger->Entry(MongoLog::Local, "No override options provided");
+          }
+
+          //Here are our options
+          if(options != NULL) {
+            delete options;
+            options = NULL;
+          }
+          options = new Options(logger, mode, hostname, mongo_uri, dbname, override_json);
+
+          // Initialise the V2178, V1495 and DDC10...etc.
+          if(fHandler->DeviceArm(run, options) != 0){
+            logger->Entry(MongoLog::Warning, "Failed to initialize devices");
+          }
+
+        } // end if "arm" command
+        else if(command == "start"){
+          if((fHandler->DeviceStart()) != 0){
+            logger->Entry(MongoLog::Warning, "Failed to start devices");
+          }
+        }
+        else if(command == "stop"){
+          if((fHandler->DeviceStop()) != 0){
+            logger->Entry(MongoLog::Warning, "Failed to stop devices");
+          }
+        }
+      } //end for
+    } catch (const std::exception& e) {
+      std::cout<<"Can't access db, I'll keep doing my thing\n";
+      continue;
+    }
+
     // Report back on what we are doing
     try{
       status.insert_one(fHandler->GetStatusDoc(hostname));
-    } catch(...) {
+    } catch(const std::exception& e) {
       std::cout<<"Couldn't update database, I'll keep doing my thing\n";
     }
-   usleep(1000000);
+    std::this_thread::sleep_for(seconds(1));
   }
+  if (options != NULL) delete options;
+  delete fHandler;
+  delete fLogger;
   return 0;
 }

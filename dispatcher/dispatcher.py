@@ -56,7 +56,8 @@ def main():
         sh.event.wait(sleep_period)
 
         # Get most recent check-in from all connected hosts
-        MongoConnector.GetUpdate()
+        if MongoConnector.GetUpdate():
+            continue
         latest_status = MongoConnector.latest_status
 
         # Get most recent goal state from database. Users will update this from the website.
@@ -66,7 +67,6 @@ def main():
 
         # Decision time. Are we actually in our goal state? If not what should we do?
         DAQControl.SolveProblem(latest_status, goal_state)
-        MongoConnector.ProcessCommands()
 
         # Time to report back
         MongoConnector.UpdateAggregateStatus()
@@ -75,7 +75,7 @@ def main():
         for detector in latest_status.keys():
             logger.debug("Detector %s should be %sACTIVE and is %s"%(
                     detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
-                        latest_status[detector]['status'].name))
+                    latest_status[detector]['status'].name))
 
     return
 
