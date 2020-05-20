@@ -6,13 +6,23 @@
 #include <limits.h>
 #include <unistd.h>
 #include <chrono>
+#include <csignal>
+#include <atomic>
+
+std::atomic_bool b_run = true;
+
+void SignalHandler(int signum) {
+    std::cout << "Received signal "<<signum<<std::endl;
+    b_run = false;
+    return;
+}
 
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
 
 int main(int argc, char** argv){
-  
+
   mongocxx::instance instance{};
   // Parse arguments
   if(argc < 3){
@@ -57,10 +67,10 @@ int main(int argc, char** argv){
   Options *options = NULL;
   
   // Holds session data
-  CControl_Handler *fHandler = new CControl_Handler(logger, hostname);  
+  CControl_Handler *fHandler = new CControl_Handler(logger, hostname);
   using namespace std::chrono;
 
-  while(1){
+  while(b_run){
 
     auto order = bsoncxx::builder::stream::document{} <<
       "_id" << 1 <<bsoncxx::builder::stream::finalize;
@@ -153,7 +163,7 @@ int main(int argc, char** argv){
       std::cout<<"Couldn't update database, I'll keep doing my thing\n";
     }
     std::this_thread::sleep_for(seconds(1));
-  }
+  } // while run
   if (options != NULL) delete options;
   delete fHandler;
   delete fLogger;

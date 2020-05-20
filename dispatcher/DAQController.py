@@ -284,7 +284,6 @@ class DAQController():
                 command, detector, dt, self.timeouts[command]))
             #self.CheckTimeouts(detector=detector, command=command)
 
-
     def CheckTimeouts(self, detector, command = None):
         ''' 
         This one is invoked if we think we need to change states. Either a stop command needs

@@ -10,6 +10,7 @@
 #include <limits.h>
 #include <chrono>
 #include <thread>
+#include <atomic>
 
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
@@ -115,7 +116,6 @@ int main(int argc, char** argv){
   std::vector<std::thread*> readoutThreads;
   std::thread status_update(&UpdateStatus, suri, dbname, controller);
   using namespace std::chrono;
-
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
   while(b_run == true){
@@ -143,17 +143,15 @@ int main(int argc, char** argv){
 	  doc["command"].get_utf8().value.to_string().c_str());
 	// Very first thing: acknowledge we've seen the command. If the command
 	// fails then we still acknowledge it because we tried
-	control.update_one
-	  (
+	control.update_one(
 	   bsoncxx::builder::stream::document{} << "_id" << (doc)["_id"].get_oid() <<
 	   bsoncxx::builder::stream::finalize,
 	   bsoncxx::builder::stream::document{} << "$set" <<
 	   bsoncxx::builder::stream::open_document << "acknowledged." + hostname <<
-           duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() <<
+           (long)duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() <<
 	   bsoncxx::builder::stream::close_document <<
 	   bsoncxx::builder::stream::finalize
 	   );
-	std::cout<<"Updated doc"<<std::endl;
 
 	// Get the command out of the doc
 	std::string command = "";

@@ -41,8 +41,6 @@ class MongoConnect():
         rdbn = config['DEFAULT']['RunsDatabaseName']
         self.dax_db = MongoClient(
             config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])[dbn]
-        self.log_db = MongoClient(
-            config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])[dbn]
         self.runs_db = MongoClient(
             config['DEFAULT']['RunsDatabaseURI']%os.environ['RUNS_MONGO_PASSWORD'])[rdbn]
 
@@ -407,6 +405,39 @@ class MongoConnect():
         else:
             self.event.set()
         return 0
+
+    def GetNextCommand(self, command=None, host=None):
+        query = {}
+        sort=[('createdAt', 1)]
+        if command is not None:
+            query['command'] = command
+        if host is not None:
+            if isinstance(host, str):
+                query['host'] = host
+            elif isinstance(host, (list, tuple)):
+                pass
+        for doc in self.collections['command_queue'].find(query).sort(sort).limit(1):
+            return doc
+        return None
+
+    def CommandBufferer(self):
+        while True:
+            next_cmd = self.GetNextCommand()
+            if next_cmd is None:
+                dt = 10
+            else:
+                dt= (next_cmd['createdAt']-datetime.datetime.utcnow()).total_seconds()
+                if dt < 0.1:
+                    oid = next_cmd['_id']
+                    del next_cmd['_id']
+                    self.collections['outgoing_commands'].insert_one(next_cmd)
+                    self.collections['command_queue'].delete_one({'_id': oid})
+                    continue
+
+            self.event.wait(dt)
+            self.event.clear()
+            if hasattr(self, 'quit') and self.quit == True:
+                return
 
     def ProcessCommands(self):
         '''
