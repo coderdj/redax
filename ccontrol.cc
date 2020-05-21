@@ -153,6 +153,9 @@ int main(int argc, char** argv){
           if((fHandler->DeviceStop()) != 0){
             logger->Entry(MongoLog::Warning, "Failed to stop devices");
           }
+          auto start_time = system_clock::now();
+          logger->Entry(MongoLog::Local, "Ack to Stop took %i us",
+            duration_cast<microseconds>(start_time-ack_time).count());
         }
       } //end for
     } catch (const std::exception& e) {
