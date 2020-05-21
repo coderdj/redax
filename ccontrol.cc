@@ -166,6 +166,6 @@ int main(int argc, char** argv){
   } // while run
   if (options != NULL) delete options;
   delete fHandler;
-  delete fLogger;
+  delete logger;
   return 0;
 }
