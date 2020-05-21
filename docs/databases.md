@@ -91,6 +91,7 @@ Because some of these fields require slightly more explanation a table has been 
         "detector" : "tpc", 
         "active" : "true",
         "stop_after" : "60",
+        "finish_run_on_stop": "true",
         "mode" : "two_boards_with_sync",
         "user" : "Coderre",
         "comment" : "",
@@ -106,6 +107,7 @@ Because some of these fields require slightly more explanation a table has been 
 |detector	|Either 'tpc', 'muon_veto', or 'neutron_veto'. Or whatever funny thing you've got in your lab. |
 |active	|The user can set whether this detector is 'active' or not. If it's not active then we don't care about it's status. In fact we can't care since some readers will be reused when running in combined modes and may not longer belong to their original detectors.|
 |stop_after	|How many minutes (or seconds? check code) until the run automatically restarts. This is a global DAQ state setting, not the setting for a single run. So if you want to run for an hour you set this to 60 minutes, put the detector active, and the dispatcher should handle giving you the 1 hour runs. |
+|finish_run_on_stop |How to deal with a run in progress if you set active to 'false'. If 'finish_run_on_stop' is true, we wait for the run to finish due to stop_after (but no new one is started). If false, we stop the run. Has no effect if active is 'true'. |    
 |mode	|The options mode we're running the DAQ in. Should correspond to the 'name' field of one of the documents in the options collection. |
 |user	|Who gets credit/blame for starting these runs? This is the user who last changed this command doc and it will be recorded in the run documents of all runs recorded while this command is active. |
 |Comment	|You can automatically connect a comment to all runs started with this setting by setting this field. The comment is put in the run doc for all runs started while the command is active. |
