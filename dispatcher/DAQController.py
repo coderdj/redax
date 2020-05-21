@@ -105,16 +105,16 @@ class DAQController():
                     (latest_status['neutron_veto']['status']  in active_states and
                      goal_state['tpc']['link_nv'] == 'true')
             ):
-                self.StopDetectorGently(goal_state, latest_status, detector='tpc')
+                self.StopDetectorGently(detector='tpc')
 
         # 1b - deal with MV but only if MV not linked to TPC
         if goal_state['tpc']['link_mv'] == 'false' and goal_state['muon_veto']['active'] == 'false':
             if latest_status['muon_veto']['status']  in active_states:
-                self.StopDetectorGently(goal_state, latest_status, detector='muon_veto')
+                self.StopDetectorGently(detector='muon_veto')
         # 1c - deal with NV but only if NV not linked to TPC
         if goal_state['tpc']['link_nv'] == 'false' and goal_state['neutron_veto']['active'] == 'false':
             if latest_status['neutron_veto']['status']  in active_states:
-                self.StopDetectorGently(goal_state, latest_status, detector='neutron_veto')
+                self.StopDetectorGently(detector='neutron_veto')
 
         '''
         CASE 2: DETECTORS ARE ACTIVE
@@ -232,20 +232,19 @@ class DAQController():
 
         return
 
-    def StopDetectorGently(self, goal_state, latest_status, detector):
+    def StopDetectorGently(self, detector):
         '''
         Stops the detector, unless we're told to wait for the current
         run to end
         '''
         if (
                 # Running normally (not arming, error, timeout, etc)
-                latest_status[detector]['status'] == STATUS.RUNNING and
+                self.latest_status[detector]['status'] == STATUS.RUNNING and
                 # We were asked to wait for the current run to stop
-                goal_state[detector].get('finish_run_on_stop', 'false') == 'true'):
+                self.goal_state[detector].get('finish_run_on_stop', 'false') == 'true'):
             self.CheckRunTurnover(detector)
         else:
             self.ControlDetector(detector=detector, command='stop')
-            # self.CheckTimeouts(detector)
 
     def ControlDetector(self, command, detector, force=False):
         '''
