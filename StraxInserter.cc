@@ -131,7 +131,7 @@ void StraxInserter::GetDataPerChan(std::map<int, int>& ret) {
   return;
 }
 
-void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp, int16_t bid) {
+void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp, int16_t bid, uint32_t et, int ro) {
   std::string fragment;
   fragment.append((char*)&timestamp, sizeof(timestamp));
   int32_t length = fFragmentBytes>>1;
@@ -149,7 +149,7 @@ void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp, int16_t bid) {
   int8_t zero = 0;
   while ((int)fragment.size() < fFragmentBytes+fStraxHeaderSize)
     fragment.append((char*)&zero, sizeof(zero));
-  AddFragmentToBuffer(fragment, timestamp);
+  AddFragmentToBuffer(std::move(fragment), timestamp, et, ro);
 }
 
 void StraxInserter::ProcessDatapacket(data_packet* dp){
@@ -200,7 +200,8 @@ uint32_t StraxInserter::ProcessEvent(uint32_t* buff, unsigned total_words, long 
 
   if(buff[1]&0x4000000){ // board fail
     const std::lock_guard<std::mutex> lg(fFC_mutex);
-    GenerateArtificialDeadtime(((clock_counter<<31) + event_time)*fmt["ns_per_clock"], bid);
+    GenerateArtificialDeadtime(((clock_counter<<31) + event_time)*fmt["ns_per_clock"], bid,
+        event_time, clock_counter);
     fDataSource->CheckError(bid);
     fFailCounter[bid]++;
     return event_header_words;
@@ -279,8 +280,8 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   // let's sanity-check the data first to make sure we didn't get CAENed
   for (unsigned w = fmt["channel_header_words"]; w < channel_words; w++) {
     if ((buff[w]>>28) == 0xA) {
-      fLog->Entry(MongoLog::Local, "Board %i has CAEN'd itself (%lx)", bid, TIme64);
-      GenerateArtificialDeadtime(Time64, bid);
+      fLog->Entry(MongoLog::Local, "Board %i has CAEN'd itself (%lx)", bid, Time64);
+      GenerateArtificialDeadtime(Time64, bid, event_time, clock_counter);
       return -1;
     }
   }
@@ -347,7 +348,7 @@ void StraxInserter::AddFragmentToBuffer(std::string&& fragment, int64_t timestam
     const short* channel = (const short*)(fragment.data()+14);
     fLog->Entry(MongoLog::Warning,
         "Thread %lx got data from ch %i that's in chunk %i instead of %i/%i (ts %lx), it might get lost (ts %x ro %i)",
-        fThreadId, *channel, chunk_id, min_chunk, max_chunk, timestamp, ts, ro);
+        fThreadId, *channel, chunk_id, min_chunk, max_chunk, timestamp, ts, rollovers);
   } else if (chunk_id - max_chunk > 2) {
     fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s)",
         fThreadId, chunk_id - max_chunk - 1);
