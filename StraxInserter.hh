@@ -58,7 +58,7 @@ private:
   uint32_t ProcessEvent(uint32_t*, unsigned, long, uint32_t, int);
   int ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int);
   void WriteOutFiles(bool end=false);
-  void GenerateArtificialDeadtime(int64_t, int16_t);
+  void GenerateArtificialDeadtime(int64_t, int16_t, uint32_t, int);
   void AddFragmentToBuffer(std::string&&, int64_t, uint32_t, int);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
