@@ -200,7 +200,7 @@ uint32_t StraxInserter::ProcessEvent(uint32_t* buff, unsigned total_words, long 
 
   if(buff[1]&0x4000000){ // board fail
     const std::lock_guard<std::mutex> lg(fFC_mutex);
-    GenerateArtificialDeadtime(((clock_counter<<31) + header_time)*fmt["ns_per_clock"], bid);
+    GenerateArtificialDeadtime(((clock_counter<<31) + event_time)*fmt["ns_per_clock"], bid);
     fDataSource->CheckError(bid);
     fFailCounter[bid]++;
     return event_header_words;
@@ -279,7 +279,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   // let's sanity-check the data first to make sure we didn't get CAENed
   for (unsigned w = fmt["channel_header_words"]; w < channel_words; w++) {
     if ((buff[w]>>28) == 0xA) {
-      fLog->Entry(MongoLog::Local, "Board %i has CAEN'd itself", bid);
+      fLog->Entry(MongoLog::Local, "Board %i has CAEN'd itself (%lx)", bid, TIme64);
       GenerateArtificialDeadtime(Time64, bid);
       return -1;
     }
@@ -319,7 +319,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
     while((int)fragment.size()<fFragmentBytes+fStraxHeaderSize)
       fragment.append((char*)&zero_filler, 2);
 
-    AddFragmentToBuffer(fragment, time_this_fragment);
+    AddFragmentToBuffer(std::move(fragment), time_this_fragment, event_time, clock_counter);
   } // loop over frag_i
   {
     const std::lock_guard<std::mutex> lg(fDPC_mutex);
@@ -328,7 +328,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   return channel_words;
 }
 
-void StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp) {
+void StraxInserter::AddFragmentToBuffer(std::string&& fragment, int64_t timestamp, uint32_t ts, int rollovers) {
   // Get the CHUNK and decide if this event also goes into a PRE/POST file
   int chunk_id = timestamp/fFullChunkLength;
   bool nextpre = (chunk_id+1)* fFullChunkLength - timestamp <= fChunkOverlap;
@@ -336,9 +336,9 @@ void StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp
   // If not in pre/post
   std::string chunk_index = GetStringFormat(chunk_id);
   int min_chunk(0), max_chunk(1);
-  const auto [min_chunk_, max_chunk_] = std::minmax_element(fFragments.begin(), fFragments.end(), 
-      [&](auto& l, auto& r) {return std::stoi(l.first) < std::stoi(r.first);});
   if (fFragments.size() > 0) {
+    const auto [min_chunk_, max_chunk_] = std::minmax_element(fFragments.begin(), fFragments.end(), 
+      [&](auto& l, auto& r) {return std::stoi(l.first) < std::stoi(r.first);});
     min_chunk = std::stoi((*min_chunk_).first);
     max_chunk = std::stoi((*max_chunk_).first);
   }
@@ -346,8 +346,8 @@ void StraxInserter::AddFragmentToBuffer(std::string& fragment, int64_t timestamp
   if (min_chunk - chunk_id > fWarnIfChunkOlderThan) {
     const short* channel = (const short*)(fragment.data()+14);
     fLog->Entry(MongoLog::Warning,
-        "Thread %lx got data from channel %i that's %i chunks behind the buffer, it might get lost",
-        fThreadId, *channel, min_chunk - chunk_id);
+        "Thread %lx got data from ch %i that's in chunk %i instead of %i/%i (ts %lx), it might get lost (ts %x ro %i)",
+        fThreadId, *channel, chunk_id, min_chunk, max_chunk, timestamp, ts, ro);
   } else if (chunk_id - max_chunk > 2) {
     fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s)",
         fThreadId, chunk_id - max_chunk - 1);
