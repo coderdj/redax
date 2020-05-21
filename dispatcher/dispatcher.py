@@ -1,7 +1,5 @@
-import time
 import configparser
 import argparse
-import datetime
 import logging
 import logging.handlers
 import threading
@@ -52,7 +50,7 @@ def main():
     sleep_period = int(config['DEFAULT']['PollFrequency'])
     sh = SignalHandler()
 
-    while(not sh.event.is_set()):
+    while(sh.event.is_set() == False):
         sh.event.wait(sleep_period)
 
         # Get most recent check-in from all connected hosts
@@ -64,7 +62,6 @@ def main():
         goal_state = MongoConnector.GetWantedState()
         if goal_state is None:
             continue
-
         # Decision time. Are we actually in our goal state? If not what should we do?
         DAQControl.SolveProblem(latest_status, goal_state)
 
@@ -76,7 +73,7 @@ def main():
             logger.debug("Detector %s should be %sACTIVE and is %s"%(
                     detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
                     latest_status[detector]['status'].name))
-
+    MongoConnector.Quit()
     return
 
 

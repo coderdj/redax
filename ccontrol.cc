@@ -8,6 +8,10 @@
 #include <chrono>
 #include <csignal>
 #include <atomic>
+#include <mongocxx/instance.hpp>
+#include <bsoncxx/builder/stream/document.hpp>
+#include <bsoncxx/json.hpp>
+
 
 std::atomic_bool b_run = true;
 
@@ -16,10 +20,6 @@ void SignalHandler(int signum) {
     b_run = false;
     return;
 }
-
-#include <mongocxx/instance.hpp>
-#include <bsoncxx/builder/stream/document.hpp>
-#include <bsoncxx/json.hpp>
 
 int main(int argc, char** argv){
 
@@ -85,12 +85,13 @@ int main(int argc, char** argv){
          );
       for (auto doc : cursor) {
         // Acknowledge the commands
+        auto ack_time = system_clock::now();
         control.update_one(
             bsoncxx::builder::stream::document{} << "_id" << doc["_id"].get_oid() <<
             bsoncxx::builder::stream::finalize,
             bsoncxx::builder::stream::document{} << "$set" <<
             bsoncxx::builder::stream::open_document << "acknowledged." + hostname <<
-            duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() <<
+            duration_cast<milliseconds>(ack_time.time_since_epoch()).count() <<
             bsoncxx::builder::stream::close_document <<
             bsoncxx::builder::stream::finalize
             );
@@ -144,6 +145,9 @@ int main(int argc, char** argv){
           if((fHandler->DeviceStart()) != 0){
             logger->Entry(MongoLog::Warning, "Failed to start devices");
           }
+          auto start_time = system_clock::now();
+          logger->Entry(MongoLog::Local, "Ack to Start took %i us",
+            duration_cast<microseconds>(start_time-ack_time).count());
         }
         else if(command == "stop"){
           if((fHandler->DeviceStop()) != 0){

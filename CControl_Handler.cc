@@ -83,12 +83,11 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 	fLog->Entry(MongoLog::Error, "Failed to pull DDC10 options from file");
      }
   } else {
-    fLog->Entry(MongoLog::Debug, "No HEV");
+    //fLog->Entry(MongoLog::Debug, "No HEV");
   }
 
 
-  // Getting options for the Muon Veto V1495 board
-  // Init V1495_MV only when included in config - Muon Veto only
+  // Getting options for the V1495 board
   std::vector<BoardType> mv = fOptions->GetBoards("V1495", fProcname);
   if (mv.size() == 1){
     BoardType mv_def = mv[0];
@@ -107,9 +106,9 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 		}
     }
   }else{
-    fLog->Entry(MongoLog::Debug, "No V1495");
+    //fLog->Entry(MongoLog::Debug, "No V1495");
   }
-  fLog->Entry(MongoLog::Local, "Arm sequence finished");
+  //fLog->Entry(MongoLog::Local, "Arm sequence finished");
   fStatus = DAXHelpers::Armed;
   return 0;
 
@@ -124,20 +123,20 @@ int CControl_Handler::DeviceStart(){
     fLog->Entry(MongoLog::Warning, "V2718 attempt to start without arming. Maybe unclean shutdown");
     return 0;
   }
-  if(fV2718 == NULL || fV2718->SendStartSignal()!=0){   
+  if(fV2718 == NULL || fV2718->SendStartSignal()!=0){
     fLog->Entry(MongoLog::Error, "V2718 either failed to start");
     fStatus = DAXHelpers::Error;
     return -1;
   }
 
   fStatus = DAXHelpers::Running;
-  fLog->Entry(MongoLog::Local, "Start sequence completed");
+  //fLog->Entry(MongoLog::Local, "Start sequence completed");
   return 0;
 }
 
 // Stopping the previously started devices; V2718, V1495, DDC10...
 int CControl_Handler::DeviceStop(){
-  fLog->Entry(MongoLog::Local, "Beginning stop sequence");
+  //fLog->Entry(MongoLog::Local, "Beginning stop sequence");
 
   // If V2718 here then send stop signal
   if(fV2718 != NULL){

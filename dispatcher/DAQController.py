@@ -265,17 +265,15 @@ class DAQController():
                 delay = 5
                 # TODO smart delay?
             self.log.debug('Sending %s to %s' % (command.upper(), detector))
-            if (self.mongo.SendCommand(command, cc, self.goal_state[detector]['user'],
-                    detector, self.goal_state[detector]['mode']) or 
-                self.mongo.SendCommand(command, readers, self.goal_state[detector]['user'],
-                    detector, self.goal_state[detector]['mode'], delay)):
+            if self.mongo.SendCommand(command, (cc, readers), self.goal_state[detector]['user'],
+                    detector, self.goal_state[detector]['mode'], delay):
                 # failed
                 return
             self.last_command[command][detector] = now
             if command == 'start' and self.mongo.InsertRunDoc(detector, self.goal_state):
                 # db having a moment
                 return
-            if command == 'stop' and self.mongo.SetStopTime(self.latest_status[detector]['number']):
+            if command == 'stop' and self.mongo.SetStopTime(self.latest_status[detector]['number'], detector):
                 # db having a moment
                 return
 

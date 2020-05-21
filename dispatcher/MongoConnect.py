@@ -60,7 +60,6 @@ class MongoConnect():
             'command_queue' : self.dax_db['dispatcher_queue'],
         }
 
-        self.outgoing_commands = []
         self.error_sent = {}
 
         # How often we should push certain types of errors (seconds)
@@ -103,13 +102,14 @@ class MongoConnect():
                     continue
                 self.latest_status[detector]['controller'][controller] = {}
 
+        self.command_oid = {k:{c:None} for c in ['start','stop','arm'] for k in self.latest_status.keys()}
         self.log = log
         self.run = True
         self.event = threading.Event()
         self.command_thread = threading.Thread(target=self.ProcessCommands)
         self.command_thread.start()
 
-    def __del__(self):
+    def Quit(self):
         self.run = False
         try:
             self.event.set()
@@ -117,33 +117,25 @@ class MongoConnect():
         except:
             pass
 
+    def __del__(self):
+        self.Quit()
+
     def GetUpdate(self):
 
         latest = {}
         try:
-            for doc in self.collections['node_status'].aggregate([
-                    {'$sort' : {'_id' : -1}},
-                    {'$group' : {
-                        '_id' : '$host',
-                        'rate' : {'$first' : '$rate'},
-                        'status' : {'$first' : '$status'},
-                        'buffer' : {'$first' : '$buffer_size'},
-                        'strax_buffer' : {'$first' : '$strax_buffer'},
-                        'mode' : {'$first' : '$run_mode'},
-                        'time' : {'$first' : '$time'},
-                        }}
-                    ]):
-                latest[doc['_id']] = doc
-        except:
+            for detector in self.latest_status.keys():
+                for host in self.latest_status[detector]['readers'].keys():
+                    doc = self.collections['node_status'].find_one({'host': host},
+                                                                   sort=[('_id', -1)])
+                    self.latest_status[detector]['readers'][host] = doc
+                for host in self.latest_status[detector]['controller'].keys():
+                    doc = self.collections['node_status'].find_one({'host': host},
+                                                                    sort=[('_id', -1)])
+                    self.latest_status[detector]['controller'][host] = doc
+        except Exception as e:
+            print(type(e), e)
             return -1
-
-        # Get updates from readers and controller
-        for detector in self.latest_status.keys():
-            for reader in self.latest_status[detector]['readers'].keys():
-                self.latest_status[detector]['readers'][reader] = latest[reader]
-
-            for controller in self.latest_status[detector]['controller'].keys():
-                self.latest_status[detector]['controller'][controller] = latest[controller]
 
         # Now compute aggregate status
         self.AggregateStatus()
@@ -259,8 +251,8 @@ class MongoConnect():
     def GetWantedState(self):
         # Pull the wanted state per detector from the DB and return a dict
         try:
-            self.latest_settings=dict(zip(self.latest_status.keys(),
-                                          self.collections['incoming_commands'].find()))
+            for doc in self.collections['incoming_commands'].find():
+                self.latest_settings[doc['detector']]=doc
             return self.latest_settings
         except:
             return None
@@ -354,10 +346,10 @@ class MongoConnect():
         '''
         self.log.info("Updating run %i with end time"%number)
         try:
-            time.sleep(2)
+            time.sleep(2) # this number depends on the delay between CC and reader stop
             endtime = self.GetAckTime(detector, 'stop')
             if endtime is None:
-                endtime = datetime.datetime.utcnow()
+                endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=2)
             self.collections['run'].update_one({"number": int(number), "end": {"$exists": False}},
                                           {"$set": {"end": endtime}})
         except:
@@ -369,14 +361,15 @@ class MongoConnect():
         Finds the time when specified detector's crate controller ack'd the specified command
         '''
         cc = list(self.latest_status[detector]['controller'].keys())[0]
-        query = {'_id' : self.command_oid[detector][command],
-                'acknowledged.%s' % cc: {'$exists' : 1}}
+        query = {'acknowledged.%s' % cc: {'$exists' : 1},
+                 '_id' : self.command_oid[detector][command]}
         doc = self.collections['outgoing_commands'].find_one(query)
         if doc is not None:
             return datetime.datetime.utcfromtimestamp(doc['acknowledged'][cc]/1000)
+        self.log.debug('No ACK time for %s-%s' % (detector, command))
         return None
 
-    def SendCommand(self, command, host_list, user, detector, mode="", delay=0):
+    def SendCommand(self, command, hosts, user, detector, mode="", delay=0):
         '''
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
@@ -387,57 +380,33 @@ class MongoConnect():
                 number = self.GetNextRunNumber()
                 if number == -1:
                     return -1
-                n_id = (str(number)).zfill(6)
+                n_id = '%06i' % number
                 self.latest_status[detector]['number'] = number
-            self.collections["command_queue"].insert_one({
+            doc_base = {
                 "command": command,
                 "user": user,
                 "detector": detector,
                 "mode": mode,
                 "options_override": {"run_identifier": n_id},
                 "number": number,
-                "host": host_list,
-                "createdAt": datetime.datetime.utcnow() + datetime.timedelta(seconds=delay)
-            })
-        except:
+                "createdAt": datetime.datetime.utcnow()
+            }
+            if delay == 0:
+                docs = doc_base
+                docs['host'] = hosts[0]+hosts[1] if isinstance(hosts, tuple) else hosts
+            else:
+                docs = [dict(doc_base.items()), dict(doc_base.items())]
+                docs[0]['host'], docs[1]['host'] = hosts
+                docs[1]['createdAt'] += datetime.timedelta(seconds=delay)
+            self.collections['command_queue'].insert(docs)
+        except Exception as e:
             self.log.info('Database issue, dropping command %s to %s' % (command, detector))
+            print(type(e), e)
             return -1
         else:
+            self.log.debug('Queued %s for %s' % (command, detector))
             self.event.set()
         return 0
-
-    def GetNextCommand(self, command=None, host=None):
-        query = {}
-        sort=[('createdAt', 1)]
-        if command is not None:
-            query['command'] = command
-        if host is not None:
-            if isinstance(host, str):
-                query['host'] = host
-            elif isinstance(host, (list, tuple)):
-                pass
-        for doc in self.collections['command_queue'].find(query).sort(sort).limit(1):
-            return doc
-        return None
-
-    def CommandBufferer(self):
-        while True:
-            next_cmd = self.GetNextCommand()
-            if next_cmd is None:
-                dt = 10
-            else:
-                dt= (next_cmd['createdAt']-datetime.datetime.utcnow()).total_seconds()
-                if dt < 0.1:
-                    oid = next_cmd['_id']
-                    del next_cmd['_id']
-                    self.collections['outgoing_commands'].insert_one(next_cmd)
-                    self.collections['command_queue'].delete_one({'_id': oid})
-                    continue
-
-            self.event.wait(dt)
-            self.event.clear()
-            if hasattr(self, 'quit') and self.quit == True:
-                return
 
     def ProcessCommands(self):
         '''
@@ -538,7 +507,7 @@ class MongoConnect():
             time.sleep(2)
             start_time = self.GetAckTime(detector, 'start')
             if start_time is None:
-                start_time = datetime.datetime.utcnow()
+                start_time = datetime.datetime.utcnow()-datetime.timedelta(seconds=2)
             run_doc['start'] = start_time
 
             self.collections['run'].insert_one(run_doc)
