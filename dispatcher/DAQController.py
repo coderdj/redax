@@ -304,7 +304,7 @@ class DAQController():
 
         dt = (nowtime - self.last_command[command][detector]).total_seconds()
 
-        local_timeouts = self.timeouts
+        local_timeouts = dict(self.timeouts.items())
         local_timeouts['stop'] = self.timeouts['stop']*(self.error_stop_count[detector]+1)
 
         if dt < local_timeouts[command]:
