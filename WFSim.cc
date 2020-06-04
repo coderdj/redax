@@ -1,4 +1,6 @@
 #include "WFSim.hh"
+#include "MongoLog.hh"
+#include "Options.hh"
 #include <chrono>
 #include <cmath>
 
@@ -17,27 +19,43 @@ int WFSim::End() {
   if (fGeneratorThread.joinable()) fGeneratorThread.join();
 }
 
-int WFSim::WriteRegister(unsigned int reg, unsigned int) {
-
+int WFSim::Reset() {
+  const std::lock_guard<std::mutex> lg;
+  fBuffer.clear();
+  fBufferSize = 0;
+  return 0;
 }
 
-unsigned int WFSim::ReadReigster(unsigned int reg) {
-
+int WFSim::WriteRegister(unsigned int, unsigned int) {
+  return 0;
 }
 
-int WFSim::Init(int link, int crate, int bid, unsigned int address) {
-  link = crate = 0;
+unsigned int WFSim::ReadRegister(unsigned int) {
+  return 0;
+}
+
+int WFSim::Init(int, int, int bid, unsigned int) {
   fBID = bid;
-  bRun = true;
   fGen = std::mt19937_64(fRD());
   fFlatDist = std::uniform_real_distribution<>(0., 1.);
   fSPEtemplate = {0.0, 0.0, 0.0, 2.81,-2, 7.4, 6.07e1, 3.26e1, 1.33e1, 7.60, 5.71, 7.75, 4.46,
       3.68, 3.31, 2.97, 2.74, 2.66, 2.48, 2.27, 2.15, 2.03, 1.93, 1.70, 1.68, 1.26, 7.86e-1,
       5.36e-1, 4.36e-1, 3.11e-1, 2.15e-1};
   if (fOptions->GetFaxOptions(fFaxOptions)) {
-    // fail
+    fLog->Entry(MongoLog::Message, "Using default fax options");
+    fFaxOptions.rate = 1e-7; // 100 Hz in ns
+    fFaxOptions.tpc_radius = 35; // mm
+    fFaxOptions.rpc_length = 70; // mm
+    fFaxOptions.e_absorbtion_dist = 70; // mm
+    fFaxOptions.drift_speed = 1.5e-3 // mm/ns
   }
 
+}
+
+int WFSim::SoftwareStart() {
+  fRun = true;
+  fGeneratorThread = std::thread(&WFSim::Run, this);
+  return 0;
 }
 
 int WFSim::ReadMBLT(uint32_t* &buffer) {
@@ -152,24 +170,24 @@ void WFSim::Run() {
   using namespace std::chrono;
   std::exponential_distribution<> rate(fFaxOptions.rate);
   double x, y, z;
-  int s1, s2;
-  std::vector<int> v1;
-  std::vector<double> v2;
+  int mask;
+  std::tuple<int, int> photons;
+  std::vector<std::tuple<int, double>> hits;
+  std::vector<std::vector<double>> wf;
   fClock = (0.5+fFlatDist(fGen))*10000000;
   fEventCounter = 0;
   while (bRun == true) {
-    GenerateEventLocation(x, y, z);
-    [s1, s2] = GenerateEventSize(x, y, z);
-    [v1, v2, dt] = MakeHitpattern(S1, s1, x, y, z);
-    fClock += dt;
-    MakeWaveform(v1, v2);
-    drift_time = z/fFaxOptions.drift_speed;
-    std::this_thread::sleep_for(nanoseconds(drift_time));
-    fClock += drift_time;
-    fClock += MakeHitpattern(S2, s2, x, y, z);
-    time_to_next_event = rate(fGen);
-    std::this_thread::sleep_for(nanoseconds(time_to_next_event));
-    fClock += time_to_next_event;
+    std::tie(x,y,z) = GenerateEventLocation();
+    photons = GenerateEventSize(x, y, z);
+    for (auto s_i : {S1, S2}) {
+      hits = MakeHitpattern(S1, std::get<s_i>(photons), x, y, z);
+      wf = MakeWaveform(hits);
+      mask = 0;
+      for (auto& p : hits) mask |= (1 << std::get<0>(p));
+      fClock += ConvertToDigiFormat(wf, mask);
+      time_to_next = s == S1 ? z/fFaxOptions.drift_speed : rate(fGen);
+      fClock += time_to_next;
+      std::this_thread::sleep_for(nanoseconds(time_to_next));
     fEventCounter++;
   }
 }

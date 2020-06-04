@@ -58,10 +58,12 @@ struct HEVOptions{
 
 };
 
-struct FaxOptions {
-  double tpc_length; // mm
-  double tpc_radius; // mm
-  double event_rate; // 1/us
+struct fax_options_t {
+  int tpc_length; // mm
+  int tpc_radius; // mm
+  double rate; // 1/ns
+  double drift_speed; // mm/ns
+  double e_absorbtion_dist; // mm
 };
 
 class MongoLog;
@@ -93,7 +95,7 @@ public:
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
   void SaveBenchmarks(std::map<std::string, long>&, std::map<int, long>&, double, double, double, double);
-  int GetFaxOptions(FaxOptions&);
+  int GetFaxOptions(fax_options_t&);
 
 private:
   mongocxx::client fClient;

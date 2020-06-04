@@ -19,7 +19,7 @@ class V1724{
   virtual int ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v=nullptr);
   virtual int WriteRegister(unsigned int reg, unsigned int value);
   virtual unsigned int ReadRegister(unsigned int reg);
-  int GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num);
+  virtual int GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num);
   virtual int End();
 
   int bid(){
@@ -32,16 +32,16 @@ class V1724{
   int SetThresholds(std::vector<u_int16_t> vals);
 
   // Acquisition Control
-  int SINStart();
-  int SoftwareStart();
-  int AcquisitionStop();
-  int SWTrigger();
-  int Reset();
-  bool EnsureReady(int ntries, int sleep);
-  bool EnsureStarted(int ntries, int sleep);
-  bool EnsureStopped(int ntries, int sleep);
-  int CheckErrors();
-  u_int32_t GetAcquisitionStatus();
+  virtual int SINStart();
+  virtual int SoftwareStart();
+  virtual int AcquisitionStop();
+  virtual int SWTrigger();
+  virtual int Reset();
+  virtual bool EnsureReady(int ntries, int sleep);
+  virtual bool EnsureStarted(int ntries, int sleep);
+  virtual bool EnsureStopped(int ntries, int sleep);
+  virtual int CheckErrors();
+  virtual u_int32_t GetAcquisitionStatus();
   u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size, u_int32_t& num);
 
   std::map<std::string, int> DataFormatDefinition;
@@ -66,7 +66,7 @@ protected:
   int BLT_SIZE;
   std::map<int, long> fBLTCounter;
 
-  bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
+  virtual bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
 		       int sleep, u_int32_t val=1);
   Options *fOptions;
   int fBoardHandle;
