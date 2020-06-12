@@ -295,7 +295,7 @@ int V1724::ReadMBLT(u_int32_t* &buffer){
   int count = 0;
   int alloc_size = BLT_SIZE/sizeof(u_int32_t)*fBLTSafety;
   u_int32_t* thisBLT = nullptr;
-  if (GetAcquisitionStatus() & 0x8 == 0) return 0;
+  if ((GetAcquisitionStatus() & 0x8) == 0) return 0;
   // digitizer has at least one event
   do{
 

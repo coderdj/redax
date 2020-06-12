@@ -14,7 +14,7 @@
 
 Options::Options(MongoLog *log, std::string options_name, std::string hostname,
           std::string suri, std::string dbname, std::string override_opts) : 
-    fLog(log), fDBName(dbname), fHostname(hostname) {
+    fLog(log), fDBname(dbname), fHostname(hostname) {
   bson_value = NULL;
   mongocxx::uri uri{suri};
   fClient = mongocxx::client{uri};
@@ -71,7 +71,7 @@ int Options::Load(std::string name, mongocxx::collection& opts_collection,
     return -1;
   }
   try{
-    fDetector = bson_options["detectors"][hostname].get_utf8().value.to_string();
+    fDetector = bson_options["detectors"][fHostname].get_utf8().value.to_string();
   }catch(const std::exception& e){
     fLog->Entry(MongoLog::Warning, "No detector specified for this host");
     return -1;
@@ -229,7 +229,7 @@ std::vector<RegisterType> Options::GetRegisters(int board, bool strict){
         sdet = ele["board"].get_utf8().value.to_string();
         ibid = -1;
       }catch(const std::exception& ee){
-        throw std::exception("Invalid register: board is neither int nor string");
+        throw std::runtime_error("Invalid register: board is neither int nor string");
       }
     }
     if ((ibid != board) && strict) continue;
@@ -423,7 +423,8 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
     update_doc << close_document; // buffer xfers
   }
 
-  update_doc << close_document << close_document; // push
+  update_doc << close_document; // data
+  update_doc << close_document; // push
   auto write_doc = update_doc << finalize;
   mongocxx::options::update options;
   options.upsert(true);
