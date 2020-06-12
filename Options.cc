@@ -2,6 +2,8 @@
 #include "DAXHelpers.hh"
 #include "MongoLog.hh"
 
+#include <cmath>
+
 #include <mongocxx/uri.hpp>
 #include <mongocxx/database.hpp>
 #include <bsoncxx/array/view.hpp>
@@ -384,16 +386,26 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
     std::map<int, long>& buffer_counter,
     double proc_time_dp_us, double proc_time_ev_us, double proc_time_ch_us, double comp_time_us) {
   using namespace bsoncxx::builder::stream;
-  if (GetInt("benchmark_level", 1) == 0) return;
+  int level = GetInt("benchmark_level", 2);
+  if (level == 0) return;
   int run_id = -1;
   try{
     run_id = std::stoi(GetString("run_identifier", "latest"));
   } catch (...) {
   }
+  std::map<int, long> bc;
+  if (level == 2) {
+    for (const auto& p : buffer_counter)
+      if (p.first != 0)
+        bc[int(std::ceil(std::log2(p.first)))] += p.second;
+  } else if (level == 3) {
+    bc = buffer_counter;
+  }
+
   auto search_doc = document{} << "run" << run_id << finalize;
   auto update_doc = document{};
   update_doc << "$set" << open_document << "run" << run_id << close_document;
-  update_doc << "$push" << open_document;
+  update_doc << "$push" << open_document << "data" << open_document;
   update_doc << "host" << fHostname;
   update_doc << "bytes" << byte_counter["bytes"];
   update_doc << "fragments" << byte_counter["fragments"];
@@ -403,15 +415,15 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
   update_doc << "processing_time_ev_us" << proc_time_ev_us;
   update_doc << "processing_time_ch_us" << proc_time_ch_us;
   update_doc << "compression_time_us" << comp_time_us;
-  if (GetInt("benchmark_level", 1) == 2) {
+  if (level >= 2) {
     update_doc << "buffer_xfers" << open_document;
-    for (auto& p : buffer_counter) {
+    for (auto& p : bc) {
       update_doc << std::to_string(p.first) << p.second;
     }
     update_doc << close_document; // buffer xfers
   }
 
-  update_doc << close_document; // push
+  update_doc << close_document << close_document; // push
   auto write_doc = update_doc << finalize;
   mongocxx::options::update options;
   options.upsert(true);

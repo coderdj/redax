@@ -302,17 +302,9 @@ int V1724::ReadMBLT(u_int32_t* &buffer){
     // Reserve space for this block transfer
     thisBLT = new u_int32_t[alloc_size];
 
-    try{
-      ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
+    ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
 				     ((unsigned char*)thisBLT),
 				     BLT_SIZE, cvA32_U_MBLT, cvD64, &nb);
-    }catch(std::exception E){
-      std::cout<<fBoardHandle<<" sucks"<<std::endl;
-      std::cout<<"BLT_BYTES: "<<blt_bytes<<std::endl;
-      std::cout<<"nb: "<<nb<<std::endl;
-      std::cout<<E.what()<<std::endl;
-      throw;
-    };
     if( (ret != cvSuccess) && (ret != cvBusError) ){
       fLog->Entry(MongoLog::Error,
 		  "Board %i read error after %i reads: (%i) and transferred %i bytes this read",
@@ -320,7 +312,7 @@ int V1724::ReadMBLT(u_int32_t* &buffer){
 
       // Delete all reserved data and fail
       delete[] thisBLT;
-      for (auto b : xfer_buffers) delete[] b.first;
+      for (auto& b : xfer_buffers) delete[] b.first;
       return -1;
     }
     if (nb > (int)BLT_SIZE) fLog->Entry(MongoLog::Message,

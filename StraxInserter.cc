@@ -68,7 +68,9 @@ StraxInserter::~StraxInserter(){
     std::this_thread::sleep_for(std::chrono::seconds(2));
   }
   long total_dps = std::accumulate(fBufferCounter.begin(), fBufferCounter.end(), 0,
-      [&](long tot, auto& p){return tot + p.second;});
+      [&](long tot, auto& p){return std::move(tot) + p.second;});
+  fLog->Entry(MongoLog::Local, "Thread %lx got events %.1f\% of the time",
+      fThreadId, (total_dps-fBufferCounter[0]+0.0)/total_dps*100.);
   std::map<std::string, long> counters {
     {"bytes", fBytesProcessed},
     {"fragments", fFragmentsProcessed},
@@ -400,6 +402,7 @@ int StraxInserter::ReadAndInsertData(){
         b.clear();
         WriteOutFiles();
       } else {
+        fBufferCounter[0]++;
         std::this_thread::sleep_for(sleep_time);
       }
     }

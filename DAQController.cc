@@ -277,7 +277,7 @@ void DAQController::ReadData(int link){
         }
       }
       if (dp == nullptr) dp = new data_packet;
-      if((dp->size = digi->ReadMBLT(buff, &dp->vBLT))<0){
+      if((dp->size = digi->ReadMBLT(dp->buff))<0){
         if (dp->buff != nullptr) {
 	  delete[] dp->buff; // possible leak, catch here
 	  dp->buff = nullptr;
