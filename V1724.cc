@@ -286,7 +286,7 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
+int V1724::ReadMBLT(u_int32_t* &buffer){
   // Initialize
   int64_t blt_bytes=0;
   int nb=0,ret=-5;
@@ -295,11 +295,13 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
   int count = 0;
   int alloc_size = BLT_SIZE/sizeof(u_int32_t)*fBLTSafety;
   u_int32_t* thisBLT = nullptr;
+  if (GetAcquisitionStatus() & 0x8 == 0) return 0;
+  // digitizer has at least one event
   do{
 
     // Reserve space for this block transfer
     thisBLT = new u_int32_t[alloc_size];
-    
+
     try{
       ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
 				     ((unsigned char*)thisBLT),
@@ -347,7 +349,6 @@ int V1724::ReadMBLT(u_int32_t* &buffer, std::vector<unsigned int>* v){
     for (auto& xfer : xfer_buffers) {
       std::memcpy(((unsigned char*)buffer)+bytes_copied, xfer.first, xfer.second);
       bytes_copied += xfer.second;
-      if (v != nullptr) v->push_back(xfer.second);
     }
     fBLTCounter[count]++;
     if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Message,

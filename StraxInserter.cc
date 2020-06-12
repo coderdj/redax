@@ -597,5 +597,4 @@ data_packet::~data_packet() {
   if (buff != nullptr) delete[] buff;
   buff = nullptr;
   size = clock_counter = header_time = bid = 0;
-  //vBLT.clear();
 }

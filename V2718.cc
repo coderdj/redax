@@ -33,21 +33,16 @@ int V2718::SendStartSignal(){
 
   // Straight copy from: https://github.com/coderdj/kodiaq
 
-  // Line 0 : S-IN. 
-  CAENVME_SetOutputConf(fCrate, cvOutput0, cvDirect, 
-			cvActiveHigh, cvManualSW);
+  // Line 0 : S-IN.
+  CAENVME_SetOutputConf(fCrate, cvOutput0, cvDirect, cvActiveHigh, cvManualSW);
   // Line 1 : MV S-IN Logic
-  CAENVME_SetOutputConf(fCrate, cvOutput1, cvDirect, 
-			cvActiveHigh, cvManualSW);
+  CAENVME_SetOutputConf(fCrate, cvOutput1, cvDirect, cvActiveHigh, cvManualSW);
   // Line 2 : LED Logic
-  CAENVME_SetOutputConf(fCrate, cvOutput2, cvDirect, 
-			cvActiveHigh, cvManualSW);
+  CAENVME_SetOutputConf(fCrate, cvOutput2, cvDirect, cvActiveHigh, cvManualSW);
   // Line 3 : LED Pulser
-  CAENVME_SetOutputConf(fCrate, cvOutput3, cvDirect, 
-			cvActiveHigh, cvMiscSignals);
-  // Line 4 : NV S-IN Logic   
-  CAENVME_SetOutputConf(fCrate, cvOutput4, cvDirect,
-                        cvActiveHigh, cvMiscSignals); // soonTM
+  CAENVME_SetOutputConf(fCrate, cvOutput3, cvDirect, cvActiveHigh, cvMiscSignals);
+  // Line 4 : NV S-IN Logic
+  CAENVME_SetOutputConf(fCrate, cvOutput4, cvDirect, cvActiveHigh, cvMiscSignals); // soonTM
 
 
   // Set the output register
@@ -93,8 +88,8 @@ int V2718::SendStartSignal(){
     }
     // Set pulser
     int ret = CAENVME_SetPulserConf(fCrate, cvPulserB, period, width, tu, 0,
-	 		  cvManualSW, cvManualSW);
-    ret *= CAENVME_StartPulser(fCrate,cvPulserB); 
+                                    cvManualSW, cvManualSW);
+    ret *= CAENVME_StartPulser(fCrate,cvPulserB);
     if(ret != cvSuccess){
       fLog->Entry(MongoLog::Warning, "Failed to activate LED pulser");
       return -1;
@@ -115,7 +110,7 @@ int V2718::SendStopSignal(bool end){
 
   // Line 0 : S-IN.
   CAENVME_SetOutputConf(fCrate, cvOutput0, cvDirect, cvActiveHigh, cvManualSW);
-  // Line 1 : MV S-IN Logic 
+  // Line 1 : MV S-IN Logic
   CAENVME_SetOutputConf(fCrate, cvOutput1, cvDirect, cvActiveHigh, cvManualSW);
   // Line 2 : LED Logic
   CAENVME_SetOutputConf(fCrate, cvOutput2, cvDirect, cvActiveHigh, cvManualSW);
@@ -123,10 +118,10 @@ int V2718::SendStopSignal(bool end){
   CAENVME_SetOutputConf(fCrate, cvOutput3, cvDirect, cvActiveHigh, cvMiscSignals);
   // Line 4 : NV S-IN Logic
   CAENVME_SetOutputConf(fCrate, cvOutput4, cvDirect, cvActiveHigh, cvManualSW);
-  
 
-  // Set the output register 
-  unsigned int data = 0x0; 
+
+  // Set the output register
+  unsigned int data = 0x0;
   CAENVME_SetOutputRegister(fCrate,data);
 
   if(end){
