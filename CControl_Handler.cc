@@ -221,7 +221,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
 	      << bsoncxx::builder::stream::close_document; 
   }
   
-  //auto after_array = in_array << bsoncxx::builder::stream::close_array;
-  //return after_array << bsoncxx::builder::stream::finalize;
+  after_array = in_array << bsoncxx::builder::stream::close_array;
+  return after_array << bsoncxx::builder::stream::finalize;
 
 }  
