@@ -63,7 +63,7 @@ struct fax_options_t {
   int tpc_radius; // mm
   double rate; // 1/ns
   double drift_speed; // mm/ns
-  double e_absorbtion_dist; // mm
+  double e_absorbtion_length; // mm
 };
 
 class MongoLog;
