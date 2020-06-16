@@ -90,19 +90,19 @@ tuple<int, int> WFSim::GenerateEventSize(double, double, double z) {
   return {s1, s2};
 }
 
-vector<pair<int, double>> MakeHitpattern(int s_i, int photons, double x, double y, double z) {
+vector<pair<int, double>> WFSim::MakeHitpattern(int s_i, int photons, double x, double y, double z) {
   double r = std::hypot(x,y), theta = std::atan2(y,x);
-  double signal_width = s_i == S1 ? 40 : 1000.+200.*std::sqrt(std::abs(z));
+  double signal_width = s_i == 1 ? 40 : 1000.+200.*std::sqrt(std::abs(z));
   vector<pair<int, double>> ret; // { {pmt id, hit time}, {pmt id, hit time} ... }
   ret.reserve(photons);
   vector<double> hit_probability(fNumPMTs, 0.);
   std::discrete_distribution<> hitpattern;
-  if (s_i == S1) {
+  if (s_i == 1) {
     hit_probability[0] = -0.3/70*z+0.6;
     double prob_left = 1.-hit_probability[0];
-    for (auto it = hit_probability.begin()+1, it < hit_probability.end(); it++) *it = prob_left/6;
+    for (auto it = hit_probability.begin()+1; it < hit_probability.end(); it++) *it = prob_left/6;
   } else {
-    int max_pmt = r < 25 ? 1 : 2+6*theta/(2*PI);
+    int max_pmt = r < 25 ? 1 : 2+6*theta/(2*PI());
     hit_probability[0] = 0.3;
     hit_probability[max_pmt] = 0.5;
     if (max_pmt == 1) {
@@ -192,11 +192,11 @@ void WFSim::Run() {
   while (fRun == true) {
     std::tie(x,y,z) = GenerateEventLocation();
     photons = GenerateEventSize(x, y, z);
-    for (auto s_i : {S1, S2}) {
-      hits = MakeHitpattern(s_i, std::get<s_i == S1 ? 0 : 1>(photons), x, y, z);
-      wf = MakeWaveform(hits);
+    for (auto s_i : {1,2}) {
+      hits = MakeHitpattern(s_i, std::get<s_i-1>(photons), x, y, z);
+      wf = MakeWaveform(hits, mask);
       fClock += ConvertToDigiFormat(wf, mask);
-      time_to_next = s_i == S1 ? z/fFaxOptions.drift_speed : rate(fGen);
+      time_to_next = s_i == 1 ? z/fFaxOptions.drift_speed : rate(fGen);
       fClock += time_to_next;
       std::this_thread::sleep_for(std::chrono::nanoseconds(time_to_next));
     }

@@ -43,10 +43,6 @@ protected:
   std::vector<std::vector<double>> MakeWaveform(std::vector<std::pair<int, double>>&, int&);
   int ConvertToDigiFormat(std::vector<std::vector<double>>&, int);
 
-  enum s_type {
-    S1 = 0,
-    S2
-  } s_type;
   std::thread fGeneratorThread;
   std::string fBuffer;
   std::mutex fBufferMutex;
