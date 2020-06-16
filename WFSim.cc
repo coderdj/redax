@@ -6,7 +6,7 @@
 using std::vector;
 using std::tuple;
 using std::pair;
-constexpr double PI() {return std::acos(-1.)};
+constexpr double PI() {return std::acos(-1.);}
 
 WFSim::WFSim(MongoLog* log, Options* options) : V1724(log, options), fNumPMTs(8) {
   fLog->Entry(MongoLog::Warning, "Initializing fax digitizer");
@@ -41,9 +41,9 @@ int WFSim::Init(int, int, int bid, unsigned int) {
     fLog->Entry(MongoLog::Message, "Using default fax options");
     fFaxOptions.rate = 1e-7; // 100 Hz in ns
     fFaxOptions.tpc_radius = 35; // mm
-    fFaxOptions.rpc_length = 70; // mm
-    fFaxOptions.e_absorbtion_dist = 70; // mm
-    fFaxOptions.drift_speed = 1.5e-3 // mm/ns
+    fFaxOptions.tpc_length = 70; // mm
+    fFaxOptions.e_absorbtion_length = 70; // mm
+    fFaxOptions.drift_speed = 1.5e-3; // mm/ns
   }
   return 0;
 }
@@ -90,9 +90,9 @@ tuple<int, int> WFSim::GenerateEventSize(double, double, double z) {
   return {s1, s2};
 }
 
-vector<pair<int, double>> MakeHitpattern(s_type s_i, int photons, double x, double y, double z) {
+vector<pair<int, double>> MakeHitpattern(int s_i, int photons, double x, double y, double z) {
   double r = std::hypot(x,y), theta = std::atan2(y,x);
-  double signal_width = s_i == 1 ? 40 : 1000.+200.*std::sqrt(std::abs(z));
+  double signal_width = s_i == S1 ? 40 : 1000.+200.*std::sqrt(std::abs(z));
   vector<pair<int, double>> ret; // { {pmt id, hit time}, {pmt id, hit time} ... }
   ret.reserve(photons);
   vector<double> hit_probability(fNumPMTs, 0.);
@@ -193,7 +193,7 @@ void WFSim::Run() {
     std::tie(x,y,z) = GenerateEventLocation();
     photons = GenerateEventSize(x, y, z);
     for (auto s_i : {S1, S2}) {
-      hits = MakeHitpattern(s_i, std::get<s_i>(photons), x, y, z);
+      hits = MakeHitpattern(s_i, std::get<s_i == S1 ? 0 : 1>(photons), x, y, z);
       wf = MakeWaveform(hits);
       fClock += ConvertToDigiFormat(wf, mask);
       time_to_next = s_i == S1 ? z/fFaxOptions.drift_speed : rate(fGen);

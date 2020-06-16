@@ -11,10 +11,6 @@
 #include <utility>
 #include <tuple>
 
-enum s_type {
-  S1 = 0,
-  S2
-} s_type;
 
 class WFSim : public V1724 {
 public:
@@ -43,10 +39,14 @@ protected:
   void Run();
   std::tuple<double, double, double> GenerateEventLocation();
   std::tuple<int,int> GenerateEventSize(double, double, double);
-  std::vector<std::pair<int, double>> MakeHitpattern(s_type, int, double, double, double);
+  std::vector<std::pair<int, double>> MakeHitpattern(int, int, double, double, double);
   std::vector<std::vector<double>> MakeWaveform(std::vector<std::pair<int, double>>&, int&);
   int ConvertToDigiFormat(std::vector<std::vector<double>>&, int);
 
+  enum s_type {
+    S1 = 0,
+    S2
+  } s_type;
   std::thread fGeneratorThread;
   std::string fBuffer;
   std::mutex fBufferMutex;
