@@ -3,6 +3,7 @@
 #include "Options.hh"
 #include <chrono>
 #include <cmath>
+#include <bitset>
 
 using std::vector;
 using std::tuple;
@@ -20,13 +21,6 @@ WFSim::~WFSim() {
 int WFSim::End() {
   fRun = false;
   if (fGeneratorThread.joinable()) fGeneratorThread.join();
-}
-
-int WFSim::Reset() {
-  const std::lock_guard<std::mutex> lg;
-  fBuffer.clear();
-  fBufferSize = 0;
-  return 0;
 }
 
 int WFSim::WriteRegister(unsigned int, unsigned int) {
@@ -52,7 +46,7 @@ int WFSim::Init(int, int, int bid, unsigned int) {
     fFaxOptions.e_absorbtion_dist = 70; // mm
     fFaxOptions.drift_speed = 1.5e-3 // mm/ns
   }
-
+  return 0;
 }
 
 int WFSim::SoftwareStart() {
@@ -89,9 +83,9 @@ tuple<double, double, double> WFSim::GenerateEventLocation() {
   return {x,y,z};
 }
 
-tuple<int, int> WFSim::GenerateEventSize(double x, double y, double z) {
+tuple<int, int> WFSim::GenerateEventSize(double, double, double z) {
   int s1 = fFlatDist(fGen)*19+1;
-  std::normal_distribution<> s2_over_s1({100, 20});
+  std::normal_distribution<> s2_over_s1{100, 20};
   double elivetime_loss_fraction = std::exp(-z/fFaxOptions.e_absorbtion_length);
   int s2 = s1*s2_over_s1(fGen)*elivetime_loss_fraction;
   return {s1, s2};
@@ -203,7 +197,7 @@ void WFSim::Run() {
       hits = MakeHitpattern(s_i, std::get<s_i>(photons), x, y, z);
       wf = MakeWaveform(hits);
       fClock += ConvertToDigiFormat(wf, mask);
-      time_to_next = s == S1 ? z/fFaxOptions.drift_speed : rate(fGen);
+      time_to_next = s_i == S1 ? z/fFaxOptions.drift_speed : rate(fGen);
       fClock += time_to_next;
       std::this_thread::sleep_for(std::chrono::nanoseconds(time_to_next));
     }

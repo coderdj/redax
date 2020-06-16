@@ -15,7 +15,7 @@ struct fax_options_t;
 class WFSim : public V1724 {
 public:
   WFSim(MongoLog* log, Options* options);
-  virtual ~WFsim();
+  virtual ~WFSim();
 
   virtual int Init(int, int, int, unsigned int);
   virtual int ReadMBLT(uint32_t*&);
@@ -35,12 +35,16 @@ public:
   virtual uint32_t GetAcquisitionStatus();
 
 protected:
+  enum s_type {
+    S1 = 0,
+    S2
+  } s_type;
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
   void Run();
   std::tuple<double, double, double> GenerateEventLocation();
   std::tuple<int,int> GenerateEventSize(double, double, double);
   std::vector<std::pair<int, double>> MakeHitpattern(s_type, int, double, double, double);
-  std::vector<std::vector<double>> MakeWaveform(std::vector<std::pair<int, double>>&);
+  std::vector<std::vector<double>> MakeWaveform(std::vector<std::pair<int, double>>&, int&);
   int ConvertToDigiFormat(std::vector<std::vector<double>>&, int);
 
   std::thread fGeneratorThread;
@@ -49,7 +53,7 @@ protected:
   std::atomic_int fBufferSize;
   std::random_device fRD;
   std::mt19937_64 fGen;
-  std::uniform_real_distribution fFlatDist;
+  std::uniform_real_distribution<> fFlatDist;
   long fClock;
   int fEventCounter;
   std::atomic_bool fRun;
@@ -57,10 +61,6 @@ protected:
   const int fNumPMTs;
   std::vector<double> fSPEtemplate;
 
-  enum {
-    S1 = 0,
-    S2
-  } s_type;
 };
 
 #endif // _WFSIM_HH_ defined
