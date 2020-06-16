@@ -2,6 +2,7 @@
 #define _WFSIM_HH_
 
 #include "V1724.hh"
+#include "Options.hh"
 #include <thread>
 #include <random>
 #include <mutex>
@@ -10,7 +11,10 @@
 #include <utility>
 #include <tuple>
 
-struct fax_options_t;
+enum s_type {
+  S1 = 0,
+  S2
+} s_type;
 
 class WFSim : public V1724 {
 public:
@@ -35,10 +39,6 @@ public:
   virtual uint32_t GetAcquisitionStatus();
 
 protected:
-  enum s_type {
-    S1 = 0,
-    S2
-  } s_type;
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
   void Run();
   std::tuple<double, double, double> GenerateEventLocation();

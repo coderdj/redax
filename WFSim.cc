@@ -1,14 +1,12 @@
 #include "WFSim.hh"
 #include "MongoLog.hh"
-#include "Options.hh"
 #include <chrono>
 #include <cmath>
-#include <bitset>
 
 using std::vector;
 using std::tuple;
 using std::pair;
-const double PI = std::acos(-1.);
+constexpr double PI() {return std::acos(-1.)};
 
 WFSim::WFSim(MongoLog* log, Options* options) : V1724(log, options), fNumPMTs(8) {
   fLog->Entry(MongoLog::Warning, "Initializing fax digitizer");
@@ -21,6 +19,7 @@ WFSim::~WFSim() {
 int WFSim::End() {
   fRun = false;
   if (fGeneratorThread.joinable()) fGeneratorThread.join();
+  return 0;
 }
 
 int WFSim::WriteRegister(unsigned int, unsigned int) {
@@ -78,7 +77,7 @@ int WFSim::ReadMBLT(uint32_t* &buffer) {
 tuple<double, double, double> WFSim::GenerateEventLocation() {
   double z = -1.*fFlatDist(fGen)*(fFaxOptions.tpc_length-1)-1; // min so peaks don't overlap
   double r = fFlatDist(fGen)*fFaxOptions.tpc_radius; // no, this isn't uniform
-  double theta = fFlatDist(fGen)*2*PI;
+  double theta = fFlatDist(fGen)*2*PI();
   double x = r*std::cos(theta), y = r*std::sin(theta);
   return {x,y,z};
 }
@@ -125,17 +124,17 @@ vector<vector<double>> WFSim::MakeWaveform(vector<pair<int, double>>& hits, int&
   mask = 0;
   double last_hit_time = 0;
   for (auto& hit : hits) {
-    mask |= (1<<iter.first);
-    last_hit_time = std::max(latest_hit_time, iter.second);
+    mask |= (1<<hit.first);
+    last_hit_time = std::max(last_hit_time, hit.second);
   }
-  std::array<int, fNumPMTs> pmt_arr;
+  vector<int> pmt_arr(fNumPMTs, 0);
   unsigned j = 0;
   for (int i = 0; i < fNumPMTs; i++) pmt_arr[i] = (mask & (1<<i)) ? j++ : -1;
   int wf_length = fSPEtemplate.size() + last_hit_time/DataFormatDefinition["ns_per_sample"];
   wf_length += wf_length % 2 ? 1 : 2; // ensure an even number of samples with room
   // start with a positive-going pulse, then invert in the next stage when we apply
   // whatever baseline we want
-  vector<vector<double>> wf(std::bitset<fNumPMTs>(mask).count(), vector<double>(wf_length, 0.));
+  vector<vector<double>> wf(j, vector<double>(wf_length, 0.));
   int offset;
   for (auto& hit : hits) {
     offset = hit.second/DataFormatDefinition["ns_per_sample"];
@@ -147,7 +146,7 @@ vector<vector<double>> WFSim::MakeWaveform(vector<pair<int, double>>& hits, int&
 }
 
 int WFSim::ConvertToDigiFormat(vector<vector<double>>& wf, int mask) {
-  int num_channels = std::bitset<fNumPMTs>(mask).count();
+  int num_channels = wf.size();
   const int overhead_per_channel = 2*sizeof(uint32_t), overhead_per_event = 4*sizeof(uint32_t);
   std::string buffer;
   uint32_t word = 0;
