@@ -10,6 +10,7 @@
 #include <vector>
 #include <utility>
 #include <tuple>
+#include <array>
 
 
 class WFSim : public V1724 {
@@ -38,7 +39,7 @@ protected:
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
   void Run();
   std::tuple<double, double, double> GenerateEventLocation();
-  std::tuple<int,int> GenerateEventSize(double, double, double);
+  std::array<int, 3> GenerateEventSize(double, double, double);
   std::vector<std::pair<int, double>> MakeHitpattern(int, int, double, double, double);
   std::vector<std::vector<double>> MakeWaveform(std::vector<std::pair<int, double>>&, int&);
   int ConvertToDigiFormat(std::vector<std::vector<double>>&, int);

@@ -82,12 +82,13 @@ tuple<double, double, double> WFSim::GenerateEventLocation() {
   return {x,y,z};
 }
 
-tuple<int, int> WFSim::GenerateEventSize(double, double, double z) {
-  int s1 = fFlatDist(fGen)*19+1;
+std::array<int, 3> WFSim::GenerateEventSize(double, double, double z) {
+  std::array<int, 3> ret({0, 0, 0});
+  ret[1] = fFlatDist(fGen)*19+1;
   std::normal_distribution<> s2_over_s1{100, 20};
   double elivetime_loss_fraction = std::exp(-z/fFaxOptions.e_absorbtion_length);
-  int s2 = s1*s2_over_s1(fGen)*elivetime_loss_fraction;
-  return {s1, s2};
+  ret[2] = ret[1]*s2_over_s1(fGen)*elivetime_loss_fraction;
+  return ret;
 }
 
 vector<pair<int, double>> WFSim::MakeHitpattern(int s_i, int photons, double x, double y, double z) {
@@ -113,7 +114,7 @@ vector<pair<int, double>> WFSim::MakeHitpattern(int s_i, int photons, double x, 
       hit_probability[max_pmt == fNumPMTs-1 ? 2 : max_pmt+1] = 0.2/3;
     }
   }
-  hitpattern.param(std::discrete_distribution::param_type(hit_probability.begin(), hit_probability.end()));
+  hitpattern.param(std::discrete_distribution<>::param_type(hit_probability.begin(), hit_probability.end()));
 
   std::generate_n(ret.begin(), photons,
       [&]{return std::make_pair(hitpattern(fGen), fFlatDist(fGen)*signal_width);});
@@ -184,7 +185,7 @@ void WFSim::Run() {
   double x, y, z;
   int mask;
   long time_to_next;
-  tuple<int, int> photons;
+  std::array<int, 3> photons; // S1 = 1
   vector<pair<int, double>> hits;
   vector<vector<double>> wf;
   fClock = (0.5+fFlatDist(fGen))*10000000;
@@ -192,8 +193,8 @@ void WFSim::Run() {
   while (fRun == true) {
     std::tie(x,y,z) = GenerateEventLocation();
     photons = GenerateEventSize(x, y, z);
-    for (auto s_i : {1,2}) {
-      hits = MakeHitpattern(s_i, std::get<s_i-1>(photons), x, y, z);
+    for (const auto s_i : {1,2}) {
+      hits = MakeHitpattern(s_i, photons[s_i], x, y, z);
       wf = MakeWaveform(hits, mask);
       fClock += ConvertToDigiFormat(wf, mask);
       time_to_next = s_i == 1 ? z/fFaxOptions.drift_speed : rate(fGen);
