@@ -48,6 +48,16 @@ int WFSim::Init(int, int, int bid, unsigned int) {
   return 0;
 }
 
+uint32_t WFSim::GetAcquisitionStatus() {
+  uint32_t ret = 0;
+  if (fRun) ret |= 0x4; // run status
+  if (fBufferSize > 0) ret |= 0x8; // event ready
+  ret |= 0x80; // no PLL unlock
+  ret |= 0x100; // board is ready
+
+  return ret;
+}
+
 int WFSim::SoftwareStart() {
   fRun = true;
   fGeneratorThread = std::thread(&WFSim::Run, this);
