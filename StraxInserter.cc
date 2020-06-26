@@ -252,7 +252,7 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
             bid, channel, channel_words, fmt["channel_header_words"]);
       return -1;
     }
-    channel_time = buff[1]&0x7FFFFFFF;
+    channel_time = buff[1] & (fmt["channel_time_msb_idx"] == -1 ? 0x7FFFFFFF : 0xFFFFFFFF);
 
     if (fmt["channel_time_msb_idx"] == 2) {
       channel_timeMSB = long(buff[2]&0xFFFF)<<32;
