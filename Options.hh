@@ -19,14 +19,11 @@ struct BoardType{
   std::string type;
   std::string host;
   unsigned int vme_address;
-
 };
 
 struct RegisterType{
-  int board;
   std::string reg;
   std::string val;
-
 };
 
 struct CrateOptions{
@@ -71,33 +68,30 @@ class MongoLog;
 class Options{
 
 public:
-  Options(MongoLog *log, std::string name, std::string hostname, std::string suri,
-  	std::string dbname, std::string override_opts);
+  Options(MongoLog*, std::string, std::string, std::string, std::string, std::string);
   ~Options();
 
-  int Load(std::string name, mongocxx::collection& opts_collection, std::string override_opts);
-  int Override(bsoncxx::document::view override_opts);
-  std::string ExportToString();
-  
-  int GetInt(std::string key, int default_value=-1);
-  long int GetLongInt(std::string key, long int default_value=-1);
-  double GetDouble(std::string key, double default_value=-1);
-  std::string GetString(std::string key, std::string default_value="");
+  int GetInt(std::string, int=-1);
+  long int GetLongInt(std::string, long int=-1);
+  double GetDouble(std::string, double=-1);
+  std::string GetString(std::string, std::string="");
 
-  std::vector<BoardType> GetBoards(std::string type="", std::string hostname="DEFAULT");
-  std::vector<RegisterType> GetRegisters(int board=-1);
-  int GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs, std::vector<int>& bids);
+  std::vector<BoardType> GetBoards(std::string);
+  std::vector<RegisterType> GetRegisters(int, bool=false);
+  int GetDAC(std::map<int, std::map<std::string, std::vector<double>>>&, std::vector<int>&);
   int GetCrateOpt(CrateOptions &ret);
   int GetHEVOpt(HEVOptions &ret);
-  int16_t GetChannel(int bid, int cid);
-  int GetNestedInt(std::string path, int default_value);
-  std::vector<u_int16_t> GetThresholds(int board);
+  int16_t GetChannel(int, int);
+  int GetNestedInt(std::string, int);
+  std::vector<uint16_t> GetThresholds(int);
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
   void SaveBenchmarks(std::map<std::string, long>&, std::map<int, long>&, double, double, double, double);
   int GetFaxOptions(fax_options_t&);
 
 private:
+  int Load(std::string, mongocxx::collection&, std::string);
+  int Override(bsoncxx::document::view);
   mongocxx::client fClient;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
@@ -105,6 +99,7 @@ private:
   mongocxx::collection fDAC_collection;
   std::string fDBname;
   std::string fHostname;
+  std::string fDetector;
 };
 
 #endif

@@ -263,20 +263,14 @@ class MongoConnect():
         '''
         retnodes = []
         retcc = []
-        retnodes = [r for r in self.latest_status[detector]['readers'].keys()]
-        retcc = [r for r in self.latest_status[detector]['controller'].keys()]
-        if detector == 'tpc' and self.latest_settings[detector]['link_nv'] == 'true':
-            for r in self.latest_status['neutron_veto']['readers'].keys():
-                retnodes.append(r)
-            for r in self.latest_status['neutron_veto']['controller'].keys():
-                retcc.append(r)
-        if detector == 'tpc' and self.latest_settings[detector]['link_mv'] == 'true':
-            for r in self.latest_status['muon_veto']['readers'].keys():
-                retnodes.append(r)
-            for r in self.latest_status['muon_veto']['controller'].keys():
-                retcc.append(r)
-        self.log.debug("Nodes: %s" % retnodes)
-        self.log.debug("CCs: %s" % retcc)
+        retnodes = list(self.latest_status[detector]['readers'].keys())
+        retcc = list(self.latest_status[detector]['controller'].keys())
+        if detector == 'tpc' and link_nv == 'true':
+            retnodes += list(self.latest_status['neutron_veto']['readers'].keys())
+            retcc += list(self.latest_status['neutron_veto']['controllers'].keys())
+        if detector == 'tpc' and link_mv == 'true':
+            retnodes += list(self.latest_status['muon_veto']['readers'].keys())
+            retcc += list(self.latest_status['muon_veto']['controllers'].keys())
         return retnodes, retcc
 
     def GetRunMode(self, mode):
@@ -326,7 +320,6 @@ class MongoConnect():
                 hostlist.append(b['host'])
             elif b['type'] == 'V2718':
                 cc.append(b['host'])
-        #self.log.debug("Hosts %s, cc %s" % (hostlist, cc))
         return hostlist, cc
 
     def GetNextRunNumber(self):
@@ -340,7 +333,7 @@ class MongoConnect():
             return 0
         return list(cursor)[0]['number']+1
 
-    def SetStopTime(self, number, detector):
+    def SetStopTime(self, number, detector, force):
         '''
         Sets the 'end' field of the run doc to the time when the STOP command was ack'd
         '''
@@ -349,9 +342,13 @@ class MongoConnect():
             time.sleep(2) # this number depends on the delay between CC and reader stop
             endtime = self.GetAckTime(detector, 'stop')
             if endtime is None:
-                endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=2)
-            self.collections['run'].update_one({"number": int(number), "end": {"$exists": False}},
-                                          {"$set": {"end": endtime}})
+                endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
+            query = {"number" : int(number), "end" : {"$exists" : False}}
+            updates = {"$set" : {"end" : endtime}}
+            if force:
+                updates["$push"] = {"tags" : {"name" : "messy", "user" : "daq",
+                    "date" : datetime.datetime.utcnow()}}
+            self.collections['run'].update_one(query, updates)
         except:
             self.log.error("Database having a moment, hope this doesn't crash")
         return
@@ -469,23 +466,26 @@ class MongoConnect():
             self.log.error("DB having a moment")
             return -1
         self.latest_status[detector]['number'] = number
-        if detector == 'tpc' and goal_state[detector]['link_nv']:
+        detectors = [detector]
+        if detector == 'tpc' and goal_state['tpc']['link_nv'] == 'true':
             self.latest_status['neutron_veto']['number'] = number
-        if detector == 'tpc' and goal_state[detector]['link_mv']:
+            detectors.append('neutron_veto')
+        if detector == 'tpc' and goal_state['tpc']['link_mv'] == 'true':
             self.latest_status['muon_veto']['number'] = number
+            detectors.append('muon_veto')
 
         run_doc = {
             "number": number,
-            'detector': detector,
+            'detectors': detectors,
             'user': goal_state[detector]['user'],
             'mode': goal_state[detector]['mode'],
         }
 
         # If there's a source add the source. Also add the complete ini file.
-        ini = self.GetRunMode(goal_state[detector]['mode'])
-        if ini is not None and 'source' in ini.keys():
-            run_doc['source'] = {'type': ini['source']}
-        run_doc['ini'] = ini
+        cfg = self.GetRunMode(goal_state[detector]['mode'])
+        if cfg is not None and 'source' in cfg.keys():
+            run_doc['source'] = {'type': cfg['source']}
+        run_doc['daq_config'] = cfg
 
         # If the user started the run with a comment add that too
         if "comment" in goal_state[detector] and goal_state[detector]['comment'] != "":
@@ -496,11 +496,11 @@ class MongoConnect():
             }]
 
         # Make a data entry so bootstrax can find the thing
-        if 'strax_output_path' in ini:
+        if 'strax_output_path' in cfg:
             run_doc['data'] = [{
                 'type': 'live',
                 'host': 'daq',
-                'location': ini['strax_output_path']
+                'location': cfg['strax_output_path']
             }]
 
         try:

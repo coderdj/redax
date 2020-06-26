@@ -29,7 +29,6 @@ struct data_packet{
     u_int32_t clock_counter;
     u_int32_t header_time;
     int bid;
-    std::vector<u_int32_t> vBLT;
 };
 
 
