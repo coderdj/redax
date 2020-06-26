@@ -34,8 +34,11 @@ class DAQController():
         # Timeouts. There are a few things that we want to wait for that might take time.
         # The keys for these dicts will be detector identifiers.
         detectors = list(json.loads(config['DEFAULT']['MasterDAQConfig']).keys())
-        self.last_command = {k:{d : datetime.datetime.utcnow() for d in detectors}
-                                for k in ['arm','start','stop']}
+        self.last_command = {}
+        for k in ['arm', 'start', 'stop']:
+            self.last_command[k] = {}
+            for d in detectors:
+                self.last_command[k][d] = datetime.datetime.utcnow()
         self.error_stop_count = {d : 0 for d in detectors}
 
         # Timeout properties come from config
@@ -91,7 +94,7 @@ class DAQController():
         '''
         # 1a - deal with TPC and also with MV and NV, but only if they're linked
         active_states = [STATUS.ARMING, STATUS.ARMED, STATUS.RUNNING,
-                         STATUS.ERROR, STATUS.TIMEOUT, STATUS.UNKNOWN]
+                         STATUS.ERROR, STATUS.UNKNOWN]
         if goal_state['tpc']['active'] == 'false':
 
             # Send stop command if we have to
@@ -106,15 +109,21 @@ class DAQController():
                      goal_state['tpc']['link_nv'] == 'true')
             ):
                 self.StopDetectorGently(detector='tpc')
+            elif latest_status['tpc']['status'] == STATUS.TIMEOUT:
+                self.CheckTimeouts('tpc')
 
         # 1b - deal with MV but only if MV not linked to TPC
         if goal_state['tpc']['link_mv'] == 'false' and goal_state['muon_veto']['active'] == 'false':
-            if latest_status['muon_veto']['status']  in active_states:
+            if latest_status['muon_veto']['status'] in active_states:
                 self.StopDetectorGently(detector='muon_veto')
+            elif latest_status['tpc']['status'] == STATUS.TIMEOUT:
+                self.CheckTimeouts('muon_veto')
         # 1c - deal with NV but only if NV not linked to TPC
         if goal_state['tpc']['link_nv'] == 'false' and goal_state['neutron_veto']['active'] == 'false':
-            if latest_status['neutron_veto']['status']  in active_states:
+            if latest_status['neutron_veto']['status'] in active_states:
                 self.StopDetectorGently(detector='neutron_veto')
+            elif latest_status['neutron_veto']['status'] == STATUS.TIMEOUT:
+                self.CheckTimeouts('neutron_veto')
 
         '''
         CASE 2: DETECTORS ARE ACTIVE
@@ -196,7 +205,6 @@ class DAQController():
                         force=self.can_force_stop['tpc'])
                 self.can_force_stop['tpc']=False
 
-
             # Maybe someone is timing out or we're in some weird mixed state
             # I think this can just be an 'else' because if we're not in some state we're happy
             # with we should probably check if a reset is in order.
@@ -272,7 +280,7 @@ class DAQController():
             else: # stop
                 readers, cc = self.mongo.GetConfiguredNodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
-                delay = 5
+                delay = 5 if not force else 0
                 # TODO smart delay?
             self.log.debug('Sending %s to %s' % (command.upper(), detector))
             if self.mongo.SendCommand(command, (cc, readers), self.goal_state[detector]['user'],
@@ -283,14 +291,13 @@ class DAQController():
             if command == 'start' and self.mongo.InsertRunDoc(detector, self.goal_state):
                 # db having a moment
                 return
-            if command == 'stop' and self.mongo.SetStopTime(self.latest_status[detector]['number'], detector):
+            if command == 'stop' and self.mongo.SetStopTime(self.latest_status[detector]['number'], detector, force):
                 # db having a moment
                 return
 
         else:
             self.log.debug('Can\'t send %s to %s, timeout at %i/%i' % (
                 command, detector, dt, self.timeouts[command]))
-            #self.CheckTimeouts(detector=detector, command=command)
 
     def CheckTimeouts(self, detector, command = None):
         ''' 
