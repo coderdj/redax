@@ -5,6 +5,7 @@
 #include "V2718.hh"
 #include "DDC10.hh"
 #include "V1495.hh"
+#include "f2718.hh"
 #include <vector>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <chrono>
@@ -46,14 +47,14 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   }
  
   // Getting the link and crate for V2718
-  std::vector<BoardType> bv = fOptions->GetBoards("V2718", fProcname);
+  std::vector<BoardType> bv = fOptions->GetBoards("V2718");
   if(bv.size() != 1){
     fLog->Entry(MongoLog::Message, "Require one V2718 to be defined or we can't start the run");
     fStatus = DAXHelpers::Idle;
     return -1;
   }
-  BoardType cc_def = bv[0];   
-  fV2718 = new V2718(fLog);
+  BoardType cc_def = bv[0];
+  fV2718 = (cc_def.crate == -2 && cc_def.link == -2) ? new f2718(fLog) : new V2718(fLog); // fax!
   if (fV2718->CrateInit(copts, cc_def.link, cc_def.crate)!=0){
     fLog->Entry(MongoLog::Error, "Failed to initialize V2718 crate controller");
     fStatus = DAXHelpers::Idle;

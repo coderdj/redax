@@ -11,7 +11,7 @@
 #include <utility>
 #include <tuple>
 #include <array>
-
+#include <sys/socket.h>
 
 class WFSim : public V1724 {
 public:
@@ -36,11 +36,33 @@ public:
   virtual uint32_t GetAcquisitionStatus();
 
 protected:
+  static void GlobalRun();
+  static void GlobalInit();
+  static void GlobalDeinit();
+  static std::tuple<double, double, double> GenerateEventLocation();
+  static std::array<int, 3> GenerateEventSize(double, double, double);
+  static std::vector<std::pair<int, double>> MakeHitpattern(int, int, double, double, double);
+  static void SendToWorkers(std::vector<std::pair<int, double>>&);
+
+  static std::thread sGeneratorThread;
+  static std::mutex sMutex;
+  static std::random_device sRD;
+  static std::mt19937_64 sGen;
+  static std::uniform_real_distribution<> sFlatDist;
+  static long sClock;
+  static int sEventCounter;
+  static std::atomic_bool sRun;
+  static bool sInit;
+  static fax_options_t sFaxOptions;
+  static int sNumPMTs;
+  static std::vector<WFSim*> sRegistry;
+  static std::vector<std::pair<double, double>> sPMTxy;
+  static std::condition_variable sCV;
+  static std::mutex sCV;
+
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
   void Run();
-  std::tuple<double, double, double> GenerateEventLocation();
-  std::array<int, 3> GenerateEventSize(double, double, double);
-  std::vector<std::pair<int, double>> MakeHitpattern(int, int, double, double, double);
+  void ReceiveFromGenerator(std::vector<std::pair<int, double>>&, long);
   std::vector<std::vector<double>> MakeWaveform(std::vector<std::pair<int, double>>&, int&);
   int ConvertToDigiFormat(std::vector<std::vector<double>>&, int);
 
@@ -51,13 +73,11 @@ protected:
   std::random_device fRD;
   std::mt19937_64 fGen;
   std::uniform_real_distribution<> fFlatDist;
-  long fClock;
-  int fEventCounter;
-  std::atomic_bool fRun;
-  fax_options_t fFaxOptions;
-  const int fNumPMTs;
   std::vector<double> fSPEtemplate;
-
+  std::mutex fMutex;
+  std::vector<std::pair<int, double>> fWFprimitive;
+  std::condition_variable fCV;
+  long fTimestamp;
 };
 
 #endif // _WFSIM_HH_ defined
