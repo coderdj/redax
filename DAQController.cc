@@ -731,7 +731,6 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         // Determine calibration values
         // ****************************
         for (auto d : digis) {
-        //for (unsigned d = 0; d < digis_this_link; d++) {
           bid = d->bid();
           fMapMutex.lock();
           cal_values[bid] = std::map<std::string, vector<double>>(
@@ -758,7 +757,6 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         // Do fitting process
         // ******************
         for (auto d : digis) {
-        //for (unsigned d = 0; d < digis_this_link; d++) {
           bid = d->bid();
           for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
             if (channel_finished[bid][ch] >= convergence_threshold) continue;
@@ -772,9 +770,6 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
             int adjustment = off_by * cal_values[bid]["slope"][ch];
             if (abs(adjustment) < min_adjustment)
               adjustment = std::copysign(min_adjustment, adjustment);
-            //fLog->Entry(MongoLog::Local,
-            //    "Bd %i ch %i dac %04x bl %.1f adjust %i step %i", bid, ch,
-            //    dac_values[bid][ch], bl_per_channel[bid][ch][step], adjustment, step);
             dac_values[bid][ch] += adjustment;
           } // for channels
         } // for digis
@@ -790,6 +785,13 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
       break;
     }
   } // end iterations
+  if (fail) return -2;
+  if (std::any_of(channel_finished.begin(), channel_finished.end(),
+      [&](auto& p){return std::any_of(p.second.begin(), p.second.end(), [=](int i){
+        return i < convergence_threshold;});})) {
+    fLog->Entry(MongoLog::Warning, "Couldn't baseline properly!");
+    return -1;
+  }
   for (auto d : digis) {
     for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
       bid = d->bid();
@@ -798,10 +800,5 @@ int DAQController::FitBaselines(std::vector<V1724*> &digis,
         dac_values[bid][ch]);
     }
   }
-  if (fail) return -2;
-  if (std::any_of(channel_finished.begin(), channel_finished.end(),
-      [&](auto& p){return std::any_of(p.second.begin(), p.second.end(), [=](int i){
-        return i < convergence_threshold;});}))
-    return -1;
   return 0;
 }
