@@ -131,7 +131,7 @@ vector<pair<int, double>> WFSim::MakeHitpattern(int s_i, int photons, double x, 
   return ret;
 }
 
-vector<vector<double>> WFSim::MakeWaveform(vector<pair<int, double>>& hits, int& mask) {
+vector<vector<double>> WFSim::MakeWaveform(const vector<pair<int, double>>& hits, int& mask) {
   mask = 0;
   double last_hit_time = 0;
   for (auto& hit : hits) {
@@ -156,7 +156,7 @@ vector<vector<double>> WFSim::MakeWaveform(vector<pair<int, double>>& hits, int&
   return wf;
 }
 
-int WFSim::ConvertToDigiFormat(vector<vector<double>>& wf, int mask) {
+int WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
   int num_channels = wf.size();
   const int overhead_per_channel = 2*sizeof(uint32_t), overhead_per_event = 4*sizeof(uint32_t);
   std::string buffer;
@@ -188,6 +188,12 @@ int WFSim::ConvertToDigiFormat(vector<vector<double>>& wf, int mask) {
     fBufferSize = fBuffer.size();
   }
   return wf[0].size()*DataFormatDefinition["ns_per_sample"]; // width of signal
+}
+
+int WFSim::NoiseInjection() {
+  vector<vector<double>> wf(fNumPMTs, vector<double>(0, fSPEtemplate.size()));
+  ConvertToDigiFormat(wf, 0xFF);
+  return 0;
 }
 
 void WFSim::Run() {

@@ -27,7 +27,7 @@ public:
   virtual int SINStart() {return 1;} // not implemented yet
   virtual int SoftwareStart();
   virtual int AcquisitionStop() {fRun = false; return 0;}
-  virtual int SWTrigger() {return 0;}
+  virtual int SWTrigger() {return NoiseInjection();}
   virtual int Reset();
   virtual bool EnsureReady(int, int) {return true;}
   virtual bool EnsureStarted(int, int) {return fRun;}
@@ -41,8 +41,9 @@ protected:
   std::tuple<double, double, double> GenerateEventLocation();
   std::array<int, 3> GenerateEventSize(double, double, double);
   std::vector<std::pair<int, double>> MakeHitpattern(int, int, double, double, double);
-  std::vector<std::vector<double>> MakeWaveform(std::vector<std::pair<int, double>>&, int&);
-  int ConvertToDigiFormat(std::vector<std::vector<double>>&, int);
+  std::vector<std::vector<double>> MakeWaveform(const std::vector<std::pair<int, double>>&, int&);
+  int ConvertToDigiFormat(const std::vector<std::vector<double>>&, int);
+  int NoiseInjection();
 
   std::thread fGeneratorThread;
   std::string fBuffer;
