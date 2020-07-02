@@ -104,7 +104,6 @@ int StraxInserter::Initialize(Options *options, MongoLog *log, DAQController *da
   fLog = log;
   fErrorBit = false;
 
-  fProcTimeDP = fProcTimeEv = fProcTimeCh = fCompTime = microseconds(0);
   fBufferNumChunks = fOptions->GetInt("strax_buffer_num_chunks", 2);
   fWarnIfChunkOlderThan = fOptions->GetInt("strax_chunk_phase_limit", 2);
 
@@ -158,7 +157,7 @@ void StraxInserter::GenerateArtificialDeadtime(int64_t timestamp, int16_t bid, u
   int8_t zero = 0;
   while ((int)fragment.size() < fFragmentBytes+fStraxHeaderSize)
     fragment.append((char*)&zero, sizeof(zero));
-  AddFragmentToBuffer(std::move(fragment), timestamp, et, ro);
+  AddFragmentToBuffer(fragment, timestamp, et, ro);
 }
 
 void StraxInserter::ProcessDatapacket(data_packet* dp){
@@ -183,7 +182,7 @@ void StraxInserter::ProcessDatapacket(data_packet* dp){
     if (fForceQuit) break;
   }
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &dp_end);
-  fProcTimeDp += timespec_subtract(dp_end, dp_begin);
+  fProcTimeDP += timespec_subtract(dp_end, dp_start);
   fBytesProcessed += dp->size;
   delete dp;
 }
@@ -225,7 +224,7 @@ uint32_t StraxInserter::ProcessEvent(uint32_t* buff, unsigned total_words, long 
       ret = ProcessChannel(buff+idx, words_in_event, bid, ch, header_time, event_time,
         clock_counter, channel_mask);
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ch_end);
-      fProcTimeCh += timespec_subtract(ch_end, ch_begin);
+      fProcTimeCh += timespec_subtract(ch_end, ch_start);
       if (ret == -1)
         break;
       idx += ret;
@@ -498,7 +497,6 @@ void StraxInserter::WriteOutFiles(bool end){
       fs::create_directory(GetDirectoryPath(chunk_index, false));
     fs::rename(GetFilePath(chunk_index, true),
 	       GetFilePath(chunk_index, false));
-    comp_end = system_clock::now();
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &comp_end);
     fCompTime += timespec_subtract(comp_end, comp_start);
 
