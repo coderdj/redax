@@ -27,7 +27,7 @@ public:
   virtual int SINStart() {return 1;} // not implemented yet
   virtual int SoftwareStart();
   virtual int AcquisitionStop() {fRun = false; return 0;}
-  virtual int SWTrigger() {return 0;}
+  virtual int SWTrigger() {return NoiseInjection();}
   virtual int Reset();
   virtual bool EnsureReady(int, int) {return true;}
   virtual bool EnsureStarted(int, int) {return fRun;}
@@ -62,9 +62,10 @@ protected:
 
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
   void Run();
-  void ReceiveFromGenerator(std::vector<std::pair<int, double>>&, long);
-  std::vector<std::vector<double>> MakeWaveform(std::vector<std::pair<int, double>>&, int&);
-  int ConvertToDigiFormat(std::vector<std::vector<double>>&, int);
+  void ReceiveFromGenerator(const std::vector<std::pair<int, double>>&, long, int);
+  std::vector<std::vector<double>> MakeWaveform(const std::vector<std::pair<int, double>>&, int&);
+  int ConvertToDigiFormat(const std::vector<std::vector<double>>&, int);
+  int NoiseInjection();
 
   std::thread fGeneratorThread;
   std::string fBuffer;
@@ -78,6 +79,7 @@ protected:
   std::vector<std::pair<int, double>> fWFprimitive;
   std::condition_variable fCV;
   long fTimestamp;
+  int fEventNumber;
 };
 
 #endif // _WFSIM_HH_ defined

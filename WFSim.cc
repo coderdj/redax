@@ -29,17 +29,16 @@ vector<pair<double, double>> sPMTxy;
 pair<double, double> PMTiToXY(int i) {
   if (i == 0) return std::make_pair(0., 0.);
   if (i < 7) return std::make_pair(std::cos((i-1)*PI()/3.), std::sin((i-1)*PI()/3.));
-  int ring = 2;
-  while (true) {
-    // how many total PMTs are contained in a radius r?
-    if (i < ring*(ring+1)/2) break;
-    ring++;
-  }
+  int ring = 0;
+  // how many total PMTs are contained in a radius r?
+  do {
+    ++ring;
+  } while (i < ring*(ring+1)/2);
   int side = (i - ring*(ring-1)/2) / ring;
   int side_i = (i - ring*(ring-1)/2) % ring;
 
-  double ref_angle = PI()/3.*side;
-  double offset_angle = ref_angle + 2.*PI()/3.;
+  double ref_angle = PI()/3*side;
+  double offset_angle = ref_angle + 2*PI()/3;
   double x_c = ring*std::cos(ref_angle), y_c = ring*std::sin(ref_angle);
   return std::make_pair(x_c + side_i*std::cos(offset_angle), y_c + side_i*std::sin(offset_angle));
 }
@@ -206,16 +205,17 @@ void WFSim::SendToWorkers(vector<pair<int, double>>& hits) {
   return;
 }
 
-void WFSim::ReceiveFromGenerator(vector<pair<int, double>>& in, long timestamp) {
+void WFSim::ReceiveFromGenerator(const vector<pair<int, double>>& in, long timestamp, int evnum) {
   {
     const std::lock_guard<std::mutex> lg(fMutex);
     fWFprimitive = in;
     fTimestamp = timestamp;
+    fEventNumber = evnum;
   }
   fCV.notify_one();
 }
 
-vector<vector<double>> WFSim::MakeWaveform(vector<pair<int, double>>& hits, int& mask) {
+vector<vector<double>> WFSim::MakeWaveform(const vector<pair<int, double>>& hits, int& mask) {
   mask = 0;
   double last_hit_time = 0;
   double first_hit_time = 1e9;
@@ -242,7 +242,7 @@ vector<vector<double>> WFSim::MakeWaveform(vector<pair<int, double>>& hits, int&
   return wf;
 }
 
-int WFSim::ConvertToDigiFormat(vector<vector<double>>& wf, int mask) {
+int WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
   int num_channels = wf.size();
   const int overhead_per_channel = 2*sizeof(uint32_t), overhead_per_event = 4*sizeof(uint32_t);
   std::string buffer;
@@ -274,6 +274,12 @@ int WFSim::ConvertToDigiFormat(vector<vector<double>>& wf, int mask) {
     fBufferSize = fBuffer.size();
   }
   return wf[0].size()*DataFormatDefinition["ns_per_sample"]; // width of signal
+}
+
+int WFSim::NoiseInjection() {
+  vector<vector<double>> wf(PMTsPerDigi, vector<double>(fSPEtemplate.size(), 0));
+  ConvertToDigiFormat(wf, 0xFF);
+  return 0;
 }
 
 static void WFSim::GlobalRun() {
