@@ -314,7 +314,7 @@ void WFSim::GlobalRun() {
   sClock = (0.5+sFlatDist(sGen))*10000000;
   sEventCounter = 0;
   {
-    std::lock_guard<std::mutex> lg(sMutex);
+    std::unique_lock<std::mutex> lg(sMutex);
     sCV.wait(lg, []{return sReady == false;});
   }
   while (sRun == true) {
