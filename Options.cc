@@ -2,6 +2,8 @@
 #include "DAXHelpers.hh"
 #include "MongoLog.hh"
 
+#include <cmath>
+
 #include <mongocxx/uri.hpp>
 #include <mongocxx/database.hpp>
 #include <bsoncxx/array/view.hpp>
@@ -11,13 +13,11 @@
 #include <bsoncxx/exception/exception.hpp>
 
 Options::Options(MongoLog *log, std::string options_name, std::string hostname,
-          std::string suri, std::string dbname, std::string override_opts){
+          std::string suri, std::string dbname, std::string override_opts) : 
+    fLog(log), fDBname(dbname), fHostname(hostname) {
   bson_value = NULL;
-  fLog = log;
-  fHostname = hostname;
   mongocxx::uri uri{suri};
   fClient = mongocxx::client{uri};
-  fDBname = dbname;
   fDAC_collection = fClient[dbname]["dac_calibration"];
   mongocxx::collection opts_collection = fClient[dbname]["options"];
   if(Load(options_name, opts_collection, override_opts)!=0)
@@ -29,11 +29,6 @@ Options::~Options(){
     delete bson_value;
     bson_value = NULL;
   }
-}
-
-std::string Options::ExportToString(){
-  std::string ret = bsoncxx::to_json(bson_options);
-  return ret;
 }
 
 int Options::Load(std::string name, mongocxx::collection& opts_collection,
@@ -52,7 +47,7 @@ int Options::Load(std::string name, mongocxx::collection& opts_collection,
   }
   bson_value = new bsoncxx::document::value((*trydoc).view());
   bson_options = bson_value->view();
-  
+
   // Pull all subdocuments
   int success = 0;
   try{
@@ -75,7 +70,12 @@ int Options::Load(std::string name, mongocxx::collection& opts_collection,
     fLog->Entry(MongoLog::Warning, "Failed to override options doc with includes and overrides.");
     return -1;
   }
-
+  try{
+    fDetector = bson_options["detectors"][fHostname].get_utf8().value.to_string();
+  }catch(const std::exception& e){
+    fLog->Entry(MongoLog::Warning, "No detector specified for this host");
+    return -1;
+  }
 
   return 0;
 }
@@ -123,7 +123,7 @@ long int Options::GetLongInt(std::string path, long int default_value){
       fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
       return default_value;
     }
-  }  
+  }
   return -1;
 }
 
@@ -139,14 +139,14 @@ double Options::GetDouble(std::string path, double default_value) {
 int Options::GetInt(std::string path, int default_value){
 
   try{
-    return bson_options[path.c_str()].get_int32();
+    return bson_options[path].get_int32();
   }
   catch (const std::exception &e){
     //LOG
     fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
     return default_value;
   }
-  return -1;  
+  return -1;
 }
 
 int Options::GetNestedInt(std::string path, int default_value){
@@ -159,9 +159,9 @@ int Options::GetNestedInt(std::string path, int default_value){
     fields.push_back( substr );
   }
   try{
-    auto val = bson_options[fields[0].c_str()];
+    auto val = bson_options[fields[0]];
     for(unsigned int i=1; i<fields.size(); i++)
-      val = val[fields[i].c_str()];
+      val = val[fields[i]];
     return val.get_int32();
   }catch(const std::exception &e){
     fLog->Entry(MongoLog::Local, "Using default value for %s",path.c_str());
@@ -172,17 +172,17 @@ int Options::GetNestedInt(std::string path, int default_value){
 
 std::string Options::GetString(std::string path, std::string default_value){
   try{
-    return bson_options[path.c_str()].get_utf8().value.to_string();
+    return bson_options[path].get_utf8().value.to_string();
   }
   catch (const std::exception &e){
     //LOG
     fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
     return default_value;
-  }  
+  }
   return "";
 }
 
-std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname){
+std::vector<BoardType> Options::GetBoards(std::string type){
   std::vector<BoardType> ret;
   bsoncxx::array::view subarr = bson_options["boards"].get_array().value;
 
@@ -197,8 +197,8 @@ std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname
     if(!std::count(types.begin(), types.end(), btype))
       continue;
     try{
-      if(ele["host"].get_utf8().value.to_string() != hostname)
-	continue;
+      if(ele["host"].get_utf8().value.to_string() != fHostname)
+        continue;
     }
     catch(const std::exception &e){
       // If there is no host field then no biggie. Assume we have just 1 host.
@@ -207,27 +207,39 @@ std::vector<BoardType> Options::GetBoards(std::string type, std::string hostname
     bt.link = ele["link"].get_int32();
     bt.crate = ele["crate"].get_int32();
     bt.board = ele["board"].get_int32();
-    bt.type = ele["type"].get_utf8().value.to_string();    
+    bt.type = ele["type"].get_utf8().value.to_string();
     bt.vme_address = DAXHelpers::StringToHex(ele["vme_address"].get_utf8().value.to_string());
     ret.push_back(bt);
   }
-  
+
   return ret;
 }
-    
-std::vector<RegisterType> Options::GetRegisters(int board){
+
+std::vector<RegisterType> Options::GetRegisters(int board, bool strict){
   std::vector<RegisterType> ret;
-  
+  int ibid = 0;
+  std::string sdet = "";
   bsoncxx::array::view regarr = bson_options["registers"].get_array().value;
   for(bsoncxx::array::element ele : regarr){
-    if(board != ele["board"].get_int32() && ele["board"].get_int32() != -1)
-      continue;
-    RegisterType rt;
-    rt.board = ele["board"].get_int32();
-    rt.reg = ele["reg"].get_utf8().value.to_string();
-    rt.val = ele["val"].get_utf8().value.to_string();
+    try{
+      ibid = ele["board"].get_int32();
+      sdet = "";
+    }catch(const std::exception& e){
+      try{
+        sdet = ele["board"].get_utf8().value.to_string();
+        ibid = -1;
+      }catch(const std::exception& ee){
+        throw std::runtime_error("Invalid register: board is neither int nor string");
+      }
+    }
+    if ((ibid != board) && strict) continue;
+    if ((ibid == board) || (sdet == fDetector) || (sdet == "all")) {
+      RegisterType rt;
+      rt.reg = ele["reg"].get_utf8().value.to_string();
+      rt.val = ele["val"].get_utf8().value.to_string();
 
-    ret.push_back(rt);
+      ret.push_back(rt);
+    }
   }
   return ret;
 }
@@ -247,22 +259,17 @@ std::vector<u_int16_t> Options::GetThresholds(int board) {
 }
 
 int Options::GetCrateOpt(CrateOptions &ret){
-  // I think we can just hack the above getters to allow dot notation
-  // for a more robust solution to access subdocuments
-  try{
+  if ((ret.pulser_freq = GetNestedInt("V2718."+fDetector+".pulser_freq", -1)) == -1) {
     try{
-      ret.pulser_freq = float(bson_options["V2718"]["pulser_freq"].get_int32().value);
+      ret.pulser_freq = bson_options["V2718"][fDetector]["pulser_freq"].get_double().value;
     } catch(std::exception& e) {
-      ret.pulser_freq = bson_options["V2718"]["pulser_freq"].get_double().value;
+      ret.pulser_freq = 0;
     }
-    ret.s_in = float(bson_options["V2718"]["s_in"].get_int32().value);
-    ret.muon_veto = bson_options["V2718"]["muon_veto"].get_int32().value;
-    ret.neutron_veto = bson_options["V2718"]["neutron_veto"].get_int32().value;
-    ret.led_trigger = bson_options["V2718"]["led_trigger"].get_int32().value;
-  }catch(std::exception &E){
-    fLog->Entry(MongoLog::Local, "Exception getting ccontroller opts: %s", E.what());
-    return -1;
   }
+  ret.s_in = GetNestedInt("V2718."+fDetector+".s_in", 0);
+  ret.muon_veto = GetNestedInt("V2718."+fDetector+".muon_veto", 0);
+  ret.neutron_veto = GetNestedInt("V2718."+fDetector+".neutron_veto", 0);
+  ret.led_trigger = GetNestedInt("V2718."+fDetector+".led_trigger", 0);
   return 0;
 }
 
@@ -392,15 +399,26 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
     std::map<int, long>& buffer_counter,
     double proc_time_dp_us, double proc_time_ev_us, double proc_time_ch_us, double comp_time_us) {
   using namespace bsoncxx::builder::stream;
+  int level = GetInt("benchmark_level", 2);
+  if (level == 0) return;
   int run_id = -1;
   try{
     run_id = std::stoi(GetString("run_identifier", "latest"));
   } catch (...) {
   }
+  std::map<int, long> bc;
+  if (level == 2) {
+    for (const auto& p : buffer_counter)
+      if (p.first != 0)
+        bc[int(std::ceil(std::log2(p.first)))] += p.second;
+  } else if (level == 3) {
+    bc = buffer_counter;
+  }
+
   auto search_doc = document{} << "run" << run_id << finalize;
   auto update_doc = document{};
   update_doc << "$set" << open_document << "run" << run_id << close_document;
-  update_doc << "$push" << open_document;
+  update_doc << "$push" << open_document << "data" << open_document;
   update_doc << "host" << fHostname;
   update_doc << "bytes" << byte_counter["bytes"];
   update_doc << "fragments" << byte_counter["fragments"];
@@ -410,12 +428,15 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
   update_doc << "processing_time_ev_us" << proc_time_ev_us;
   update_doc << "processing_time_ch_us" << proc_time_ch_us;
   update_doc << "compression_time_us" << comp_time_us;
-  update_doc << "buffer_xfers" << open_document;
-  for (auto& p : buffer_counter) {
-    update_doc << std::to_string(p.first) << p.second;
+  if (level >= 2) {
+    update_doc << "buffer_xfers" << open_document;
+    for (auto& p : bc) {
+      update_doc << std::to_string(p.first) << p.second;
+    }
+    update_doc << close_document; // buffer xfers
   }
-  update_doc << close_document; // buffer xfers
 
+  update_doc << close_document; // data
   update_doc << close_document; // push
   auto write_doc = update_doc << finalize;
   mongocxx::options::update options;

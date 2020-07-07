@@ -30,7 +30,7 @@ int V1495::WriteReg(unsigned int reg, unsigned int value){
 				fBID, reg, value, fBoardHandle);
 		return -1;
 	}
-	fLog->Entry(MongoLog::Message, "V1495: %i written register 0x%04x with value %08x (handle %i)",
+	fLog->Entry(MongoLog::Local, "V1495: %i written register 0x%04x with value %08x (handle %i)",
 			fBID, reg, value, fBoardHandle);
 	return 0;
 }

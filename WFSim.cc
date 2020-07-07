@@ -353,6 +353,3 @@ void WFSim::Run() {
   }
 }
 
-void WFSim::WaitForSignal() {
-
-}

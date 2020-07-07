@@ -29,14 +29,13 @@ CControl_Handler::~CControl_Handler(){
 int CControl_Handler::DeviceArm(int run, Options *opts){
 
   fStatus = DAXHelpers::Arming;
-  
+
   // Just in case clear out any remaining objects from previous runs
   DeviceStop();
 
-  fCurrentRun = run;  
+  fCurrentRun = run;
   fOptions = opts;
 
-// ----------------------------------------------
   // Pull options for V2718
   CrateOptions copts;
   if(fOptions->GetCrateOpt(copts) != 0){
@@ -45,7 +44,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
     fStatus = DAXHelpers::Idle;
     return -1;
   }
- 
+
   // Getting the link and crate for V2718
   std::vector<BoardType> bv = fOptions->GetBoards("V2718");
   if(bv.size() != 1){
@@ -64,12 +63,11 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
      fLog->Entry(MongoLog::Local, "V2718 Initialised");
   }
 
-// ----------------------------------------------
   // Getting options for DDC10 HEV module
   HEVOptions hopts;
-  
-  std::vector<BoardType> dv = fOptions->GetBoards("DDC10", fProcname);
-  // Init DDC10 only when included in config - only for TPC   
+
+  std::vector<BoardType> dv = fOptions->GetBoards("DDC10");
+  // Init DDC10 only when included in config - only for TPC
   if (dv.size() == 1){
      if(fOptions->GetHEVOpt(hopts) == 0){
         fDDC10 = new DDC10();
@@ -89,15 +87,13 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 
 
   // Getting options for the V1495 board
-  std::vector<BoardType> mv = fOptions->GetBoards("V1495", fProcname);
+  std::vector<BoardType> mv = fOptions->GetBoards("V1495");
   if (mv.size() == 1){
     BoardType mv_def = mv[0];
     fBID = mv_def.board;
     fV1495 = new V1495(fLog, fOptions, mv_def.board, fBoardHandle, mv_def.vme_address);
 	// Writing registers to the V1495 board
-	for(auto regi : fOptions->GetRegisters(fBID)){
-		if(regi.board != fBID)
-		       continue;
+	for(auto regi : fOptions->GetRegisters(fBID, true)){
 		unsigned int reg = DAXHelpers::StringToHex(regi.reg);
 		unsigned int val = DAXHelpers::StringToHex(regi.val);
 		if(fV1495->WriteReg(reg, val)!=0){
@@ -169,7 +165,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
  
   // Updating the status doc
   bsoncxx::builder::stream::document builder{};
-  builder << "host" << hostname << "type" << "ccontrol" << "status" << fStatus <<
+  builder << "host" << hostname << "status" << fStatus <<
     "time" << duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
   auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
 
@@ -185,6 +181,8 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
 	     << "pulser_freq" << crate_options.pulser_freq
 	     << bsoncxx::builder::stream::close_document;
   }
+  auto after_array = in_array << bsoncxx::builder::stream::close_array;
+  return after_array << bsoncxx::builder::stream::finalize;
   // DDC10 parameters might change for future updates of the XENONnT HEV
   if(fDDC10 != NULL){
     auto hev_options = fDDC10->GetHEVOptions();
@@ -224,7 +222,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
 	      << bsoncxx::builder::stream::close_document; 
   }
   
-  auto after_array = in_array << bsoncxx::builder::stream::close_array;
+  after_array = in_array << bsoncxx::builder::stream::close_array;
   return after_array << bsoncxx::builder::stream::finalize;
 
 }  

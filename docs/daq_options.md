@@ -107,8 +107,8 @@ setup given in the [previous chapter](installation.md). Each subdocument contain
 |crate |The 'crate' as defined in CAEN lingo. Namely, if multiple boards are connected to one optical link they get crate numbers zero to seven (max) defining their order in the daisy chain. The first board in the daisy chain is zero. The order is defined by the direction of the optical link propagation, which you can deduce by the little lights on the board that light when they receive an input. |
 |vme_address |It is planned to support readout via a V2718 crate controller over the VME backplane. In this case board addressing is via VME address only and crate would refer to the location of the crate controller in the daisy chain. This feature is not yet implemented so the option is placeholder (but must be included). |
 |link |Defines the optical link index this board is connected to. This is simple in case of one optical link, though like plugging in USB-A there's always a 50-50 chance to guesss it backwards. It becomes a bit more complicated when you include multiple A3818s on one server. There's a good diagram in CAEN's A3818 documentation. |
-|host |This is the DAQ name of the process that should control the board. Remember this process must be on the same physical machine as the board is connected to. Also, multiple processes cannot share one optical link (but one process can control one optical link). |
-|type |Either V1724, V1724_MV, or V1730 for digitizers or V2718 for crate controllers. If more board types are supported they will be added. FPGA support (V1495) is pending. |
+|host |This is the DAQ name of the process that should control the board. Multiple processes cannot share one optical link (but one process can control one optical link). |
+|type |Either V1724, V1724_MV, or V1730 for digitizers or V2718 for crate controllers. If more board types are supported they will be added. Limited V1495 support exists. |
 
 ## Register Definitions
 
@@ -120,38 +120,46 @@ Here is an example:
     {
       "val": "1",
       "reg": "EF24",
-      "board": -1
+      "board": "all"
     },
     {
       "val": "1",
       "reg": "EF1C",
-      "board": -1
+      "board": "tpc"
+    },
+    {
+      "val": "1",
+      "reg": "801C",
+      "board": 1337
     },
     ...
 ]
 ```
 
-"val" and "reg" are strings designating **hex values**, where 'reg' is the register to write and 'val' is the value to 
-write to it. Refer to the CAEN documentation to know which registers you want to set. The field 'board' can include the 
-integral board identifier (defined in the board definition section) in case you want to write this register to a single 
-board only. If set to -1 it will be written to all digitizers. 
+| Field | Description |
+| ----- | ----------- |
+| reg | String. The register to write to. **Hex**. |
+| val | String. The value to write. **Hex**. |
+| board | Varies. If "all", the write will go to all boards. If a different string, will go to all boards servicing the specified detector. If an int, will go to the board with that identifier. |
 
 ## V2718
 
-The V2718 crate controller has a few options to configure:
+The V2718 crate controller has a few options to configure. Note that they must be a nested object with detector names as keys:
 ```python
 "V2718": {
+  "tpc" : {
     "pulser_freq": 0,
     "neutron_veto": 0,
     "muon_veto": 0,
     "led_trigger": 0,
     "s_in": 1
   }
+}
 ```
 
 | Field | Description |
 | ------ | ----------- |
-| pulser_freq | The frequency to pulse the trigger/LED pulser in Hz. Supports from 1 Hz up to several kHz. Keep in mind this may not be implemented exactly since the CAEN API doesn't support every possible frequency exactly, but the software will attempt to match the desired frequency as closely as possible. |
+| pulser_freq | Float. The frequency to pulse the trigger/LED pulser in Hz. Supports from 1 Hz up to several kHz. Keep in mind this may not be implemented exactly since the CAEN API doesn't support every possible frequency exactly, but the software will attempt to match the desired frequency as closely as possible. |
 | neutron_veto | Should the S-IN signal be propogated to the neutron veto? 1-yes, 0-no |
 | muon_veto | Should the S-IN signal be propogated to the muon veto? 1-yes, 0-no |
 | led_trigger | Should the LED pulse be propagated to the LED driver? 1-yes, 0-no |
@@ -173,18 +181,23 @@ Various options that tell redax how to run.
     "processing_threads": {
       "reader0_reader_0": 2,
       "reader1_reader_1": 6,
-     }
+     },
+    "detectors" {
+      "reader0_reader_0": "tpc",
+      "reader5_reader_0": "muon_veto"
+    }
 }
 ```
 
 |Option | Description |
 | -------- | ---------- |
 | run_start | Tells the DAQ whether to start the run via register or S-in. 0 for register, 1 for S-in. Note that starting by register means that the digitizer clocks will not be synchronized. This can be fine if you run with an external trigger and use the trigger time as synchronization signal. If running in triggerless mode you need to run with '1' and have your hardware set up accordingly. |
-| baseline_dac_mode | cached/fixed/fit. This defines how the DAC-offset values per channel are set. If set to cached the program will load cached baselines from the run specified in *baseline_reference_run*. If it can't find that run it will fall back to the value in *baseline_fixed_value*. If set to 'fixed' it will use *baseline_fixed_value* in any case. If set to 'fit' it will attempt to adjust the DAC offset values until the baseline for each channel matches the value in *baseline_value*. If using negative voltage signals the default value of 16000 is a good one. Baselines for each run are cached in the *dac_values* collection of the daq database. |
-|baseline_reference_run | If 'baseline_dac_mode' is set to 'cached' it will use the values from the run number defined here. |
-|baseline_value | If 'baseline_dac_mode' is set to 'fit' it will attempt to adjust the baselines until they hit the decimal value defined here, which must lie between 0 and 16386 for a 14-bit ADC. |
-|baseline_fixed_value |Use this to set the DAC offset register directly with this value. See CAEN documentation for more details. |
-|processing_threads |The number of threads working on converting data between CAEN and strax format. Should be larger for processes responsible for more boards and can be smaller for processes only reading a few boards. |
+| baseline_dac_mode | "cached"/"fixed"/"fit". This defines how the DAC-offset values per channel are set. If set to cached the program will load cached baselines from the run specified in *baseline_reference_run*. If it can't find that run it will fall back to the value in *baseline_fixed_value*. If set to 'fixed' it will use *baseline_fixed_value* in any case. If set to 'fit' it will attempt to adjust the DAC offset values until the baseline for each channel matches the value in *baseline_value*. If using negative voltage signals the default value of 16000 is a good one. Baselines for each run are cached in the *dac_values* collection of the daq database. |
+|baseline_reference_run | Int. If 'baseline_dac_mode' is set to 'cached' it will use the values from the run number defined here. |
+|baseline_value | Int. If 'baseline_dac_mode' is set to 'fit' it will attempt to adjust the baselines until they hit the decimal value defined here, which must lie between 0 and 16386 for a 14-bit ADC. Default 16000. |
+|baseline_fixed_value | Int. Use this to set the DAC offset register directly with this value. See CAEN documentation for more details. Default 4000. |
+|processing_threads | Dict. The number of threads working on converting data between CAEN and strax format. Should be larger for processes responsible for more boards and can be smaller for processes only reading a few boards. |
+|detectors | Dict. Which detector a given instance is attached to. Used mainly in aggregating registers. Required |
 
 ## Strax Output Options
 
@@ -194,17 +207,17 @@ There are various configuration options for the strax output that must be set.
 {
   "strax_chunk_overlap": 0.5,
   "strax_output_path": "/data/xenon/raw/xenonnt",
-  "strax_chunk_length": 5,
+  "strax_chunk_length": 5.0,
   "strax_fragment_payload_bytes": 220
 }
 ```
 
 |Option | Description |
 | ---- | ---- | 
-| strax_chunk_overlap | Defines the overlap period between strax chunks in seconds. Make is at least some few times larger than your typical event length. In any case it should be larger than your largest expected event. |
-| strax_chunk_length | Length of each strax chunk in seconds. There's some balance required here. It should be short enough that strax can process reasonably online, as it waits for each chunk to finish then loads it at once (the size should be digestable). But it shouldn't be so short that it needlessly micro-segments the data. Order of 5-15 seconds seems reasonable at the time of writing. |
-|strax_fragment_payload_bytes | How long are the fragments? In general this should be long enough that it definitely covers the vast majority of your SPE pulses. Our SPE pulses are ~100 samples, so the default value of 220 bytes (2 bytes per sample) provides a small amount of overhead. |
-|strax_output_path | Where should we write data? This must be a locally mounted data store. Redax will handle sub-directories so just provide the top-level directory where all the live data should go. |
+| strax_chunk_overlap | Float. Defines the overlap period between strax chunks in seconds. Make is at least some few times larger than your typical event length. In any case it should be larger than your largest expected event. Default 0.5. |
+| strax_chunk_length | Float. Length of each strax chunk in seconds. There's some balance required here. It should be short enough that strax can process reasonably online, as it waits for each chunk to finish then loads it at once (the size should be digestable). But it shouldn't be so short that it needlessly micro-segments the data. Order of 5-15 seconds seems reasonable at the time of writing. Default 5. |
+|strax_fragment_payload_bytes | Int. How long are the fragments? In general this should be long enough that it definitely covers the vast majority of your SPE pulses. Our SPE pulses are ~100 samples, so the default value of 220 bytes (2 bytes per sample) provides a small amount of overhead. Undefined behavior if the value is odd. |
+|strax_output_path | String. Where should we write data? This must be a locally mounted data store. Redax will handle sub-directories so just provide the top-level directory where all the live data should go. |
 
 ## Channel Map
 
@@ -252,18 +265,19 @@ Redax accepts a variety of options that control various low-level operations. Th
 
 |Option | Description |
 | ---- | ---- |
-| baseline_max_iterations | The maximum number of overall iterations to go through when fitting baselines. Baselining runs until either this number of iterations are completed, or the baselines converge, whichever happens first. Default 2. |
-| baseline_max_steps | The maximum number of steps per iteration during baselining. Steps involve measuring the baseline and trying to adjust it towards the target value. Default 20. |
-| baseline_adjustment_threshold | How close the measured baseline must be to the target baseline in ADC units. If the absolute difference is less than this value, a channel is considered to have converged. Default 10. |
-| baselie_convergence_threshold | How many consecutive times a channel must be within the adjustment threshold to be considered stable and finished. Default 3. |
-| baseline_min_adjustment | The minimum change to the DAC value, given in DAC units. Note that the DAC is 16-bit while the digitizer is only 14-bit, so a conversion of approximately 0.25 does apply. Default 10. |
-| baseline_rebin_log2 | How much to rebin samples by when calculating the baseline. This is intended to provide some level of noise immunity. Samples are bit-shifted right by this value (ie, sample >> value). Default 1. |
-| baseline_bins_around_max | How close around the mode the majority of samples must be. This is given in units of rebinned samples, so if this value is 3 and the rebin value is 1, then the region around the max is 6 ADC samples (3 << 1) in each direction. Default 3 |
-| baseline_fraction_around_max | What fraction of total samples in the pulse must be around the mode for the pulse to be accepted. Default 0.8. |
-| baseline_triggers_per_step | How many software triggers to send for each baseline step. Default 3. |
-| baseline_ms_between_triggers | How long between software triggers. Default 10. |
-| blt_size | How many bytes to read from the digitizer during each BLT readout. Default 0x80000. |
-| blt_safety_factor | Sometimes the digitizer returns more bytes during a BLT readout than you ask for (it depends on the number and size of events in the digitizer's memory). This value is how much extra memory to allocate so you don't overrun the readout buffer. Default 1.5. |
-| buffer_safety_factor | Same, except for the longer-lived buffer that redax carries until data is processed and queued for compression. Default 1.1. |
-| do_sn_check | Whether or not to have each board check its serial number during initialization. Default 1. |
-| buffer_type | The StraxInserter can either ask the DAQController for one event at a time to process (buffer_type = 'single') or it can ask for several events to store in its own buffer (buffer_type = 'dual'). All accesses to the DAQController buffer are mutexed, so in high-rate modes it's better to use the dual-buffer setup. Default 'dual' |
+| baseline_max_iterations | Int. The maximum number of overall iterations to go through when fitting baselines. Baselining runs until either this number of iterations are completed, or the baselines converge, whichever happens first. Default 2. |
+| baseline_max_steps | Int. The maximum number of steps per iteration during baselining. Steps involve measuring the baseline and trying to adjust it towards the target value. Default 20. |
+| baseline_adjustment_threshold | Int. How close the measured baseline must be to the target baseline in ADC units. If the absolute difference is less than this value, a channel is considered to have converged. Default 10. |
+| baselie_convergence_threshold | Int. How many consecutive times a channel must be within the adjustment threshold to be considered stable and finished. Default 3. |
+| baseline_min_adjustment | Int. The minimum change to the DAC value, given in DAC units. Note that the DAC is 16-bit while the digitizer is only 14-bit, so a conversion of approximately 0.25 does apply. Default 10. |
+| baseline_rebin_log2 | Int. How much to rebin samples by when calculating the baseline. This is intended to provide some level of noise immunity. Samples are bit-shifted right by this value (ie, sample >> value). Default 1. |
+| baseline_bins_around_max | Int. How close around the mode the majority of samples must be. This is given in units of rebinned samples, so if this value is 3 and the rebin value is 1, then the region around the max is 6 ADC samples (3 << 1) in each direction. Default 3 |
+| baseline_fraction_around_max | Float. What fraction of total samples in the pulse must be around the mode for the pulse to be accepted. Default 0.8. |
+| baseline_triggers_per_step | Int. How many software triggers to send for each baseline step. Default 3. |
+| baseline_ms_between_triggers | Int. How long between software triggers. Default 10. |
+| blt_size | Int. How many bytes to read from the digitizer during each BLT readout. Default 0x80000. |
+| blt_safety_factor | Float. Sometimes the digitizer returns more bytes during a BLT readout than you ask for (it depends on the number and size of events in the digitizer's memory). This value is how much extra memory to allocate so you don't overrun the readout buffer. Default 1.5. |
+| buffer_safety_factor | Float. Same, except for the longer-lived buffer that redax carries until data is processed and queued for compression. Default 1.1. |
+| do_sn_check | 0/1. Whether or not to have each board check its serial number during initialization. Default 0. |
+| buffer_type | "single"/"dual". The StraxInserter can either ask the DAQController for one event at a time to process (buffer_type = 'single') or it can ask for several events to store in its own buffer (buffer_type = 'dual'). All accesses to the DAQController buffer are mutexed, so in high-rate modes it's better to use the dual-buffer setup. Default 'dual' |
+| max_events_per_thread | Int. The maximum number of data packets to give to a single processing thread at once. Default 1024. |

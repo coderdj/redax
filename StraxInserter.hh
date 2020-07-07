@@ -13,7 +13,6 @@
 #include <numeric>
 #include <atomic>
 #include <vector>
-#include <chrono>
 #include <thread>
 
 class DAQController;
@@ -29,7 +28,6 @@ struct data_packet{
     u_int32_t clock_counter;
     u_int32_t header_time;
     int bid;
-    std::vector<u_int32_t> vBLT;
 };
 
 
@@ -59,7 +57,7 @@ private:
   int ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int);
   void WriteOutFiles(bool end=false);
   void GenerateArtificialDeadtime(int64_t, int16_t, uint32_t, int);
-  void AddFragmentToBuffer(std::string&&, int64_t, uint32_t, int);
+  void AddFragmentToBuffer(std::string&, int64_t, uint32_t, int);
 
   std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
   std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
@@ -69,8 +67,8 @@ private:
 
   int64_t fChunkLength; // ns
   int64_t fChunkOverlap; // ns
-  int fFragmentBytes; // This is in BYTES
-  int fStraxHeaderSize; // in BYTES too
+  int fFragmentBytes;
+  int fStraxHeaderSize; // bytes
   int fBufferNumChunks;
   int fWarnIfChunkOlderThan;
   unsigned fChunkNameLength;
@@ -91,12 +89,11 @@ private:
   std::mutex fDPC_mutex;
   std::map<int, long> fBufferCounter;
   std::atomic_int fBufferLength;
-  std::map<std::string, std::chrono::system_clock::time_point> fTimeLastSeen;
   long fBytesProcessed;
   long fFragmentsProcessed;
   long fEventsProcessed;
 
-  std::chrono::microseconds fProcTimeDP, fProcTimeEv, fProcTimeCh, fCompTime;
+  double fProcTimeDP, fProcTimeEv, fProcTimeCh, fCompTime;
   std::thread::id fThreadId;
 };
 

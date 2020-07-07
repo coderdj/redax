@@ -25,6 +25,7 @@ public:
 
   virtual int SINStart();
   virtual int SoftwareStart();
+  virtual int AcquisitionStop();
   virtual int SWTrigger() {return NoiseInjection();}
   virtual int Reset();
   virtual bool EnsureReady(int, int) {return sReady || sRun;}
@@ -63,6 +64,7 @@ protected:
   void ReceiveFromGenerator(const std::vector<std::pair<int, double>>&, long);
   std::vector<std::vector<double>> MakeWaveform(const std::vector<std::pair<int, double>>&, int&);
   void ConvertToDigiFormat(const std::vector<std::vector<double>>&, int);
+
   int NoiseInjection();
 
   std::thread fGeneratorThread;
