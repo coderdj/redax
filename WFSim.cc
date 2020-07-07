@@ -20,8 +20,8 @@ std::atomic_bool WFSim::sRun, WFSim::sReady;
 fax_options_t WFSim::sFaxOptions;
 int WFSim::sNumPMTs;
 vector<WFSim*> WFSim::sRegistry;
-vector<pair<double, double>> sPMTxy;
-std::condition_variable sCV;
+vector<pair<double, double>> WFSim::sPMTxy;
+std::condition_variable WFSim::sCV;
 
 pair<double, double> PMTiToXY(int i) {
   if (i == 0) return std::make_pair(0., 0.);
