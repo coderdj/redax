@@ -12,6 +12,9 @@ public:
   virtual int CrateInit(CrateOptions, int, int) {}
   virtual int SendStartSignal();
   virtual int SendStopSignal(bool=true);
+
+private:
+  int SendSignal(const std::string&);
 };
 
 #endif // _F2718_HH_ defined

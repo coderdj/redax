@@ -26,7 +26,7 @@ class V1724{
     return fBID;
   };
 
-  int LoadDAC(std::vector<u_int16_t> &dac_values);
+  virtual int LoadDAC(std::vector<u_int16_t> &dac_values);
   void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
   unsigned GetNumChannels() {return fNChannels;}
   int SetThresholds(std::vector<u_int16_t> vals);

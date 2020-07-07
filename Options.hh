@@ -59,11 +59,10 @@ struct HEVOptions{
 };
 
 struct fax_options_t {
-  int tpc_length; // mm
-  int tpc_radius; // mm
+  int tpc_size; // PMTs
   double rate; // 1/ns
-  double drift_speed; // mm/ns
-  double e_absorbtion_length; // mm
+  double drift_speed; // PMTs/ns
+  double e_absorbtion_length; // TPC lengths
 };
 
 class MongoLog;

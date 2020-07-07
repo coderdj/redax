@@ -11,7 +11,6 @@
 #include <utility>
 #include <tuple>
 #include <array>
-#include <sys/socket.h>
 
 class WFSim : public V1724 {
 public:
@@ -24,14 +23,13 @@ public:
   virtual unsigned int ReadRegister(unsigned int);
   virtual int End();
 
-  virtual int SINStart() {return 1;} // not implemented yet
+  virtual int SINStart();
   virtual int SoftwareStart();
-  virtual int AcquisitionStop() {fRun = false; return 0;}
   virtual int SWTrigger() {return NoiseInjection();}
   virtual int Reset();
-  virtual bool EnsureReady(int, int) {return true;}
-  virtual bool EnsureStarted(int, int) {return fRun;}
-  virtual bool EnsureStopped(int, int) {return fRun;}
+  virtual bool EnsureReady(int, int) {return sReady || sRun;}
+  virtual bool EnsureStarted(int, int) {return fRun==true;}
+  virtual bool EnsureStopped(int, int) {return fRun==false;}
   virtual int CheckErrors() {return 0;}
   virtual uint32_t GetAcquisitionStatus();
 
@@ -42,7 +40,8 @@ protected:
   static std::tuple<double, double, double> GenerateEventLocation();
   static std::array<int, 3> GenerateEventSize(double, double, double);
   static std::vector<std::pair<int, double>> MakeHitpattern(int, int, double, double, double);
-  static void SendToWorkers(std::vector<std::pair<int, double>>&);
+  static void SendToWorkers(const std::vector<std::pair<int, double>>&);
+  static void WaitForSignal();
 
   static std::thread sGeneratorThread;
   static std::mutex sMutex;
@@ -52,19 +51,18 @@ protected:
   static long sClock;
   static int sEventCounter;
   static std::atomic_bool sRun;
-  static bool sInit;
+  static std::atomic_bool sReady;
   static fax_options_t sFaxOptions;
   static int sNumPMTs;
   static std::vector<WFSim*> sRegistry;
   static std::vector<std::pair<double, double>> sPMTxy;
   static std::condition_variable sCV;
-  static std::mutex sCV;
 
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
   void Run();
-  void ReceiveFromGenerator(const std::vector<std::pair<int, double>>&, long, int);
+  void ReceiveFromGenerator(const std::vector<std::pair<int, double>>&, long);
   std::vector<std::vector<double>> MakeWaveform(const std::vector<std::pair<int, double>>&, int&);
-  int ConvertToDigiFormat(const std::vector<std::vector<double>>&, int);
+  void ConvertToDigiFormat(const std::vector<std::vector<double>>&, int);
   int NoiseInjection();
 
   std::thread fGeneratorThread;
@@ -79,7 +77,7 @@ protected:
   std::vector<std::pair<int, double>> fWFprimitive;
   std::condition_variable fCV;
   long fTimestamp;
-  int fEventNumber;
+  int fEventCounter;
 };
 
 #endif // _WFSIM_HH_ defined
