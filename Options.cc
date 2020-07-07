@@ -385,8 +385,7 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
 int Options::GetFaxOptions(fax_options_t& options) {
   try{
     options.rate = bson_options["fax_options"]["rate"].get_double().value;
-    options.tpc_radius = bson_options["fax_options"]["tpc_radius"].get_int32().value;
-    options.tpc_length = bson_options["fax_options"]["tpc_length"].get_int32().value;
+    options.tpc_size = bson_options["fax_options"]["tpc_size"].get_int32().value;
     options.e_absorbtion_length = bson_options["fax_options"]["e_absorbtion_length"].get_double().value;
     options.drift_speed = bson_options["fax_options"]["drift_speed"].get_double().value;
     return 0;
