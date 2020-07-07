@@ -93,7 +93,7 @@ void WFSim::GlobalInit(fax_options_t& fax_options) {
     int PMTsPerArray = sNumPMTs/2;
     sPMTxy.reserve(sNumPMTs);
     for (int p = 0; p < sNumPMTs; p++)
-      sPMTxy.emplace_back(PMTiToXy(p % PMTsPerArray));
+      sPMTxy.emplace_back(PMTiToXY(p % PMTsPerArray));
 
     sGeneratorThread = std::thread(&WFSim::GlobalRun);
   }
@@ -314,7 +314,7 @@ void WFSim::GlobalRun() {
   sClock = (0.5+sFlatDist(sGen))*10000000;
   sEventCounter = 0;
   {
-    const std::lock_guard<std::mutex> lg(sMutex);
+    std::lock_guard<std::mutex> lg(sMutex);
     sCV.wait(lg, []{return sReady == false;});
   }
   while (sRun == true) {
