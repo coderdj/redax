@@ -17,7 +17,6 @@ std::uniform_real_distribution<> WFSim::sFlatDist;
 long WFSim::sClock;
 int WFSim::sEventCounter;
 std::atomic_bool WFSim::sRun, WFSim::sReady;
-bool WFSim::sInit;
 fax_options_t WFSim::sFaxOptions;
 int WFSim::sNumPMTs;
 vector<WFSim*> WFSim::sRegistry;
@@ -104,7 +103,7 @@ void WFSim::GlobalDeinit() {
   const std::lock_guard<std::mutex> lg(sMutex);
   if (sGeneratorThread.joinable()) {
     sRun = sReady = false;
-    sGeneratorThread::join();
+    sGeneratorThread.join();
   }
 }
 
@@ -137,7 +136,7 @@ int WFSim::SINStart() {
 int WFSim::AcquisitionStop() {
   GlobalDeinit();
   fRun = false;
-  if (fGeneratorThread.joinable() fGeneratorThread.join();
+  if (fGeneratorThread.joinable()) fGeneratorThread.join();
   Reset();
   return 0;
 }
@@ -163,9 +162,9 @@ int WFSim::ReadMBLT(uint32_t* &buffer) {
 
 std::tuple<double, double, double> WFSim::GenerateEventLocation() {
   double offset = 0.5; // min number of PMTs between S1 and S2 to prevent overlap
-  double z = -1.*sFlatDist(fGen)*(2*sFaxOptions.tpc_size-offset)-offset;
-  double r = sFlatDist(fGen)*sFaxOptions.tpc_radius; // no, this isn't uniform
-  double theta = sFlatDist(fGen)*2*PI();
+  double z = -1.*sFlatDist(sGen)*(2*sFaxOptions.tpc_size-offset)-offset;
+  double r = sFlatDist(sGen)*sFaxOptions.tpc_size; // no, this isn't uniform
+  double theta = sFlatDist(sGen)*2*PI();
   return {r*std::cos(theta), r*std::sin(theta), z};
 }
 
@@ -178,7 +177,6 @@ std::array<int, 3> WFSim::GenerateEventSize(double, double, double z) {
 }
 
 vector<pair<int, double>> WFSim::MakeHitpattern(int s_i, int photons, double x, double y, double z) {
-  double r = std::hypot(x,y), theta = std::atan2(y,x);
   double signal_width = s_i == 1 ? 40 : 1000.+200.*std::sqrt(std::abs(z));
   vector<pair<int, double>> ret(photons); // { {pmt id, hit time}, {pmt id, hit time} ... }
   vector<double> hit_prob(sNumPMTs, 0.);
@@ -194,13 +192,13 @@ vector<pair<int, double>> WFSim::MakeHitpattern(int s_i, int photons, double x, 
     double gaus_std = 1.3; // PMTs wide
     auto gen = [&](std::pair<double, double>& p){
       return std::exp(-(std::pow(p.first-x, 2)+std::pow(p.second-y, 2))/(2*gaus_std*gaus_std));
-    }
+    };
 
     std::transform(sPMTxy.begin(), sPMTxy.begin()+TopPMTs, hit_prob.begin(), gen);
     // normalize
     double total_top_prob = std::accumulate(hit_prob.begin(), hit_prob.begin()+TopPMTs, 0.);
     std::transform(hit_prob.begin(), hit_prob.begin()+TopPMTs, hit_prob.begin(),
-        [](double x){return top_fraction*x/total_top_prob;});
+        [&](double x){return top_fraction*x/total_top_prob;});
   }
   // bottom array probability simpler to calculate
   std::fill(hit_prob.begin()+TopPMTs, hit_prob.end(), (1.-top_fraction)/TopPMTs);
@@ -278,7 +276,7 @@ void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
   buffer.append((char*)&word, sizeof(word));
   buffer.append((char*)&mask, sizeof(mask));
   buffer.append((char*)&fEventCounter, sizeof(fEventCounter));
-  uint32_t timestamp = fClock/DataFormatDefinition["ns_per_sample"];
+  uint32_t timestamp = fTimestamp/DataFormatDefinition["ns_per_sample"];
   buffer.append((char*)&timestamp, sizeof(timestamp));
   uint16_t sample, baseline(16000);
   for (auto& ch_wf : wf) {
@@ -307,14 +305,13 @@ int WFSim::NoiseInjection() {
   return 0;
 }
 
-static void WFSim::GlobalRun() {
+void WFSim::GlobalRun() {
   std::exponential_distribution<> rate(sFaxOptions.rate);
   double x, y, z, t_max;
-  int mask;
   long time_to_next;
   std::array<int, 3> photons; // S1 = 1
   vector<pair<int, double>> hits;
-  sClock = (0.5+sFlatDist(fGen))*10000000;
+  sClock = (0.5+sFlatDist(sGen))*10000000;
   sEventCounter = 0;
   {
     const std::lock_guard<std::mutex> lg(sMutex);
@@ -332,7 +329,7 @@ static void WFSim::GlobalRun() {
         t_max = std::max(t_max, hit.second);
       }
 
-      time_to_next = (s_i == 1 ? std::abs(z/fFaxOptions.drift_speed) : rate(fGen)) + t_max;
+      time_to_next = (s_i == 1 ? std::abs(z/sFaxOptions.drift_speed) : rate(sGen)) + t_max;
       sClock += time_to_next;
       std::this_thread::sleep_for(std::chrono::nanoseconds(time_to_next));
     }

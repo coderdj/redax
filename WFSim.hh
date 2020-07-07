@@ -11,6 +11,7 @@
 #include <utility>
 #include <tuple>
 #include <array>
+#include <condition_variable>
 
 class WFSim : public V1724 {
 public:
@@ -36,7 +37,7 @@ public:
 
 protected:
   static void GlobalRun();
-  static void GlobalInit();
+  static void GlobalInit(fax_options_t&);
   static void GlobalDeinit();
   static std::tuple<double, double, double> GenerateEventLocation();
   static std::array<int, 3> GenerateEventSize(double, double, double);
@@ -78,8 +79,10 @@ protected:
   std::mutex fMutex;
   std::vector<std::pair<int, double>> fWFprimitive;
   std::condition_variable fCV;
+  fax_options_t fFaxOptions;
   long fTimestamp;
   int fEventCounter;
+  std::atomic_bool fRun;
 };
 
 #endif // _WFSIM_HH_ defined
