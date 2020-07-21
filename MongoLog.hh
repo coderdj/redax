@@ -85,9 +85,6 @@ private:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
-  std::thread fFlushThread;
-  std::atomic_bool fFlush;
-  int fFlushPeriod;
 };
 
 #endif
