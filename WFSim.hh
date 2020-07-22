@@ -37,7 +37,7 @@ public:
 
 protected:
   static void GlobalRun();
-  static void GlobalInit(fax_options_t&);
+  static void GlobalInit(fax_options_t&, MongoLog*);
   static void GlobalDeinit();
   static std::tuple<double, double, double> GenerateEventLocation();
   static std::array<int, 3> GenerateEventSize(double, double, double);
@@ -59,10 +59,11 @@ protected:
   static std::vector<WFSim*> sRegistry;
   static std::vector<std::pair<double, double>> sPMTxy;
   static std::condition_variable sCV;
+  static MongoLog* sLog;
 
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
   void Run();
-  void ReceiveFromGenerator(const std::vector<std::pair<int, double>>&, long);
+  void ReceiveFromGenerator(std::vector<std::pair<int, double>>&&, long);
   std::vector<std::vector<double>> MakeWaveform(const std::vector<std::pair<int, double>>&, int&);
   void ConvertToDigiFormat(const std::vector<std::vector<double>>&, int);
 
