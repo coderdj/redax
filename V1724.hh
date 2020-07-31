@@ -19,12 +19,10 @@ class V1724{
   int ReadMBLT(u_int32_t* &buffer);
   int WriteRegister(unsigned int reg, unsigned int value);
   unsigned int ReadRegister(unsigned int reg);
-  int GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num);
+  int GetClockCounter(u_int32_t timestamp);
   int End();
 
-  int bid(){
-    return fBID;
-  };
+  int bid() {return fBID;}
 
   int LoadDAC(std::vector<u_int16_t> &dac_values);
   void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
@@ -66,19 +64,17 @@ protected:
   int BLT_SIZE;
   std::map<int, long> fBLTCounter;
 
-  bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
-		       int sleep, u_int32_t val=1);
+  bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep, u_int32_t val=1);
   Options *fOptions;
   int fBoardHandle;
-  int fLink, fCrate, fBID;  
+  int fLink, fCrate, fBID;
   unsigned int fBaseAddress;
 
   // Stuff for clock reset tracking
-  u_int32_t clock_counter;
-  u_int32_t last_time;
-  u_int32_t last_event_num;
-  bool seen_under_5;
-  bool seen_over_15;
+  u_int32_t fRolloverCounter;
+  u_int32_t fLastClock;
+  bool seen_under_5, seen_over_15;
+  std::map<int, int> fClockCases;
 
   MongoLog *fLog;
 
