@@ -55,6 +55,9 @@ V1724::V1724(MongoLog  *log, Options *options){
   fBLTSafety = 1.4;
   fBufferSafety = 1.1;
 
+  seen_under_5 = true;
+  seen_over_15 = false;
+
 }
 
 V1724::~V1724(){
@@ -71,6 +74,10 @@ V1724::~V1724(){
       }
     }
   }
+  fLog->Entry(MongoLog::Local, msg.str());
+  msg.str("");
+  msg << "Clock report for board " << fBID;
+  for (auto& p : fClockCases) msg << " | " << p.first << ' ' << int(std::log2(p.second));
   fLog->Entry(MongoLog::Local, msg.str());
 }
 
@@ -127,7 +134,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   fBID = bid;
   fBaseAddress=address;
   clock_counter = 0;
-  last_time = 0;
+  fLastClock = 0;
   last_event_num = 0;
   seen_over_15 = false;
   seen_under_5 = true; // starts run as true
@@ -170,16 +177,14 @@ int V1724::Reset() {
   return ret;
 }
 
-u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size, u_int32_t& num){
+u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
   u_int32_t idx = 0;
   while(idx < size/sizeof(u_int32_t)){
     if(buff[idx]>>28==0xA){
-      num = buff[idx+2]&0xFFFFFF;
       return buff[idx+3]&0x7FFFFFFF;
     }
     idx++;
   }
-  num = 0;
   return 0xFFFFFFFF;
 }
 
@@ -197,64 +202,63 @@ int V1724::GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num){
   // time you see something under 5
 
   // First, is this number greater than the previous?
-  if(timestamp > last_time){
+  if(timestamp > fLastClock){
 
     // Case 1. This is over 15s but seen_under_5 is true. Give 1 back
-    if(timestamp >= 15e8 && seen_under_5 && clock_counter != 0)
+    if(timestamp >= 15e8 && seen_under_5 && clock_counter != 0) {
+      fClockCases[0] += 1;
       return clock_counter-1;
+    }
 
     // Case 2. This is over 5s and seen_under_5 is true.
     else if(timestamp >= 5e8 && timestamp < 15e8 && seen_under_5){
       seen_under_5 = false;
-      last_time = timestamp;
-      last_event_num = this_event_num;
+      fLastClock = timestamp;
+      fClockCases[1] += 1;
       return clock_counter;
     }
 
     // Case 3. This is over 15s and seen_under_5 is false
     else if(timestamp >= 15e8 && !seen_under_5){
       seen_over_15 = true;
-      last_time = timestamp;
-      last_event_num = this_event_num;
+      fLastClock = timestamp;
+      fClockCases[2] += 1;
       return clock_counter;
     }
 
     // Case 5. Anything else where the clock is progressing correctly
     else{
-      last_time = timestamp;
-      last_event_num = this_event_num;
+      fLastClock = timestamp;
+      fClockCases[3] += 1;
       return clock_counter;
     }
   }
 
   // Second, is this number less than the previous?
-  else if(timestamp < last_time){
+  else if(timestamp < fLastClock){
 
     // Case 1. Genuine clock reset. under 5s is false and over 15s is true
     if(timestamp < 5e8 && !seen_under_5 && seen_over_15){
       seen_under_5 = true;
       seen_over_15 = false;
-      last_time = timestamp;
-      last_event_num = this_event_num;
+      fLastClock = timestamp;
       clock_counter++;
+      fClockCases[4] += 1;
       return clock_counter;
     }
 
     // Case 2: Any other jitter within the 21 seconds, just return
     else{
+      fClockCases[5] += 1;
       return clock_counter;
     }
   }
   else{
-    if (last_event_num == this_event_num && last_event_num != 0)
       fLog->Entry(MongoLog::Warning,
-        "Board %i has odd clock counters. ts: %x, over_15: %i, under_5: %i, event %x",
-		fBID, timestamp, seen_over_15, seen_under_5, last_event_num);
-    else
-      fLog->Entry(MongoLog::Warning,
-          "Board %i has odd clock counters. ts: %x, over_15: %i, under_5: %i, last event %x, this event %x",
-          fBID, timestamp, seen_over_15, seen_under_5, last_event_num, this_event_num);
+          "Board %i has odd clock counters. ts: %x, over_15: %i, under_5: %i, last event %x",
+          fBID, timestamp, seen_over_15, seen_under_5, fLastClock);
     // Counter equal to last time, so we're happy and keep the same counter
+    fClockCases[6] += 1;
     return clock_counter;
   }
 }
