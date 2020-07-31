@@ -136,8 +136,6 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   clock_counter = 0;
   fLastClock = 0;
   last_event_num = 0;
-  seen_over_15 = false;
-  seen_under_5 = true; // starts run as true
   u_int32_t word(0);
   int my_bid(0);
   
