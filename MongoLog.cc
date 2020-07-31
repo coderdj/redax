@@ -17,9 +17,21 @@ MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays, std::string log_d
     RotateLogFile();
   }
   fLocalFileLogging = LocalFileLogging;
+  fFlush = true;
+  fFlushThread = std::thread(&MongoLog::Flusher, this);
 }
+
 MongoLog::~MongoLog(){
   fOutfile.close();
+}
+
+void MongoLog::Flusher() {
+  while (fFlush == true) {
+    std::this_thread::sleep_for(std::chrono::seconds(fFlushPeriod));
+    fMutex.lock();
+    if (fOutfile.is_open()) fOutfile << std::flush;
+    fMutex.unlock();
+  }
 }
 
 std::string MongoLog::FormatTime(struct tm* date) {

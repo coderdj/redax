@@ -87,6 +87,9 @@ private:
   int fToday;
   std::mutex fMutex;
   std::filesystem::path fOutputDir;
+  std::thread fFlushThread;
+  std::atomic_bool fFlush;
+  int fFlushPeriod;
 };
 
 #endif
