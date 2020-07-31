@@ -22,6 +22,8 @@ MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays, std::string log_d
 }
 
 MongoLog::~MongoLog(){
+  fFlush = false;
+  fFlushThread.join();
   fOutfile.close();
 }
 
