@@ -35,7 +35,7 @@ void UpdateStatus(std::string suri, std::string dbname, DAQController* controlle
       // Put in status update document
       auto insert_doc = bsoncxx::builder::stream::document{};
       insert_doc << "host" << hostname <<
-        "time" << duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count()<<
+        "time" << bsoncxx::types::b_date(system_clock::now())<<
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
 	"buffer_length" << controller->GetBufferLength() <<
@@ -81,7 +81,7 @@ int main(int argc, char** argv){
   if(argc >= 4)
     dbname = argv[3];
   if (argc >= 5)
-    log_dir = argc[4];
+    log_dir = argv[4];
 
   // We will consider commands addressed to this PC's ID 
   char chostname[HOST_NAME_MAX];

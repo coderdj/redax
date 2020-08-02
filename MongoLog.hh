@@ -13,7 +13,7 @@
 #include <vector>
 #include <atomic>
 #include <thread>
-#include <filesystem>
+#include <experimental/filesystem>
 
 #include <mongocxx/client.hpp>
 #include <mongocxx/collection.hpp>
@@ -53,7 +53,7 @@ class MongoLog{
   */
   
 public:
-  MongoLog(bool LocalFileLogging=false, int DeleteAfterDays, std::string log_dir);
+  MongoLog(bool LocalFileLogging=false, int DeleteAfterDays=7, std::string log_dir=".");
   ~MongoLog();
   
   int  Initialize(std::string connection_string,
@@ -86,7 +86,7 @@ private:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
-  std::filesystem::path fOutputDir;
+  std::experimental::filesystem::path fOutputDir;
   std::thread fFlushThread;
   std::atomic_bool fFlush;
   int fFlushPeriod;
