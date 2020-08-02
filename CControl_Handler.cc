@@ -165,7 +165,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
   // Updating the status doc
   bsoncxx::builder::stream::document builder{};
   builder << "host" << hostname << "status" << fStatus <<
-    "time" << duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count();
+    "time" << bsoncxx::types::b_date(system_clock::now());
   auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
 
   if(fV2718 != NULL){
