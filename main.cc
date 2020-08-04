@@ -225,7 +225,7 @@ int main(int argc, char** argv){
 	    controller->Stop();
 	    if(readoutThreads.size() !=0){
 	      for(auto t : readoutThreads){
-		fLog->Entry(MongoLog::Local, "Joining orphaned readout thread");
+		logger->Entry(MongoLog::Local, "Joining orphaned readout thread");
 		t->join();
 		delete t;
 	      }
