@@ -19,6 +19,7 @@ MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays, std::string log_d
   fLocalFileLogging = LocalFileLogging;
   fFlush = true;
   fFlushThread = std::thread(&MongoLog::Flusher, this);
+  fRunId = "none";
 }
 
 MongoLog::~MongoLog(){
@@ -140,6 +141,7 @@ int MongoLog::Entry(int priority, std::string message, ...){
 				  "user" << fHostname <<
 				  "message" << message <<
 				  "priority" << priority <<
+                                  "runid" << fRunId <<
 				  bsoncxx::builder::stream::finalize);
     }
     catch(const std::exception &e){

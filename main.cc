@@ -225,7 +225,7 @@ int main(int argc, char** argv){
 	    controller->Stop();
 	    if(readoutThreads.size() !=0){
 	      for(auto t : readoutThreads){
-		std::cout<<"Joining orphaned readout thread"<<std::endl;
+		fLog->Entry(MongoLog::Local, "Joining orphaned readout thread");
 		t->join();
 		delete t;
 	      }
@@ -262,6 +262,7 @@ int main(int argc, char** argv){
 	    }
 	  else{
 	    initialized = true;
+            logger->SetRunId(fOptions->GetString("run_identifier","none"));
 	    logger->Entry(MongoLog::Debug, "Initialized electronics");
 	  }
 	    
