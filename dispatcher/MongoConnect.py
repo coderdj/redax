@@ -181,7 +181,7 @@ class MongoConnect():
         #  - If any single node reports error then the whole thing is in error
         #  - If any single node times out then the whole thing is in timeout
 
-        whattimeisit = time.time()
+        whattimeisit = datetime.datetime.utcnow()
         for detector in self.latest_status.keys():
             status_list = []
             status = None
@@ -209,8 +209,11 @@ class MongoConnect():
                     status = STATUS.UNKNOWN
 
                 # Now check if this guy is timing out
-                if "time" in doc.keys() and (whattimeisit - doc['time']/1000) > self.timeout:
-                    status = STATUS.TIMEOUT
+                try:
+                    if "time" in doc.keys() and (whattimeisit - doc['time']).seconds > self.timeout:
+                        status = STATUS.TIMEOUT
+                except:
+                    status = STATUS.UNKNOWN
 
                 status_list.append(status)
 
@@ -221,8 +224,11 @@ class MongoConnect():
                     status = STATUS(doc['status'])
                 except KeyError:
                     status = STATUS.UNKNOWN
-                if "time" in doc.keys() and (whattimeisit - doc['time']/1000) > self.timeout:
-                    status = STATUS.TIMEOUT
+                try:
+                    if "time" in doc.keys() and (whattimeisit - doc['time']).seconds > self.timeout:
+                        status = STATUS.TIMEOUT
+                except:
+                    status = STATUS.UNKNOWN
                 status_list.append(status)
 
             # Now we aggregate the statuses
