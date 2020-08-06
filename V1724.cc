@@ -64,16 +64,8 @@ V1724::~V1724(){
   End();
   if (fBLTCounter.empty()) return;
   std::stringstream msg;
-  msg << "BLT report for board " << fBID << "(BLT " << BLT_SIZE << "): ";
-  for (auto p : fBLTCounter) {
-    msg << p.first << " ";
-    for (int i = 63; i >= 0; i--) {
-      if (p.second & (1L << i)) { // log2
-        msg << i << " | ";
-        break;
-      }
-    }
-  }
+  msg << "BLT report for board " << fBID << " (BLT " << BLT_SIZE << ")";
+  for (auto p : fBLTCounter) msg << " | " << p.first << " " << int(std::log2(p.second));
   fLog->Entry(MongoLog::Local, msg.str());
   msg.str("");
   msg << "Clock report for board " << fBID;
@@ -186,7 +178,7 @@ u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
   return 0xFFFFFFFF;
 }
 
-int V1724::GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num){
+int V1724::GetClockCounter(u_int32_t timestamp){
   // The V1724 has a 31-bit on board clock counter that counts 10ns samples.
   // So it will reset every 21 seconds. We need to count the resets or we
   // can't run longer than that. But it's not as simple as incementing a
