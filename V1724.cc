@@ -125,9 +125,8 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   fCrate = crate;
   fBID = bid;
   fBaseAddress=address;
-  clock_counter = 0;
+  fRolloverCounter = 0;
   fLastClock = 0;
-  last_event_num = 0;
   u_int32_t word(0);
   int my_bid(0);
   
@@ -195,9 +194,9 @@ int V1724::GetClockCounter(u_int32_t timestamp){
   if(timestamp > fLastClock){
 
     // Case 1. This is over 15s but seen_under_5 is true. Give 1 back
-    if(timestamp >= 15e8 && seen_under_5 && clock_counter != 0) {
+    if(timestamp >= 15e8 && seen_under_5 && fRolloverCounter != 0) {
       fClockCases[0] += 1;
-      return clock_counter-1;
+      return fRolloverCounter-1;
     }
 
     // Case 2. This is over 5s and seen_under_5 is true.
@@ -205,7 +204,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
       seen_under_5 = false;
       fLastClock = timestamp;
       fClockCases[1] += 1;
-      return clock_counter;
+      return fRolloverCounter;
     }
 
     // Case 3. This is over 15s and seen_under_5 is false
@@ -213,14 +212,14 @@ int V1724::GetClockCounter(u_int32_t timestamp){
       seen_over_15 = true;
       fLastClock = timestamp;
       fClockCases[2] += 1;
-      return clock_counter;
+      return fRolloverCounter;
     }
 
     // Case 5. Anything else where the clock is progressing correctly
     else{
       fLastClock = timestamp;
       fClockCases[3] += 1;
-      return clock_counter;
+      return fRolloverCounter;
     }
   }
 
@@ -232,15 +231,15 @@ int V1724::GetClockCounter(u_int32_t timestamp){
       seen_under_5 = true;
       seen_over_15 = false;
       fLastClock = timestamp;
-      clock_counter++;
+      fRolloverCounter++;
       fClockCases[4] += 1;
-      return clock_counter;
+      return fRolloverCounter;
     }
 
     // Case 2: Any other jitter within the 21 seconds, just return
     else{
       fClockCases[5] += 1;
-      return clock_counter;
+      return fRolloverCounter;
     }
   }
   else{
@@ -249,7 +248,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
           fBID, timestamp, seen_over_15, seen_under_5, fLastClock);
     // Counter equal to last time, so we're happy and keep the same counter
     fClockCases[6] += 1;
-    return clock_counter;
+    return fRolloverCounter;
   }
 }
 
