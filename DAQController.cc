@@ -244,7 +244,6 @@ void DAQController::ReadData(int link){
   fBufferMutex.unlock();
 
   u_int32_t board_status = 0;
-  u_int32_t event_number = 0;
   int readcycler = 0;
   int err_val = 0;
   std::list<data_packet*> local_buffer;
@@ -289,8 +288,8 @@ void DAQController::ReadData(int link){
       }
       if(dp->size>0){
         dp->bid = digi->bid();
-	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size, event_number);
-	dp->clock_counter = digi->GetClockCounter(dp->header_time, event_number);
+	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
+	dp->clock_counter = digi->GetClockCounter(dp->header_time);
         local_buffer.push_back(dp);
         local_size += dp->size;
         dp = nullptr;

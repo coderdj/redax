@@ -40,7 +40,7 @@ class V1724{
   bool EnsureStopped(int ntries, int sleep);
   int CheckErrors();
   u_int32_t GetAcquisitionStatus();
-  u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size, u_int32_t& num);
+  u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
 
   std::map<std::string, int> DataFormatDefinition;
 
