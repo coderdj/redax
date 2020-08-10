@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include <map>
+#include <chrono>
 
 class MongoLog;
 class Options;
@@ -73,8 +74,8 @@ protected:
   // Stuff for clock reset tracking
   u_int32_t fRolloverCounter;
   u_int32_t fLastClock;
-  bool seen_under_5, seen_over_15;
-  std::map<int, int> fClockCases;
+  std::chrono::high_resolution_clock::fLastClockTime;
+  std::chrono::nanoseconds fClockPeriod;
 
   MongoLog *fLog;
 
