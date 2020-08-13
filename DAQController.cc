@@ -3,6 +3,7 @@
 #include "V1724.hh"
 #include "V1724_MV.hh"
 #include "V1730.hh"
+#include "WFSim.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
 #include "StraxInserter.hh"
@@ -71,6 +72,8 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
       digi = new V1724_MV(fLog, fOptions);
     else if(d.type == "V1730")
       digi = new V1730(fLog, fOptions);
+    else if(d.type == "V1724_fax")
+      digi = new WFSim(fLog, fOptions);
     else
       digi = new V1724(fLog, fOptions);
 
@@ -186,7 +189,7 @@ int DAQController::Stop(){
   std::cout<<"Deactivating boards"<<std::endl;
   for( auto const& link : fDigitizers ){
     for(auto digi : link.second){
-      digi->AcquisitionStop();
+      digi->AcquisitionStop(true);
 
       // Ensure digitizer is stopped
       if(digi->EnsureStopped(1000, 1000) != true){

@@ -16,31 +16,32 @@ class V1724{
   V1724(MongoLog *log, Options *options);
   virtual ~V1724();
 
-  int Init(int link, int crate, int bid, unsigned int address=0);
-  int ReadMBLT(u_int32_t* &buffer);
-  int WriteRegister(unsigned int reg, unsigned int value);
-  unsigned int ReadRegister(unsigned int reg);
-  int GetClockCounter(u_int32_t timestamp);
-  int End();
+  virtual int Init(int link, int crate, int bid, unsigned int address=0);
+  virtual int ReadMBLT(u_int32_t* &buffer);
+  virtual int WriteRegister(unsigned int reg, unsigned int value);
+  virtual unsigned int ReadRegister(unsigned int reg);
+  virtual int GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num);
+  virtual int End();
 
   int bid() {return fBID;}
 
-  int LoadDAC(std::vector<u_int16_t> &dac_values);
+  virtual int LoadDAC(std::vector<u_int16_t> &dac_values);
   void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
   unsigned GetNumChannels() {return fNChannels;}
   int SetThresholds(std::vector<u_int16_t> vals);
 
   // Acquisition Control
-  int SINStart();
-  int SoftwareStart();
-  int AcquisitionStop();
-  int SWTrigger();
-  int Reset();
-  bool EnsureReady(int ntries, int sleep);
-  bool EnsureStarted(int ntries, int sleep);
-  bool EnsureStopped(int ntries, int sleep);
-  int CheckErrors();
-  u_int32_t GetAcquisitionStatus();
+
+  virtual int SINStart();
+  virtual int SoftwareStart();
+  virtual int AcquisitionStop(bool=false);
+  virtual int SWTrigger();
+  virtual int Reset();
+  virtual bool EnsureReady(int ntries, int sleep);
+  virtual bool EnsureStarted(int ntries, int sleep);
+  virtual bool EnsureStopped(int ntries, int sleep);
+  virtual int CheckErrors();
+  virtual u_int32_t GetAcquisitionStatus();
   u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
 
   std::map<std::string, int> DataFormatDefinition;

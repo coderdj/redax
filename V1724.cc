@@ -72,7 +72,7 @@ int V1724::SoftwareStart(){
   fLastClockTime = std::chrono::high_resolution_clock::now();
   return WriteRegister(fAqCtrlRegister, 0x104);
 }
-int V1724::AcquisitionStop(){
+int V1724::AcquisitionStop(bool){
   return WriteRegister(fAqCtrlRegister, 0x100);
 }
 int V1724::SWTrigger(){
