@@ -246,7 +246,7 @@ int V1724::GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num){
     }
   }
   else{
-    if (last_event_num == this_event_num && last_event_num != 0)
+  /*  if (last_event_num == this_event_num && last_event_num != 0)
       fLog->Entry(MongoLog::Warning,
         "Board %i has odd clock counters. ts: %x, over_15: %i, under_5: %i, event %x",
 		fBID, timestamp, seen_over_15, seen_under_5, last_event_num);
@@ -254,7 +254,7 @@ int V1724::GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num){
       fLog->Entry(MongoLog::Warning,
           "Board %i has odd clock counters. ts: %x, over_15: %i, under_5: %i, last event %x, this event %x",
           fBID, timestamp, seen_over_15, seen_under_5, last_event_num, this_event_num);
-    // Counter equal to last time, so we're happy and keep the same counter
+    // Counter equal to last time, so we're happy and keep the same counter*/
     return clock_counter;
   }
 }
