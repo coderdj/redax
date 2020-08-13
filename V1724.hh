@@ -75,7 +75,7 @@ protected:
   // Stuff for clock reset tracking
   u_int32_t fRolloverCounter;
   u_int32_t fLastClock;
-  std::chrono::high_resolution_clock::fLastClockTime;
+  std::chrono::high_resolution_clock::time_point fLastClockTime;
   std::chrono::nanoseconds fClockPeriod;
 
   MongoLog *fLog;
