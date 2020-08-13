@@ -13,8 +13,7 @@ MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays, std::string log_d
   fOutputDir = log_dir;
 
   if(LocalFileLogging){
-    std::cout<<"Configured WITH local file logging."<<std::endl;
-    RotateLogFile();
+    std::cout<<"Configured WITH local file logging to " << log_dir << std::endl;
   }
   fLocalFileLogging = LocalFileLogging;
   fFlush = true;
@@ -47,13 +46,17 @@ int MongoLog::Today(struct tm* date) {
   return (date->tm_year+1900)*10000 + (date->tm_mon+1)*100 + (date->tm_mday);
 }
 
+std::string MongoLog::LogFileName(struct tm* date) {
+  return std::to_string(Today(date)) + "_" + fHostname + ".log";
+}
+
 int MongoLog::RotateLogFile() {
   if (fOutfile.is_open()) fOutfile.close();
   auto t = std::time(0);
   auto today = *std::gmtime(&t);
-  std::stringstream fn;
-  fn << std::put_time(&today, fLogFileNameFormat.c_str());
-  fOutfile.open(fOutputDir / fn.str(), std::ofstream::out | std::ofstream::app);
+  std::string filename = LogFileName(&today);
+  std::cout<<fOutputDir/filename<<std::endl;
+  fOutfile.open(fOutputDir / filename, std::ofstream::out | std::ofstream::app);
   if (!fOutfile.is_open()) {
     std::cout << "Could not rotate logfile!\n";
     return -1;
@@ -101,6 +104,7 @@ int  MongoLog::Initialize(std::string connection_string,
 
   fHostname = host;
   fLogFileNameFormat = "%Y%m%d_" + host + ".log";
+  RotateLogFile();
 
   if(debug)
     fLogLevel = 1;
