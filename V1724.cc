@@ -186,17 +186,17 @@ int V1724::GetClockCounter(u_int32_t timestamp){
   int n_missed = dt / fClockPeriod;
   if (n_missed > 0) {
     fLog->Entry(MongoLog::Message, "Board %i missed %i rollovers", fBID, n_missed);
-    fClockRolloverCounter += n_missed;
+    fRolloverCounter += n_missed;
   }
 
   if (timestamp < fLastClock) {
     // actually rolled over
-    fClockRolloverCounter++;
+    fRolloverCounter++;
   } else {
     // not a rollover
   }
   fLastClock = timestamp;
-  return fClockRolloverCounter;
+  return fRolloverCounter;
 }
 
 int V1724::WriteRegister(unsigned int reg, unsigned int value){
