@@ -189,7 +189,7 @@ int DAQController::Stop(){
   std::cout<<"Deactivating boards"<<std::endl;
   for( auto const& link : fDigitizers ){
     for(auto digi : link.second){
-      digi->AcquisitionStop();
+      digi->AcquisitionStop(true);
 
       // Ensure digitizer is stopped
       if(digi->EnsureStopped(1000, 1000) != true){

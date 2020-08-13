@@ -80,7 +80,7 @@ int V1724::SINStart(){
 int V1724::SoftwareStart(){
   return WriteRegister(fAqCtrlRegister, 0x104);
 }
-int V1724::AcquisitionStop(){
+int V1724::AcquisitionStop(bool){
   return WriteRegister(fAqCtrlRegister, 0x100);
 }
 int V1724::SWTrigger(){

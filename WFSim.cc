@@ -66,9 +66,9 @@ int WFSim::Init(int, int, int bid, unsigned int) {
   fBID = bid;
   fGen = std::mt19937_64(fRD());
   fFlatDist = std::uniform_real_distribution<>(0., 1.);
-  fSPEtemplate = {0.0, 0.0, 0.0, 2.81e-2, 7.4, 6.07e1, 3.26e1, 1.33e1, 7.60, 5.71, 7.75, 4.46,
-      3.68, 3.31, 2.97, 2.74, 2.66, 2.48, 2.27, 2.15, 2.03, 1.93, 1.70, 1.68, 1.26, 7.86e-1,
-      5.36e-1, 4.36e-1, 3.11e-1, 2.15e-1};
+  fSPEtemplate = {0.0, 0.0, 0.0, 2.81e-2, 7.4, 6.07e1, 3.26e1, 1.33e1, 7.60, 5.71,
+    7.75, 4.46, 3.68, 3.31, 2.97, 2.74, 2.66, 2.48, 2.27, 2.15, 2.03, 1.93, 1.70,
+    1.68, 1.26, 7.86e-1, 5.36e-1, 4.36e-1, 3.11e-1, 2.15e-1};
   if (fOptions->GetFaxOptions(fFaxOptions)) {
     fLog->Entry(MongoLog::Message, "Using default fax options");
     fFaxOptions.rate = 1e-8; // 10 Hz in ns
@@ -136,7 +136,8 @@ int WFSim::SINStart() {
   return SoftwareStart();
 }
 
-int WFSim::AcquisitionStop() {
+int WFSim::AcquisitionStop(bool i_mean_it) {
+  if (!i_mean_it) return 0;
   GlobalDeinit();
   fRun = false;
   if (fGeneratorThread.joinable()) fGeneratorThread.join();

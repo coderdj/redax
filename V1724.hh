@@ -34,7 +34,7 @@ class V1724{
   // Acquisition Control
   virtual int SINStart();
   virtual int SoftwareStart();
-  virtual int AcquisitionStop();
+  virtual int AcquisitionStop(bool=false);
   virtual int SWTrigger();
   virtual int Reset();
   virtual bool EnsureReady(int ntries, int sleep);
