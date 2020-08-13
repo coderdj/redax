@@ -13,6 +13,7 @@
 #include <vector>
 #include <atomic>
 #include <thread>
+#include <experimental/filesystem>
 
 #include <mongocxx/client.hpp>
 #include <mongocxx/collection.hpp>
@@ -52,7 +53,7 @@ class MongoLog{
   */
   
 public:
-  MongoLog(bool LocalFileLogging=false, int DeleteAfterDays=7);
+  MongoLog(bool LocalFileLogging=false, int DeleteAfterDays=7, std::string log_dir=".");
   ~MongoLog();
   
   int  Initialize(std::string connection_string,
@@ -67,6 +68,7 @@ public:
   const static int Local   = -1; // Write to local (file) log only
 
   int Entry(int priority,std::string message, ...);
+  void SetRunId(const std::string& runid) {fRunId = runid;}
 
 private:
   void Flusher();
@@ -85,9 +87,11 @@ private:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
+  std::experimental::filesystem::path fOutputDir;
   std::thread fFlushThread;
   std::atomic_bool fFlush;
   int fFlushPeriod;
+  std::string fRunId;
 };
 
 #endif

@@ -1,17 +1,16 @@
 #include "MongoLog.hh"
-#include <experimental/filesystem>
 #include <iostream>
 #include <chrono>
 #include <mongocxx/uri.hpp>
 #include <mongocxx/database.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 
-MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays){
+MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays, std::string log_dir){
   fLogLevel = 0;
   fHostname = "_host_not_set";
-  fLogFileNameFormat = "%Y%m%d.log";
   fDeleteAfterDays = DeleteAfterDays;
   fFlushPeriod = 5; // seconds
+  fOutputDir = log_dir;
 
   if(LocalFileLogging){
     std::cout<<"Configured WITH local file logging."<<std::endl;
@@ -20,7 +19,9 @@ MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays){
   fLocalFileLogging = LocalFileLogging;
   fFlush = true;
   fFlushThread = std::thread(&MongoLog::Flusher, this);
+  fRunId = "none";
 }
+
 MongoLog::~MongoLog(){
   fFlush = false;
   fFlushThread.join();
@@ -31,7 +32,7 @@ void MongoLog::Flusher() {
   while (fFlush == true) {
     std::this_thread::sleep_for(std::chrono::seconds(fFlushPeriod));
     fMutex.lock();
-    fOutfile << std::flush;
+    if (fOutfile.is_open()) fOutfile << std::flush;
     fMutex.unlock();
   }
 }
@@ -52,7 +53,7 @@ int MongoLog::RotateLogFile() {
   auto today = *std::gmtime(&t);
   std::stringstream fn;
   fn << std::put_time(&today, fLogFileNameFormat.c_str());
-  fOutfile.open(fn.str(), std::ofstream::out | std::ofstream::app);
+  fOutfile.open(fOutputDir / fn.str(), std::ofstream::out | std::ofstream::app);
   if (!fOutfile.is_open()) {
     std::cout << "Could not rotate logfile!\n";
     return -1;
@@ -99,6 +100,7 @@ int  MongoLog::Initialize(std::string connection_string,
   }
 
   fHostname = host;
+  fLogFileNameFormat = "%Y%m%d_" + host + ".log";
 
   if(debug)
     fLogLevel = 1;
@@ -122,35 +124,32 @@ int MongoLog::Entry(int priority, std::string message, ...){
   va_end (args);
   message = &vec[0];
 
-  fMutex.lock();
+  std::unique_lock<std::mutex> lg(fMutex);
+
+  auto t = std::time(nullptr);
+  auto tm = *std::gmtime(&t);
+  std::stringstream msg;
+  msg<<FormatTime(&tm)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
+  std::cout << msg.str();
+  if(fLocalFileLogging){
+    if (Today(&tm) != fToday) RotateLogFile();
+    fOutfile<<msg.str();
+  }
   if(priority >= fLogLevel){
     try{
       fMongoCollection.insert_one(bsoncxx::builder::stream::document{} <<
 				  "user" << fHostname <<
 				  "message" << message <<
 				  "priority" << priority <<
+                                  "runid" << fRunId <<
 				  bsoncxx::builder::stream::finalize);
     }
     catch(const std::exception &e){
       std::cout<<"Failed to insert log message "<<message<<" ("<<
 	priority<<")"<<std::endl;
-      fMutex.unlock();
       return -1;
     }
   }
-
-  auto t = std::time(nullptr);
-  auto tm = *std::gmtime(&t);
-  std::stringstream msg;
-  msg<<FormatTime(&tm)<<" ["<<fPriorities[priority+1]
-	    <<"]: "<<message<<std::endl;
-  std::cout << msg.str();
-  if(fLocalFileLogging){
-    if (Today(&tm) != fToday) RotateLogFile();
-    fOutfile<<msg.str();
-  }
-  fMutex.unlock();
-
   return 0;
 }
 

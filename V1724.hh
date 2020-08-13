@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <vector>
 #include <map>
+#include <chrono>
 
 class MongoLog;
 class Options;
@@ -22,9 +23,7 @@ class V1724{
   virtual int GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num);
   virtual int End();
 
-  int bid(){
-    return fBID;
-  };
+  int bid() {return fBID;}
 
   virtual int LoadDAC(std::vector<u_int16_t> &dac_values);
   void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
@@ -32,6 +31,7 @@ class V1724{
   int SetThresholds(std::vector<u_int16_t> vals);
 
   // Acquisition Control
+
   virtual int SINStart();
   virtual int SoftwareStart();
   virtual int AcquisitionStop(bool=false);
@@ -42,7 +42,7 @@ class V1724{
   virtual bool EnsureStopped(int ntries, int sleep);
   virtual int CheckErrors();
   virtual u_int32_t GetAcquisitionStatus();
-  u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size, u_int32_t& num);
+  u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
 
   std::map<std::string, int> DataFormatDefinition;
 
@@ -66,19 +66,17 @@ protected:
   int BLT_SIZE;
   std::map<int, long> fBLTCounter;
 
-  virtual bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries,
-		       int sleep, u_int32_t val=1);
+  bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep, u_int32_t val=1);
   Options *fOptions;
   int fBoardHandle;
-  int fLink, fCrate, fBID;  
+  int fLink, fCrate, fBID;
   unsigned int fBaseAddress;
 
   // Stuff for clock reset tracking
-  u_int32_t clock_counter;
-  u_int32_t last_time;
-  u_int32_t last_event_num;
-  bool seen_under_5;
-  bool seen_over_15;
+  u_int32_t fRolloverCounter;
+  u_int32_t fLastClock;
+  std::chrono::high_resolution_clock::fLastClockTime;
+  std::chrono::nanoseconds fClockPeriod;
 
   MongoLog *fLog;
 
