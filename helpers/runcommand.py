@@ -1,79 +1,33 @@
 import os
-import sys
 from pymongo import MongoClient
-
-command = sys.argv[1]
-
-#client = MongoClient("mongodb://reader:%s@127.0.0.1:27017/dax"%os.environ["MONGO_PASSWORD"])
-#client = MongoClient("mongodb://dax:%s@ds129770.mlab.com:29770/dax"%os.environ["MONGO_PASSWORD"])
-client = MongoClient("mongodb://daq:%s@xenon1t-daq:27020/admin" % os.environ['MONGO_PASSWORD_DAQ'])
-
-db = client['daq']
-collection = db['control']
-
-try:
-    hostname = sys.argv[2]
-except:
-    hostname = os.uname()[1]
-    print("No hostname provided so assuming it's running locally at %s"%hostname)
-
-hostname = ['reader5_reader_0']
-
-try:
-    run_num = int(sys.argv[4])
-except:
-    run_num = 1
-    print("Didn't provide a run number so trying 1")
-
-try:
-    runmode = sys.argv[3]
-except:
-    runmode = 'test'
-    print("Didn't provide a run mode so trying 'test'")
+import argparse
+import datetime
 
 
+def main(coll):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--command', choices='arm stop start'.split(), required=True, help='The command')
+    parser.add_argument('--number', type=int, default=1, help='Run number')
+    parser.add_argument('--mode', help='Run mode', required=True)
+    parser.add_argument('--host', nargs='+', default=[os.uname()[1]], help="Hosts to issue to")
 
-doc = {}
-if command == 'start':
+    args = parser.parse_args()
 
     doc = {
-        "detector": "TPC",
-        "command": "start",
-        "run": run_num,
-        "mode": runmode,
-        "host": hostname,
-        "user": os.getlogin()        
-    }
-    
-elif command == 'stop':
+            "command": args.command,
+            "number": args.number,
+            "mode": args.mode,
+            "host": args.host,
+            "user": os.getlogin(),
+            "run_identifier": '%06i' % args.number,
+            "createdAt": datetime.datetime.utcnow()
+            }
+    coll.insert_one(doc)
+    return
 
-    doc = {
-        "detector": "TPC",
-        "command": "stop",
-        "run": run_num,
-        "mode": runmode,
-        "host": hostname,
-        "user": os.getlogin()
-    }
-
-elif command == 'arm':
-
-    doc = {
-        "detector": "TPC",
-        "mode": runmode,
-        "command": "arm",
-        "run": run_num,
-        "host": hostname,
-        "user": os.getlogin()
-    }
-                   
-else:
-    print("Usage: python runcommand.py {start/stop/arm} {host} {runmode} {run}")
-    exit(0)
-
-try:
-    collection.insert(doc)
-    print("Command sent!")
-except Exception as e:
-    print("Failed!")
-    print(str(e))
+if __name__ == '__main__':
+    with MongoClient("mongodb://daq:%s@xenon1t-daq:27017/admin" % os.environ['MONGO_PASSWORD_DAQ']) as client:
+        try:
+            main(client['daq']['options'])
+        except Exception as e:
+            print('%s: %s' % (type(e), e))

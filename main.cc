@@ -11,6 +11,7 @@
 #include <chrono>
 #include <thread>
 #include <atomic>
+#include <getopt.h>
 
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
@@ -58,8 +59,8 @@ void UpdateStatus(std::string suri, std::string dbname, DAQController* controlle
 }
 
 int PrintUsage() {
-  std::cout<<"Welcome to REDAX\nAccepted command-line arguments:"
-    << "--id <id number>: id number of this instance, required\n"
+  std::cout<<"Welcome to REDAX readout\nAccepted command-line arguments:"
+    << "--id <id number>: id number of this readout instance, required\n"
     << "--uri <mongo uri>: full MongoDB URI, required\n"
     << "--db <database name>: name of the database to use, default \"daq\"\n"
     << "--logdir <directory>: where to write the logs, default /live_data/redax_logs\n"
@@ -79,7 +80,7 @@ int main(int argc, char** argv){
   std::string current_run_id="none", log_dir = "/live_data/redax_logs";
   std::string dbname = "daq", suri = "", sid = "";
   int log_retention = 7; // days
-  int c;
+  int c, opt_index;
   struct option longopts[] = {
     {"id", required_argument, 0, 0},
     {"uri", required_argument, 0, 1},
@@ -101,7 +102,7 @@ int main(int argc, char** argv){
         return PrintUsage();
     }
   }
-  if (suri = "" || sid = "") return PrintUsage();
+  if (suri == "" || sid == "") return PrintUsage();
 
   // We will consider commands addressed to this PC's ID 
   char chostname[HOST_NAME_MAX];
