@@ -127,7 +127,7 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   fBufferSafety = fOptions->GetDouble("buffer_safety_factor", 1.1);
   BLT_SIZE = fOptions->GetInt("blt_size", 512*1024);
   // there's a more elegant way to do this, but I'm not going to write it
-  long clock_period = (1l << 31) * DataFormatDefinition["ns_per_clock"];
+  long clock_period = (1l << 31) * DataFormatDefinition["ns_per_clk"];
   fClockPeriod = std::chrono::nanoseconds(clock_period);
   fLog->Entry(MongoLog::Local, "Clock period %li ns", fClockPeriod.count());
 
