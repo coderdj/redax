@@ -188,7 +188,7 @@ std::vector<BoardType> Options::GetBoards(std::string type){
 
   std::vector <std::string> types;
   if(type == "V17XX")
-    types = {"V1724", "V1730", "V1724_MV", "V1724_fax"};
+    types = {"V1724", "V1730", "V1724_MV"};
   else
     types.push_back(type);
   
@@ -380,19 +380,6 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
   options.upsert(true);
   fDAC_collection.update_one(search_doc.view(), write_doc.view(), options);
   return;
-}
-
-int Options::GetFaxOptions(fax_options_t& options) {
-  try{
-    options.rate = bson_options["fax_options"]["rate"].get_double().value;
-    options.tpc_size = bson_options["fax_options"]["tpc_size"].get_int32().value;
-    options.e_absorbtion_length = bson_options["fax_options"]["e_absorbtion_length"].get_double().value;
-    options.drift_speed = bson_options["fax_options"]["drift_speed"].get_double().value;
-    return 0;
-  }catch(std::exception& e) {
-    fLog->Entry(MongoLog::Warning, "Error getting fax options: %s", e.what());
-    return -1;
-  }
 }
 
 void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
