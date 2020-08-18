@@ -20,7 +20,7 @@ class V1724{
   virtual int ReadMBLT(u_int32_t* &buffer);
   virtual int WriteRegister(unsigned int reg, unsigned int value);
   virtual unsigned int ReadRegister(unsigned int reg);
-  virtual int GetClockCounter(u_int32_t timestamp, u_int32_t this_event_num);
+  virtual int GetClockCounter(u_int32_t timestamp);
   virtual int End();
 
   int bid() {return fBID;}
@@ -75,7 +75,7 @@ protected:
   // Stuff for clock reset tracking
   u_int32_t fRolloverCounter;
   u_int32_t fLastClock;
-  std::chrono::high_resolution_clock::fLastClockTime;
+  std::chrono::high_resolution_clock::time_point fLastClockTime;
   std::chrono::nanoseconds fClockPeriod;
 
   MongoLog *fLog;
