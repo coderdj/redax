@@ -64,6 +64,7 @@ int PrintUsage() {
     << "--uri <mongo uri>: full MongoDB URI, required\n"
     << "--db <database name>: name of the database to use, default \"daq\"\n"
     << "--logdir <directory>: where to write the logs, default /live_data/redax_logs\n"
+    << "--help: print this message\n"
     << "\n";
   return 1;
 }
@@ -85,7 +86,8 @@ int main(int argc, char** argv){
     {"id", required_argument, 0, 0},
     {"uri", required_argument, 0, 1},
     {"db", required_argument, 0, 2},
-    {"logdir", required_argument, 0, 3}
+    {"logdir", required_argument, 0, 3},
+    {"help", no_argument, 0, 4}
   };
   while ((c = getopt_long(argc, argv, "", longopts, &opt_index)) != -1) {
     switch(c) {
@@ -97,6 +99,7 @@ int main(int argc, char** argv){
         dbname = optarg; break;
       case 3:
         log_dir = optarg; break;
+      case 4:
       default:
         std::cout<<"Received unknown arg\n";
         return PrintUsage();
