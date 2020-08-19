@@ -28,6 +28,6 @@ def main(coll):
 if __name__ == '__main__':
     with MongoClient("mongodb://daq:%s@xenon1t-daq:27017/admin" % os.environ['MONGO_PASSWORD_DAQ']) as client:
         try:
-            main(client['daq']['options'])
+            main(client['daq']['control'])
         except Exception as e:
             print('%s: %s' % (type(e), e))

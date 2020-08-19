@@ -79,6 +79,7 @@ public:
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
   void SaveBenchmarks(std::map<std::string, long>&, std::map<int, long>&, double, double, double, double);
+
 private:
   int Load(std::string, mongocxx::collection&, std::string);
   int Override(bsoncxx::document::view);

@@ -104,6 +104,7 @@ int  MongoLog::Initialize(std::string connection_string,
     fLogLevel = 1;
   else
     fLogLevel = 0;
+  RotateLogFile();
 
   return 0;
 }
