@@ -5,17 +5,14 @@
 #include <mongocxx/database.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 
-MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays, std::string log_dir){
+MongoLog::MongoLog(int DeleteAfterDays, std::string log_dir){
   fLogLevel = 0;
   fHostname = "_host_not_set";
   fDeleteAfterDays = DeleteAfterDays;
   fFlushPeriod = 5; // seconds
   fOutputDir = log_dir;
 
-  if(LocalFileLogging){
-    std::cout<<"Configured WITH local file logging to " << log_dir << std::endl;
-  }
-  fLocalFileLogging = LocalFileLogging;
+  std::cout<<"Configured WITH local file logging to " << log_dir << std::endl;
   fFlush = true;
   fFlushThread = std::thread(&MongoLog::Flusher, this);
   fRunId = "none";
@@ -55,7 +52,7 @@ int MongoLog::RotateLogFile() {
   auto t = std::time(0);
   auto today = *std::gmtime(&t);
   std::string filename = LogFileName(&today);
-  std::cout<<fOutputDir/filename<<std::endl;
+  std::cout<<"Logging to " << fOutputDir/filename<<std::endl;
   fOutfile.open(fOutputDir / filename, std::ofstream::out | std::ofstream::app);
   if (!fOutfile.is_open()) {
     std::cout << "Could not rotate logfile!\n";
@@ -75,9 +72,7 @@ int MongoLog::RotateLogFile() {
     }
     last_week.tm_mday += days_per_month[last_week.tm_mon]; // off by one error???
   }
-  std::stringstream s;
-  s << std::put_time(&last_week, fLogFileNameFormat.c_str());
-  std::experimental::filesystem::path p = s.str();
+  std::experimental::filesystem::path p = LogFileName(&last_week);
   if (std::experimental::filesystem::exists(p)) {
     fOutfile << FormatTime(&today) << " [INIT]: Deleting " << p << '\n';
     std::experimental::filesystem::remove(p);
@@ -103,7 +98,6 @@ int  MongoLog::Initialize(std::string connection_string,
   }
 
   fHostname = host;
-  fLogFileNameFormat = "%Y%m%d_" + host + ".log";
   RotateLogFile();
 
   if(debug)
@@ -135,10 +129,8 @@ int MongoLog::Entry(int priority, std::string message, ...){
   std::stringstream msg;
   msg<<FormatTime(&tm)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
   std::cout << msg.str();
-  if(fLocalFileLogging){
-    if (Today(&tm) != fToday) RotateLogFile();
-    fOutfile<<msg.str();
-  }
+  if (Today(&tm) != fToday) RotateLogFile();
+  fOutfile<<msg.str();
   if(priority >= fLogLevel){
     try{
       fMongoCollection.insert_one(bsoncxx::builder::stream::document{} <<

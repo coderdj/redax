@@ -122,7 +122,7 @@ int main(int argc, char** argv){
   mongocxx::collection dac_collection = db["dac_calibration"];
 
   // Logging
-  MongoLog *logger = new MongoLog(true, log_retention, log_dir);
+  MongoLog *logger = new MongoLog(log_retention, log_dir);
   int ret = logger->Initialize(suri, dbname, "log", hostname, true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;

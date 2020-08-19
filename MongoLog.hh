@@ -53,7 +53,7 @@ class MongoLog{
   */
   
 public:
-  MongoLog(bool LocalFileLogging=false, int DeleteAfterDays=7, std::string log_dir=".");
+  MongoLog(int DeleteAfterDays=7, std::string log_dir="./");
   ~MongoLog();
   
   int  Initialize(std::string connection_string,
@@ -82,9 +82,7 @@ private:
   mongocxx::client fMongoClient;
   mongocxx::collection fMongoCollection;
   std::string fHostname;
-  std::string fLogFileNameFormat;
   int fLogLevel;
-  bool fLocalFileLogging;
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;

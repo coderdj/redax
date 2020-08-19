@@ -47,16 +47,16 @@ int main(int argc, char** argv){
   while ((c = getopt_long(argc, argv, "", longopts, &opt_index)) != -1) {
     switch(c) {
       case 0:
-	sid = optarg; break;
+        sid = optarg; break;
       case 1:
-	mongo_uri = optarg; break;
+        mongo_uri = optarg; break;
       case 2:
-	dbname = optarg; break;
+        dbname = optarg; break;
       case 3:
-	log_dir = optarg; break;
+        log_dir = optarg; break;
       default:
-	std::cout<<"Received unknown arg\n";
-	return PrintUsage();
+        std::cout<<"Received unknown arg\n";
+        return PrintUsage();
     }
   }
   if (mongo_uri== "" || sid == "") return PrintUsage();
@@ -82,7 +82,7 @@ int main(int argc, char** argv){
   std::cout<<"I dub thee "<<hostname<<std::endl;
 
   // Logging
-  MongoLog *logger = new MongoLog(true, log_retention, log_dir);
+  MongoLog *logger = new MongoLog(log_retention, log_dir);
   int ret = logger->Initialize(mongo_uri, dbname, "log", hostname, true);
   if(ret!=0){
     std::cout<<"Log couldn't be initialized. Exiting."<<std::endl;
