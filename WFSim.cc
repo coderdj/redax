@@ -28,7 +28,7 @@ pair<double, double> PMTiToXY(int i) {
   if (i == 0) return std::make_pair(0., 0.);
   if (i < 7) return std::make_pair(std::cos((i-1)*PI()/3.), std::sin((i-1)*PI()/3.));
   int ring = 2;
-  // how many total PMTs are contained in a radius r? aka which ring is this PMT im
+  // how many total PMTs are contained in a radius r? aka which ring is this PMT in
   while (i > 3*ring*(ring+1)) ring++;
   int i_in_ring = i - (1 + 3*ring*(ring-1));
   int side = i_in_ring / ring;
@@ -54,7 +54,21 @@ int WFSim::End() {
   return 0;
 }
 
-int WFSim::WriteRegister(unsigned int, unsigned int) {
+int WFSim::WriteRegister(unsigned int reg, unsigned int val) {
+  if (reg == 0x8020 || (reg & 0x1020) == 0x1020) { // min record length
+
+  } else if (reg == 0x8038 || (reg & 0x1038) == 0x1038) { // pre-trigger
+
+  } else if (reg == 0x8060 || (reg & 0x1060) == 0x1060) { // trigger threshold
+
+  } else if (reg == 0x8078 || (reg & 0x1078) == 0x1078) { // samples under threshold
+
+  } else if (reg == 0x807C || (reg & 0x107C) == 0x107C) { // max tail
+
+  } else if (reg == 0x8098 || (reg & 0x1098) == 0x1098) { // DC offset
+    if (reg == 0x8098) std::fill_n(fBaseline.begin(), fBaseline.size(), val&0xFFFF);
+    else fBaseline[(reg>>8)&0xF] = (val&0xFFFF);
+  }
   return 0;
 }
 
@@ -78,6 +92,12 @@ int WFSim::Init(int, int, int bid, unsigned int) {
   }
   GlobalInit(fFaxOptions, fLog);
   sRegistry.push_back(this);
+  fBLoffset = fBLslope = fNoiseRMS = fBaseline = vector<double>(PMTsPerDigi, 0);
+  std::generate_n(fBLoffset.begin(), PMTsPerDigi, [&]{return 17000 + 400*fFlatDist(fGen);});
+  std::generate_n(fBLslope.begin(), PMTsPerDigi, [&]{return -0.27 + 0.01*fFlatDist(fGen);});
+  std::exponential_distribution<> noise(1);
+  std::generate_n(fNoiseRMS.begin(), PMTsPerDigi, [&]{return 4*noise(fGen);});
+  std::generate_n(fBaseline.begin(), PMTsPerDigi, [&]{return 13600 + 50*fFlatDist(fGen);};
   return 0;
 }
 
@@ -211,10 +231,6 @@ vector<pair<int, double>> WFSim::MakeHitpattern(int s_i, int photons, double x, 
   std::fill(hit_prob.begin()+TopPMTs, hit_prob.end(), (1.-top_fraction)/TopPMTs);
 
   hitpattern.param(std::discrete_distribution<>::param_type(hit_prob.begin(), hit_prob.end()));
-/*  std::stringstream msg;
-  msg << "Top frac: " << top_fraction <<" hit fracs: ";
-  for (auto d : hit_prob) msg << d << ' ';
-  sLog->Entry(MongoLog::Local, msg.str());*/
 
   std::generate_n(ret.begin(), photons,
       [&]{return std::make_pair(hitpattern(sGen), WFSim::sFlatDist(sGen)*signal_width);});
@@ -237,8 +253,8 @@ void WFSim::ReceiveFromGenerator(vector<pair<int, double>>&& in, long timestamp)
     const std::lock_guard<std::mutex> lg(fMutex);
     fWFprimitive = in;
     fTimestamp = timestamp;
-    fLog->Entry(MongoLog::Local, "Bd %i received %i hits ev %i ts %lx",
-	fBID, fWFprimitive.size(), fEventCounter, fTimestamp);
+//    fLog->Entry(MongoLog::Local, "Bd %i received %i hits ev %i ts %lx",
+//	fBID, fWFprimitive.size(), fEventCounter, fTimestamp);
     fEventCounter++;
   }
   fCV.notify_one();
@@ -256,16 +272,22 @@ vector<vector<double>> WFSim::MakeWaveform(const vector<pair<int, double>>& hits
   }
   fTimestamp += first_hit_time;
   // which channels contribute?
-  vector<int> pmt_arr(PMTsPerDigi, -1);
-  unsigned j = 0;
-  for (int i = 0; i < PMTsPerDigi; i++)
-    if (mask & (1<<i)) pmt_arr[i] = j++;
+  vector<int> pmt_to_ch(PMTsPerDigi, -1);
+  vector<int> ch_to_pmt;
+  for (int i = 0; i < PMTsPerDigi; i++) {
+    if (mask & (1<<i)) {
+      pmt_to_ch[i] = ch_to_pmt.size();
+      ch_to_pmt.push_back(i);
+    }
+  }
   //fLog->Entry(MongoLog::Local, "Bd %i Mask %x = %i ch", fBID, mask, j);
   int wf_length = fSPEtemplate.size() + last_hit_time/DataFormatDefinition["ns_per_sample"];
   wf_length += wf_length % 2 ? 1 : 2; // ensure an even number of samples with room
-  // start with a positive-going pulse, then invert in the next stage when we apply
-  // whatever baseline we want
-  vector<vector<double>> wf(j, vector<double>(wf_length, 0.));
+  vector<vector<double>> wf(ch_to_pmt.size(), vector<double>(wf_length, 0.));
+  for (unsigned i = 0; i < ch_to_pmt.size(); i++) {
+    std::normal_distribution<> noise{fBaseline[ch_to_pmt[i]], fNoiseRMS[ch_to_pmt[i]]};
+    std::generate_n(wf[i].begin(), wf_length, [&]{return noise(fGen);});
+  }
   std::normal_distribution<> hit_scale{1., 0.15};
   int offset;
   double scale;
@@ -273,18 +295,20 @@ vector<vector<double>> WFSim::MakeWaveform(const vector<pair<int, double>>& hits
     offset = hit.second/DataFormatDefinition["ns_per_sample"];
     scale = hit_scale(fGen);
     for (j = 0; j < fSPEtemplate.size(); j++) {
-      wf[pmt_arr[hit.first]][offset+j] += fSPEtemplate[j]*scale;
+      wf[pmt_arr[hit.first]][offset+j] -= fSPEtemplate[j]*scale;
     }
   }
   return wf;
 }
 
+// void WFSim::ZeroLengthEncode(vector<vector<double>>& wf)
+
 void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
-  const int overhead_words_per_channel = 2, overhead_words_per_event = 4;
+  const int overhead_per_channel = 2, overhead_per_event = 4;
   std::string buffer;
   uint32_t word = 0;
   for (auto& ch : wf) word += ch.size(); // samples
-  int words_this_event = word/2 + overhead_words_per_channel*wf.size() + overhead_words_per_event;
+  int words_this_event = word/2 + overhead_per_channel*wf.size() + overhead_per_event;
   buffer.reserve(words_this_event*sizeof(uint32_t));
   word = words_this_event | 0xA0000000;
   buffer.append((char*)&word, sizeof(word));
@@ -294,16 +318,16 @@ void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
   fLog->Entry(MongoLog::Local, "Bd %i header %x %x %lx", fBID, word, timestamp,
       fTimestamp);
   buffer.append((char*)&timestamp, sizeof(timestamp));
-  uint16_t sample, baseline(16000);
+  uint16_t sample;
   for (auto& ch_wf : wf) {
-    word = ch_wf.size()/2 + overhead_words_per_channel; // size is in samples
+    word = ch_wf.size()/2 + overhead_per_channel; // size is in samples
     buffer.append((char*)&word, sizeof(word));
     buffer.append((char*)&timestamp, sizeof(timestamp));
     for (unsigned i = 0; i < ch_wf.size(); i += 2) {
-      sample = ch_wf[i] > baseline ? 0 : baseline-ch_wf[i];
-      word = sample;
-      sample = ch_wf[i+1] > baseline ? 0 : baseline-ch_wf[i+1];
-      word |= (sample << 16);
+      sample = std::max(ch_wf[i], 0.);
+      word = sample & 0x3FFF;
+      sample = std::max(ch_wf[i+1], 0.);
+      word |= (sample << 16)&0x3FFF;
       buffer.append((char*)&word, sizeof(word));
     } // loop over samples
   } // loop over channels

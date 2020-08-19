@@ -80,6 +80,9 @@ protected:
   std::mutex fMutex;
   std::vector<std::pair<int, double>> fWFprimitive;
   std::condition_variable fCV;
+  std::vector<double> fBLoffset, fBLslope;
+  std::vector<double> fNoiseRMS;
+  std::vector<double> fBaseline;
   fax_options_t fFaxOptions;
   long fTimestamp;
   int fEventCounter;
