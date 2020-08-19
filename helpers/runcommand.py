@@ -4,11 +4,9 @@ from pymongo import MongoClient
 
 command = sys.argv[1]
 
-#client = MongoClient("mongodb://reader:%s@127.0.0.1:27017/dax"%os.environ["MONGO_PASSWORD"])
-#client = MongoClient("mongodb://dax:%s@ds129770.mlab.com:29770/dax"%os.environ["MONGO_PASSWORD"])
-client = MongoClient("mongodb://daq:%s@xenon1t-daq:27020/admin" % os.environ['MONGO_PASSWORD_DAQ'])
+client = MongoClient("mongodb://daq:%s@localhost:27017/admin" % os.environ['MONGO_ADMIN_PASSWORD'])
 
-db = client['daq']
+db = client['fax_test']
 collection = db['control']
 
 try:
@@ -17,7 +15,7 @@ except:
     hostname = os.uname()[1]
     print("No hostname provided so assuming it's running locally at %s"%hostname)
 
-hostname = ['reader5_reader_0']
+hostname = ['fdaq00_reader_0']
 
 try:
     run_num = int(sys.argv[4])
@@ -42,9 +40,9 @@ if command == 'start':
         "run": run_num,
         "mode": runmode,
         "host": hostname,
-        "user": os.getlogin()        
+        "user": os.getlogin()
     }
-    
+
 elif command == 'stop':
 
     doc = {
@@ -66,7 +64,7 @@ elif command == 'arm':
         "host": hostname,
         "user": os.getlogin()
     }
-                   
+
 else:
     print("Usage: python runcommand.py {start/stop/arm} {host} {runmode} {run}")
     exit(0)

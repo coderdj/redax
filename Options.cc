@@ -38,7 +38,7 @@ int Options::Load(std::string name, mongocxx::collection& opts_collection,
   trydoc = opts_collection.find_one(bsoncxx::builder::stream::document{}<<
 				    "name" << name.c_str() << bsoncxx::builder::stream::finalize);
   if(!trydoc){
-    fLog->Entry(MongoLog::Warning, "Failed to find your options file '%s' in DB", name);
+    fLog->Entry(MongoLog::Warning, "Failed to find your options file '%s' in DB", name.c_str());
     return -1;
   }
   if(bson_value != NULL) {
