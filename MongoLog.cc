@@ -14,7 +14,6 @@ MongoLog::MongoLog(bool LocalFileLogging, int DeleteAfterDays, std::string log_d
 
   if(LocalFileLogging){
     std::cout<<"Configured WITH local file logging."<<std::endl;
-    RotateLogFile();
   }
   fLocalFileLogging = LocalFileLogging;
   fFlush = true;
@@ -53,6 +52,7 @@ int MongoLog::RotateLogFile() {
   auto today = *std::gmtime(&t);
   std::stringstream fn;
   fn << std::put_time(&today, fLogFileNameFormat.c_str());
+  std::cout<<fOutputDir/fn.str()<<std::endl;
   fOutfile.open(fOutputDir / fn.str(), std::ofstream::out | std::ofstream::app);
   if (!fOutfile.is_open()) {
     std::cout << "Could not rotate logfile!\n";
@@ -106,6 +106,7 @@ int  MongoLog::Initialize(std::string connection_string,
     fLogLevel = 1;
   else
     fLogLevel = 0;
+  RotateLogFile();
 
   return 0;
 }
