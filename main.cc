@@ -11,6 +11,7 @@
 #include <chrono>
 #include <thread>
 #include <atomic>
+#include <getopt.h>
 
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
@@ -57,6 +58,17 @@ void UpdateStatus(std::string suri, std::string dbname, DAQController* controlle
   std::cout<<"Status update returning\n";
 }
 
+int PrintUsage() {
+  std::cout<<"Welcome to REDAX readout\nAccepted command-line arguments:"
+    << "--id <id number>: id number of this readout instance, required\n"
+    << "--uri <mongo uri>: full MongoDB URI, required\n"
+    << "--db <database name>: name of the database to use, default \"daq\"\n"
+    << "--logdir <directory>: where to write the logs, default /live_data/redax_logs\n"
+    << "--help: print this message\n"
+    << "\n";
+  return 1;
+}
+
 int main(int argc, char** argv){
 
   // Need to create a mongocxx instance and it must exist for
@@ -65,36 +77,45 @@ int main(int argc, char** argv){
 
   signal(SIGINT, SignalHandler);
   signal(SIGTERM, SignalHandler);
-   
-  std::string current_run_id="none";
-  std::string log_dir = "/live_data/redax_logs";
+
+  std::string current_run_id="none", log_dir = "/live_data/redax_logs";
+  std::string dbname = "daq", suri = "", sid = "";
   int log_retention = 7; // days
-  
-  // Accept at least 2 arguments
-  if(argc<3){
-    std::cout<<"Welcome to REDAX. Run with a unique ID and a valid mongodb URI"<<std::endl;
-    std::cout<<"e.g. ./main ID mongodb://user:pass@host:port/authDB"<<std::endl;
-    std::cout<<"...exiting"<<std::endl;
-    exit(0);
+  int c, opt_index;
+  struct option longopts[] = {
+    {"id", required_argument, 0, 0},
+    {"uri", required_argument, 0, 1},
+    {"db", required_argument, 0, 2},
+    {"logdir", required_argument, 0, 3},
+    {"help", no_argument, 0, 4}
+  };
+  while ((c = getopt_long(argc, argv, "", longopts, &opt_index)) != -1) {
+    switch(c) {
+      case 0:
+        sid = optarg; break;
+      case 1:
+        suri = optarg; break;
+      case 2:
+        dbname = optarg; break;
+      case 3:
+        log_dir = optarg; break;
+      case 4:
+      default:
+        std::cout<<"Received unknown arg\n";
+        return PrintUsage();
+    }
   }
-  std::string dbname = "daq";
-  if(argc >= 4)
-    dbname = argv[3];
-  if (argc >= 5)
-    log_dir = argv[4];
+  if (suri == "" || sid == "") return PrintUsage();
 
   // We will consider commands addressed to this PC's ID 
   char chostname[HOST_NAME_MAX];
   gethostname(chostname, HOST_NAME_MAX);
   hostname=chostname;
-  hostname+= "_reader_";
-  std::string sid = argv[1];
-  hostname += sid;
+  hostname+= "_reader_" + sid;
   std::cout<<"Reader starting with ID: "<<hostname<<std::endl;
-  
+
   // MongoDB Connectivity for control database. Bonus for later:
   // exception wrap the URI parsing and client connection steps
-  std::string suri = argv[2];  
   mongocxx::uri uri(suri.c_str());
   mongocxx::client client(uri);
   mongocxx::database db = client[dbname];
@@ -102,9 +123,9 @@ int main(int argc, char** argv){
   mongocxx::collection status = db["status"];
   mongocxx::collection options_collection = db["options"];
   mongocxx::collection dac_collection = db["dac_calibration"];
-  
+
   // Logging
-  MongoLog *logger = new MongoLog(true, log_retention, log_dir);
+  MongoLog *logger = new MongoLog(log_retention, log_dir);
   int ret = logger->Initialize(suri, dbname, "log", hostname, true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
