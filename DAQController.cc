@@ -189,7 +189,7 @@ int DAQController::Stop(){
   std::cout<<"Deactivating boards"<<std::endl;
   for( auto const& link : fDigitizers ){
     for(auto digi : link.second){
-      digi->AcquisitionStop();
+      digi->AcquisitionStop(true);
 
       // Ensure digitizer is stopped
       if(digi->EnsureStopped(1000, 1000) != true){
@@ -247,7 +247,6 @@ void DAQController::ReadData(int link){
   fBufferMutex.unlock();
 
   u_int32_t board_status = 0;
-  u_int32_t event_number = 0;
   int readcycler = 0;
   int err_val = 0;
   std::list<data_packet*> local_buffer;
@@ -269,10 +268,10 @@ void DAQController::ReadData(int link){
         fCheckFails[digi->bid()] = false;
         err_val = fBoardMap[digi->bid()]->CheckErrors();
         fLog->Entry(MongoLog::Local, "Error %i from board %i", err_val, digi->bid());
-        fStatus = DAXHelpers::Error; // stop command will be issued soon
-        if (err_val == -1) {
+        if (err_val == -1 || err_val == 0) {
 
         } else {
+          fStatus = DAXHelpers::Error; // stop command will be issued soon
           if (err_val & 0x1) fLog->Entry(MongoLog::Local, "Board %i has PLL unlock",
                                          digi->bid());
           if (err_val & 0x2) fLog->Entry(MongoLog::Local, "Board %i has VME bus error",
@@ -292,8 +291,8 @@ void DAQController::ReadData(int link){
       }
       if(dp->size>0){
         dp->bid = digi->bid();
-	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size, event_number);
-	dp->clock_counter = digi->GetClockCounter(dp->header_time, event_number);
+	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
+	dp->clock_counter = digi->GetClockCounter(dp->header_time);
         local_buffer.push_back(dp);
         local_size += dp->size;
         dp = nullptr;

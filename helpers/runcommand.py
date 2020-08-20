@@ -1,77 +1,34 @@
 import os
 import sys
 from pymongo import MongoClient
+import argparse
 
-command = sys.argv[1]
+def main(db):
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--command', help='arm/start/stop', choices='arm start stop'.split(), required=True)
+    parser.add_argument('--number', type=int, help='Run number', default=1)
+    parser.add_argument('--mode', help='Run mode', default=None)
 
-client = MongoClient("mongodb://daq:%s@localhost:27017/admin" % os.environ['MONGO_ADMIN_PASSWORD'])
-
-db = client['fax_test']
-collection = db['control']
-
-try:
-    hostname = sys.argv[2]
-except:
-    hostname = os.uname()[1]
-    print("No hostname provided so assuming it's running locally at %s"%hostname)
-
-hostname = ['fdaq00_reader_0']
-
-try:
-    run_num = int(sys.argv[4])
-except:
-    run_num = 1
-    print("Didn't provide a run number so trying 1")
-
-try:
-    runmode = sys.argv[3]
-except:
-    runmode = 'test'
-    print("Didn't provide a run mode so trying 'test'")
-
-
-
-doc = {}
-if command == 'start':
+    args = parser.parse_args()
 
     doc = {
-        "detector": "TPC",
-        "command": "start",
-        "run": run_num,
-        "mode": runmode,
-        "host": hostname,
-        "user": os.getlogin()
-    }
+            "detector" : "none",
+            "command" : args.command,
+            "number" : args.number,
+            "user" : os.getlogin(),
+            "host" : ["fdaq00_reader_0"],
+            }
+    if args.command == 'arm' and args.mode is None:
+        print('Can\'t arm without specifying a mode')
+        return
+    doc['mode'] = args.mode
 
-elif command == 'stop':
+    db['control'].insert_one(doc)
 
-    doc = {
-        "detector": "TPC",
-        "command": "stop",
-        "run": run_num,
-        "mode": runmode,
-        "host": hostname,
-        "user": os.getlogin()
-    }
+if __name__ == '__main__':
+    with MongoClient("mongodb://daq:%s@localhost:27017/admin" % os.environ['MONGO_DAQ_PASSWORD']) as client:
+        try:
+            main(client['fax_test'])
+        except Exception as e:
+            print('Caught a %s: %s' % (type(e), e))
 
-elif command == 'arm':
-
-    doc = {
-        "detector": "TPC",
-        "mode": runmode,
-        "command": "arm",
-        "run": run_num,
-        "host": hostname,
-        "user": os.getlogin()
-    }
-
-else:
-    print("Usage: python runcommand.py {start/stop/arm} {host} {runmode} {run}")
-    exit(0)
-
-try:
-    collection.insert(doc)
-    print("Command sent!")
-except Exception as e:
-    print("Failed!")
-    print(str(e))

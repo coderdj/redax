@@ -5,6 +5,7 @@ import os
 import time
 from pymongo import MongoClient
 from pymongo.errors import NotMasterError
+import datetime
 timeout=2
 factors = {'k': 1e3, 'M': 1e6, 'G': 1e9, 'T': 1e12, 'B': 1, 'MiB': 1e6, 'GiB': 1e9,
            'TiB': 1e12, 'kiB': 1e3, 'kB': 1e3, 'objects,': 1}
@@ -52,7 +53,7 @@ def CheckStatus():
     
     result = subprocess.check_output(['ceph', 'status'])
     lines = result.decode().split('\n')
-    ret = {'time' : time.time()*1000}
+    ret = {'time' : datetime.datetime.utcnow()}
     for line in lines:
         
         res_list = [a.strip() for a in line.split(' ') if a != '']
@@ -97,7 +98,7 @@ while(1):
     stat['ceph_available'] = statvfs.f_frsize * statvfs.f_bavail
     try:
         coll.insert(stat)
-    except NotMasterError:
+    except:
         pass
     time.sleep(timeout)
 

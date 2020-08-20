@@ -35,7 +35,7 @@ void UpdateStatus(std::string suri, std::string dbname, DAQController* controlle
       // Put in status update document
       auto insert_doc = bsoncxx::builder::stream::document{};
       insert_doc << "host" << hostname <<
-        "time" << duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count()<<
+        "time" << bsoncxx::types::b_date(system_clock::now())<<
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
 	"buffer_length" << controller->GetBufferLength() <<
@@ -67,17 +67,21 @@ int main(int argc, char** argv){
   signal(SIGTERM, SignalHandler);
    
   std::string current_run_id="none";
+  std::string log_dir = "/live_data/redax_logs";
+  int log_retention = 7; // days
   
   // Accept at least 2 arguments
   if(argc<3){
-    std::cout<<"Welcome to DAX. Run with a unique ID and a valid mongodb URI"<<std::endl;
-    std::cout<<"e.g. ./dax ID mongodb://user:pass@host:port/authDB"<<std::endl;
+    std::cout<<"Welcome to REDAX. Run with a unique ID and a valid mongodb URI"<<std::endl;
+    std::cout<<"e.g. ./main ID mongodb://user:pass@host:port/authDB"<<std::endl;
     std::cout<<"...exiting"<<std::endl;
     exit(0);
   }
   std::string dbname = "daq";
   if(argc >= 4)
     dbname = argv[3];
+  if (argc >= 5)
+    log_dir = argv[4];
 
   // We will consider commands addressed to this PC's ID 
   char chostname[HOST_NAME_MAX];
@@ -100,7 +104,7 @@ int main(int argc, char** argv){
   mongocxx::collection dac_collection = db["dac_calibration"];
   
   // Logging
-  MongoLog *logger = new MongoLog(true);
+  MongoLog *logger = new MongoLog(true, log_retention, log_dir);
   int ret = logger->Initialize(suri, dbname, "log", hostname, true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
@@ -221,7 +225,7 @@ int main(int argc, char** argv){
 	    controller->Stop();
 	    if(readoutThreads.size() !=0){
 	      for(auto t : readoutThreads){
-		std::cout<<"Joining orphaned readout thread"<<std::endl;
+		logger->Entry(MongoLog::Local, "Joining orphaned readout thread");
 		t->join();
 		delete t;
 	      }
@@ -258,6 +262,7 @@ int main(int argc, char** argv){
 	    }
 	  else{
 	    initialized = true;
+            logger->SetRunId(fOptions->GetString("run_identifier","none"));
 	    logger->Entry(MongoLog::Debug, "Initialized electronics");
 	  }
 	    

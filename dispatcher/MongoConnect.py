@@ -160,6 +160,8 @@ class MongoConnect():
             }
             if 'number' in self.latest_status[detector].keys():
                 doc['number'] = self.latest_status[detector]['number']
+            else:
+                doc['number'] = None
             try:
                 self.collections['aggregate_status'].insert(doc)
             except:
@@ -179,7 +181,7 @@ class MongoConnect():
         #  - If any single node reports error then the whole thing is in error
         #  - If any single node times out then the whole thing is in timeout
 
-        whattimeisit = datetime.datetime.utcnow().timestamp()
+        whattimeisit = time.time()
         for detector in self.latest_status.keys():
             status_list = []
             status = None

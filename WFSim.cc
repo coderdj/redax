@@ -66,9 +66,9 @@ int WFSim::Init(int, int, int bid, unsigned int) {
   fBID = bid;
   fGen = std::mt19937_64(fRD());
   fFlatDist = std::uniform_real_distribution<>(0., 1.);
-  fSPEtemplate = {0.0, 0.0, 0.0, 2.81e-2, 7.4, 6.07e1, 3.26e1, 1.33e1, 7.60, 5.71, 7.75, 4.46,
-      3.68, 3.31, 2.97, 2.74, 2.66, 2.48, 2.27, 2.15, 2.03, 1.93, 1.70, 1.68, 1.26, 7.86e-1,
-      5.36e-1, 4.36e-1, 3.11e-1, 2.15e-1};
+  fSPEtemplate = {0.0, 0.0, 0.0, 2.81e-2, 7.4, 6.07e1, 3.26e1, 1.33e1, 7.60, 5.71,
+    7.75, 4.46, 3.68, 3.31, 2.97, 2.74, 2.66, 2.48, 2.27, 2.15, 2.03, 1.93, 1.70,
+    1.68, 1.26, 7.86e-1, 5.36e-1, 4.36e-1, 3.11e-1, 2.15e-1};
   if (fOptions->GetFaxOptions(fFaxOptions)) {
     fLog->Entry(MongoLog::Message, "Using default fax options");
     fFaxOptions.rate = 1e-8; // 10 Hz in ns
@@ -136,7 +136,8 @@ int WFSim::SINStart() {
   return SoftwareStart();
 }
 
-int WFSim::AcquisitionStop() {
+int WFSim::AcquisitionStop(bool i_mean_it) {
+  if (!i_mean_it) return 0;
   GlobalDeinit();
   fRun = false;
   if (fGeneratorThread.joinable()) fGeneratorThread.join();
@@ -259,7 +260,7 @@ vector<vector<double>> WFSim::MakeWaveform(const vector<pair<int, double>>& hits
   unsigned j = 0;
   for (int i = 0; i < PMTsPerDigi; i++)
     if (mask & (1<<i)) pmt_arr[i] = j++;
-
+  //fLog->Entry(MongoLog::Local, "Bd %i Mask %x = %i ch", fBID, mask, j);
   int wf_length = fSPEtemplate.size() + last_hit_time/DataFormatDefinition["ns_per_sample"];
   wf_length += wf_length % 2 ? 1 : 2; // ensure an even number of samples with room
   // start with a positive-going pulse, then invert in the next stage when we apply
@@ -279,11 +280,11 @@ vector<vector<double>> WFSim::MakeWaveform(const vector<pair<int, double>>& hits
 }
 
 void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
-  const int overhead_per_channel = 2*sizeof(uint32_t), overhead_per_event = 4*sizeof(uint32_t);
+  const int overhead_words_per_channel = 2, overhead_words_per_event = 4;
   std::string buffer;
   uint32_t word = 0;
   for (auto& ch : wf) word += ch.size(); // samples
-  int words_this_event = word/2 + overhead_per_channel*wf.size() + overhead_per_event;
+  int words_this_event = word/2 + overhead_words_per_channel*wf.size() + overhead_words_per_event;
   buffer.reserve(words_this_event*sizeof(uint32_t));
   word = words_this_event | 0xA0000000;
   buffer.append((char*)&word, sizeof(word));
@@ -295,7 +296,7 @@ void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
   buffer.append((char*)&timestamp, sizeof(timestamp));
   uint16_t sample, baseline(16000);
   for (auto& ch_wf : wf) {
-    word = ch_wf.size()/2 + overhead_per_channel; // size is in samples
+    word = ch_wf.size()/2 + overhead_words_per_channel; // size is in samples
     buffer.append((char*)&word, sizeof(word));
     buffer.append((char*)&timestamp, sizeof(timestamp));
     for (unsigned i = 0; i < ch_wf.size(); i += 2) {
@@ -306,8 +307,8 @@ void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
       buffer.append((char*)&word, sizeof(word));
     } // loop over samples
   } // loop over channels
-  fLog->Entry(MongoLog::Local, "Bd %i expected %x got %x", fBID,
-      words_this_event, buffer.size()/sizeof(uint32_t));
+  //fLog->Entry(MongoLog::Local, "Bd %i expected %x got %x", fBID,
+  //    words_this_event*sizeof(uint32_t), buffer.size());
   {
     const std::lock_guard<std::mutex> lg(fBufferMutex);
     fBuffer.append(buffer);
