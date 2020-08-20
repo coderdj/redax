@@ -43,7 +43,6 @@ protected:
   static std::array<int, 3> GenerateEventSize(double, double, double);
   static std::vector<std::pair<int, double>> MakeHitpattern(int, int, double, double, double);
   static void SendToWorkers(const std::vector<std::pair<int, double>>&);
-  static void WaitForSignal();
 
   static std::thread sGeneratorThread;
   static std::mutex sMutex;
@@ -66,8 +65,7 @@ protected:
   void ReceiveFromGenerator(std::vector<std::pair<int, double>>&&, long);
   std::vector<std::vector<double>> MakeWaveform(const std::vector<std::pair<int, double>>&, int&);
   void ConvertToDigiFormat(const std::vector<std::vector<double>>&, int);
-
-  int NoiseInjection();
+  std::vector<std::vector<double>> GenerateNoise(int, int=0xFF);
 
   std::thread fGeneratorThread;
   std::string fBuffer;

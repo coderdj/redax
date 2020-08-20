@@ -253,8 +253,6 @@ void WFSim::ReceiveFromGenerator(vector<pair<int, double>>&& in, long timestamp)
     const std::lock_guard<std::mutex> lg(fMutex);
     fWFprimitive = in;
     fTimestamp = timestamp;
-//    fLog->Entry(MongoLog::Local, "Bd %i received %i hits ev %i ts %lx",
-//	fBID, fWFprimitive.size(), fEventCounter, fTimestamp);
     fEventCounter++;
   }
   fCV.notify_one();
@@ -283,11 +281,7 @@ vector<vector<double>> WFSim::MakeWaveform(const vector<pair<int, double>>& hits
   //fLog->Entry(MongoLog::Local, "Bd %i Mask %x = %i ch", fBID, mask, j);
   int wf_length = fSPEtemplate.size() + last_hit_time/DataFormatDefinition["ns_per_sample"];
   wf_length += wf_length % 2 ? 1 : 2; // ensure an even number of samples with room
-  vector<vector<double>> wf(ch_to_pmt.size(), vector<double>(wf_length, 0.));
-  for (unsigned i = 0; i < ch_to_pmt.size(); i++) {
-    std::normal_distribution<> noise{fBaseline[ch_to_pmt[i]], fNoiseRMS[ch_to_pmt[i]]};
-    std::generate_n(wf[i].begin(), wf_length, [&]{return noise(fGen);});
-  }
+  auto wf = GenerateNoise(fSPEtemplate.size(), mask);
   std::normal_distribution<> hit_scale{1., 0.15};
   int offset;
   double scale;
@@ -295,7 +289,7 @@ vector<vector<double>> WFSim::MakeWaveform(const vector<pair<int, double>>& hits
     offset = hit.second/DataFormatDefinition["ns_per_sample"];
     scale = hit_scale(fGen);
     for (j = 0; j < fSPEtemplate.size(); j++) {
-      wf[pmt_arr[hit.first]][offset+j] -= fSPEtemplate[j]*scale;
+      wf[pmt_to_ch[hit.first]][offset+j] -= fSPEtemplate[j]*scale;
     }
   }
   return wf;
@@ -315,8 +309,6 @@ void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
   buffer.append((char*)&mask, sizeof(mask));
   buffer.append((char*)&fEventCounter, sizeof(fEventCounter));
   uint32_t timestamp = (fTimestamp/DataFormatDefinition["ns_per_clk"])&0x7FFFFFFF;
-  fLog->Entry(MongoLog::Local, "Bd %i header %x %x %lx", fBID, word, timestamp,
-      fTimestamp);
   buffer.append((char*)&timestamp, sizeof(timestamp));
   uint16_t sample;
   for (auto& ch_wf : wf) {
@@ -327,12 +319,15 @@ void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
       sample = std::max(ch_wf[i], 0.);
       word = sample & 0x3FFF;
       sample = std::max(ch_wf[i+1], 0.);
-      word |= (sample << 16)&0x3FFF;
+      word |= (sample << 16)&0x3FFF0000;
       buffer.append((char*)&word, sizeof(word));
     } // loop over samples
   } // loop over channels
-  //fLog->Entry(MongoLog::Local, "Bd %i expected %x got %x", fBID,
-  //    words_this_event*sizeof(uint32_t), buffer.size());
+  fLog->Entry(MongoLog::Local, "Bd %i %08x %08x %08x %08x %08x %08x %08x",
+      fBID, *(uint32_t*)(buffer.data()), *(uint32_t*)(buffer.data()+4),
+      *(uint32_t*)(buffer.data()+8), *(uint32_t*)(buffer.data()+12),
+      *(uint32_t*)(buffer.data()+16),*(uint32_t*)(buffer.data()+20),
+      *(uint32_t*)(buffer.data()+24));
   {
     const std::lock_guard<std::mutex> lg(fBufferMutex);
     fBuffer.append(buffer);
@@ -341,10 +336,17 @@ void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
   return;
 }
 
-int WFSim::NoiseInjection() {
-  vector<vector<double>> wf(PMTsPerDigi, vector<double>(fSPEtemplate.size(), 0));
-  ConvertToDigiFormat(wf, 0xFF);
-  return 0;
+vector<vector<double>> WFSim::GenerateNoise(int length, int mask) {
+  vector<vector<double>> ret;
+  ret.reserve(PMTsPerDigi);
+  for (int i = 0; i < PMTsPerDigi; i++) {
+    if (mask & (1<<i)) {
+      ret.emplace_back(length, 0);
+      std::normal_distribution<> noise{fBaseline[i], fNoiseRMS[i]};
+      std::generate(ret.back().begin(), ret.back().end(), [&]{return noise(fGen);});
+    }
+  }
+  return ret;
 }
 
 void WFSim::GlobalRun() {
@@ -360,7 +362,6 @@ void WFSim::GlobalRun() {
     sCV.wait(lg, []{return sReady == false;});
   }
   sLog->Entry(MongoLog::Local, "WFSim::GlobalRun");
-  std::this_thread::sleep_for(std::chrono::seconds(5));
   while (sRun == true) {
     std::tie(x,y,z) = GenerateEventLocation();
     photons = GenerateEventSize(x, y, z);
@@ -373,7 +374,7 @@ void WFSim::GlobalRun() {
         t_max = std::max(t_max, hit.second);
       }
 
-      time_to_next = (s_i == 1 ? std::abs(z/sFaxOptions.drift_speed) : 1e9) + t_max;
+      time_to_next = (s_i == 1 ? std::abs(z/sFaxOptions.drift_speed) : 5e9) + t_max;
       sClock += time_to_next;
       sLog->Entry(MongoLog::Local, "Sleeping for %li ns", time_to_next);
       std::this_thread::sleep_for(std::chrono::nanoseconds(time_to_next));
@@ -390,7 +391,7 @@ void WFSim::Run() {
   while (sRun == true) {
     {
       std::unique_lock<std::mutex> lk(fMutex);
-      fCV.wait(lk, [&]{return fWFprimitive.size()>0;});
+      fCV.wait(lk, [&]{return fWFprimitive.size()>0 || sRun == false;});
       wf = MakeWaveform(fWFprimitive, mask);
     }
     ConvertToDigiFormat(wf, mask);
