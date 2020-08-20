@@ -293,8 +293,8 @@ vector<vector<double>> WFSim::MakeWaveform(const vector<pair<int, double>>& hits
   for (auto& hit : hits) {
     offset = hit.second/DataFormatDefinition["ns_per_sample"];
     scale = hit_scale(fGen);
-    for (j = 0; j < fSPEtemplate.size(); j++) {
-      wf[pmt_to_ch[hit.first]][offset+j] -= fSPEtemplate[j]*scale;
+    for (unsigned i = 0; i < fSPEtemplate.size(); i++) {
+      wf[pmt_to_ch[hit.first]][offset+i] -= fSPEtemplate[i]*scale;
     }
   }
   return wf;
