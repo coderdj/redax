@@ -27,7 +27,7 @@ public:
   virtual int SINStart();
   virtual int SoftwareStart();
   virtual int AcquisitionStop(bool);
-  virtual int SWTrigger() {return NoiseInjection();}
+  virtual int SWTrigger();
   virtual int Reset();
   virtual bool EnsureReady(int, int) {return sReady || sRun;}
   virtual bool EnsureStarted(int, int) {return fRun==true;}

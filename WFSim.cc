@@ -97,7 +97,12 @@ int WFSim::Init(int, int, int bid, unsigned int) {
   std::generate_n(fBLslope.begin(), PMTsPerDigi, [&]{return -0.27 + 0.01*fFlatDist(fGen);});
   std::exponential_distribution<> noise(1);
   std::generate_n(fNoiseRMS.begin(), PMTsPerDigi, [&]{return 4*noise(fGen);});
-  std::generate_n(fBaseline.begin(), PMTsPerDigi, [&]{return 13600 + 50*fFlatDist(fGen);};
+  std::generate_n(fBaseline.begin(), PMTsPerDigi, [&]{return 13600 + 50*fFlatDist(fGen);});
+  return 0;
+}
+
+int WFSim::SWTrigger() {
+  ConvertToDigiFormat(GenerateNoise(fSPEtemplate.size(), 0xFF), 0xFF);
   return 0;
 }
 
