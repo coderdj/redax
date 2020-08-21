@@ -27,7 +27,7 @@ int PrintUsage() {
     << "--id <id number>: id number of this controller instance, required\n"
     << "--uri <mongo uri>: full MongoDB URI, required\n"
     << "--db <database name>: name of the database to use, default \"daq\"\n"
-    << "--logdir <directory>: where to write the logs, default /live_data/redax_logs\n"
+    << "--logdir <directory>: where to write the logs\n"
     << "--help: print this message\n"
     << "\n";
   return 1;
@@ -36,8 +36,7 @@ int PrintUsage() {
 int main(int argc, char** argv){
 
   mongocxx::instance instance{};
-  std::string mongo_uri = "", dbname="daq", sid="";
-  std::string log_dir = "/live_data/redax_logs";
+  std::string mongo_uri = "", dbname="daq", sid="", log_dir = "";
   int log_retention = 7, c, opt_index;
   struct option longopts[] = {
     {"id", required_argument, 0, 0},

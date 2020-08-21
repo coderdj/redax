@@ -63,7 +63,7 @@ int PrintUsage() {
     << "--id <id number>: id number of this readout instance, required\n"
     << "--uri <mongo uri>: full MongoDB URI, required\n"
     << "--db <database name>: name of the database to use, default \"daq\"\n"
-    << "--logdir <directory>: where to write the logs, default /live_data/redax_logs\n"
+    << "--logdir <directory>: where to write the logs\n"
     << "--help: print this message\n"
     << "\n";
   return 1;
@@ -78,7 +78,7 @@ int main(int argc, char** argv){
   signal(SIGINT, SignalHandler);
   signal(SIGTERM, SignalHandler);
 
-  std::string current_run_id="none", log_dir = "/live_data/redax_logs";
+  std::string current_run_id="none", log_dir = "";
   std::string dbname = "daq", suri = "", sid = "";
   int log_retention = 7; // days
   int c, opt_index;
