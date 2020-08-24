@@ -6,27 +6,31 @@
 #include <mutex>
 #include <thread>
 #include <atomic>
-#include <function>
 
 class ThreadPool {
   public:
     ThreadPool(int);
     ~ThreadPool();
 
-    void AddTask(std::function<void>&&);
-    void Kill() {fFinishNow = true; fCV.notify_all()}
+    void AddTask((void*)(std::string&), std::string&&);
+    void Kill() {fFinishNow = true; fCV.notify_all();}
     int GetWaiting() {return fWaitingTasks.load();}
     int GetRunning() {return fRunningTasks.load();}
 
   private:
     void Run();
     std::vector<std::thread> fThreads;
-    std::list<std::function<void()>> fQueue;
+    std::list<task> fQueue;
     std::mutex fMutex;
     std::condition_variable fCV;
 
     std::atomic_bool fFinishNow;
     std::atomic_int fWaitingTasks, fRunningTasks;
+
+    struct task_t {
+      void (*func)(std::string&);
+      std::string input;
+    };
 };
 
 #endif // _THREAD_POOL_HH_ defined

@@ -17,10 +17,10 @@ ThreadPool::~ThreadPool() {
   fThreads.clear();
 }
 
-void AddTask(std::function<void()>&& func) {
+void AddTask(void (*func)(std::string&), std::string&& input) {
   {
     std::lock_guard<std::mutex> lg(fMutex);
-    fQueue.emplace_back(func);
+    fQueue.emplace_back(task_t{func, input});
     fWaitingTasks++;
   }
   fCV.notify_one();
@@ -31,13 +31,12 @@ void ThreadPool::Run() {
     std::unique_lock<std::mutex> lk(fMutex);
     fCV.wait(lk, [&]{return fWaitingTasks > 0 || fFinishNow;});
     if (fQueue.size() > 0 && !fFinishNow) {
-      auto func = fQueue.front();
+      auto task = fQueue.front();
       fQueue.pop_font();
       fWaitingTasks--;
       fRunningTasks++;
       lk.unlock();
-      fCV.notify_one();
-      func();
+      task.func(task.input);
       fRunningTasks--;
     } else {
       lk.unlock();
