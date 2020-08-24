@@ -398,6 +398,8 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
     for (const auto& p : buffer_counter)
       if (p.first != 0)
         bc[int(std::ceil(std::log2(p.first)))] += p.second;
+      else
+        bc[-1] += p.second;
   } else if (level == 3) {
     bc = buffer_counter;
   }

@@ -20,7 +20,7 @@ using namespace std::chrono;
 const int event_header_words = 4, max_channels = 16;
 
 double timespec_subtract(struct timespec& a, struct timespec& b) {
-  return (a.tv_sec - b.tv_sec)/1e6 + (a.tv_nsec - b.tv_nsec)/1e3;
+  return (a.tv_sec - b.tv_sec)*1e6 + (a.tv_nsec - b.tv_nsec)/1e3;
 }
 
 StraxInserter::StraxInserter(){
@@ -74,7 +74,7 @@ StraxInserter::~StraxInserter(){
     fLog->Entry(MongoLog::Message, "Still waiting for thread %lx to stop", fThreadId);
     std::this_thread::sleep_for(std::chrono::seconds(2));
   }
-  long total_dps = std::accumulate(fBufferCounter.begin(), fBufferCounter.end(), 0,
+  long total_dps = std::accumulate(fBufferCounter.begin(), fBufferCounter.end(), 0L,
       [&](long tot, auto& p){return std::move(tot) + p.second;});
   fLog->Entry(MongoLog::Local, "Thread %lx got events %.1f%% of the time",
       fThreadId, (total_dps-fBufferCounter[0]+0.0)/total_dps*100.);
@@ -82,7 +82,7 @@ StraxInserter::~StraxInserter(){
     {"bytes", fBytesProcessed},
     {"fragments", fFragmentsProcessed},
     {"events", fEventsProcessed},
-    {"data_packets", total_dps}};
+    {"data_packets", total_dps - fBufferCounter[0]}};
   fOptions->SaveBenchmarks(counters, fBufferCounter,
       fProcTimeDP, fProcTimeEv, fProcTimeCh, fCompTime);
 }
@@ -170,7 +170,7 @@ void StraxInserter::ProcessDatapacket(data_packet* dp){
   u_int32_t idx = 0;
   unsigned total_words = dp->size/sizeof(u_int32_t);
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &dp_start);
-  while(idx < total_words){
+  while(idx < total_words && fForceQuit == false){
 
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_start);
@@ -179,7 +179,6 @@ void StraxInserter::ProcessDatapacket(data_packet* dp){
       fProcTimeEv += timespec_subtract(ev_end, ev_start);
     } else
       idx++;
-    if (fForceQuit) break;
   }
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &dp_end);
   fProcTimeDP += timespec_subtract(dp_end, dp_start);
@@ -196,7 +195,7 @@ uint32_t StraxInserter::ProcessEvent(uint32_t* buff, unsigned total_words, long 
 
   u_int32_t words_in_event = std::min(buff[0]&0xFFFFFFF, total_words);
   if (words_in_event < (buff[0]&0xFFFFFFF)) {
-    fLog->Entry(MongoLog::Local, "Board %i garbled event header: %u/%u",
+    fLog->Entry(MongoLog::Local, "Board %i garbled event header: %x/%x",
         bid, buff[0]&0xFFFFFFF, total_words);
   }
 
@@ -208,7 +207,7 @@ uint32_t StraxInserter::ProcessEvent(uint32_t* buff, unsigned total_words, long 
 
   if(buff[1]&0x4000000){ // board fail
     const std::lock_guard<std::mutex> lg(fFC_mutex);
-    GenerateArtificialDeadtime(((clock_counter<<31) + event_time)*fmt["ns_per_clock"], bid,
+    GenerateArtificialDeadtime(((clock_counter<<31) + header_time)*fmt["ns_per_clock"], bid,
         event_time, clock_counter);
     fDataSource->CheckError(bid);
     fFailCounter[bid]++;
@@ -240,8 +239,8 @@ int StraxInserter::ProcessChannel(uint32_t* buff, unsigned words_in_event, int b
   // These defaults are valid for 'default' firmware where all channels are the same size
   int channels_in_event = std::bitset<max_channels>(channel_mask).count();
   u_int32_t channel_words = (words_in_event-event_header_words) / channels_in_event;
-  long channel_time = (clock_counter<<31) + event_time;
-  long channel_timeMSB = 0;
+  long channel_time = event_time;
+  long channel_timeMSB = clock_counter<<31;
   u_int16_t baseline_ch = 0;
   std::map<std::string, int> fmt = fFmt[bid];
 
