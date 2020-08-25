@@ -13,7 +13,7 @@
 #include <sstream>
 #include <list>
 #include <utility>
-#include <fstream>
+#include "ThreadPool.hh"
 
 
 V1724::V1724(MongoLog  *log, Options *options){
@@ -226,8 +226,9 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int V1724::ReadMBLT(u_int32_t* &buffer){
+int V1724::Read(ThreadPool* tp){
   // Initialize
+
   int64_t blt_bytes=0;
   int nb=0,ret=-5;
   std::list<std::pair<u_int32_t*, int>> xfer_buffers;

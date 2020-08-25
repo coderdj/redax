@@ -9,6 +9,7 @@
 class MongoLog;
 class Options;
 class data_packet;
+class ThreadPool;
 
 class V1724{
 
@@ -73,10 +74,17 @@ protected:
   unsigned int fBaseAddress;
 
   // Stuff for clock reset tracking
+<<<<<<< HEAD
   u_int32_t fRolloverCounter;
   u_int32_t fLastClock;
   std::chrono::high_resolution_clock::time_point fLastClockTime;
   std::chrono::nanoseconds fClockPeriod;
+=======
+  u_int32_t clock_counter;
+  u_int32_t last_time;
+  bool seen_under_5;
+  bool seen_over_15;
+>>>>>>> Work
 
   MongoLog *fLog;
 

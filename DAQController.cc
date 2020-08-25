@@ -275,17 +275,8 @@ void DAQController::ReadData(int link){
                                          digi->bid());
         }
       }
-      if (dp == nullptr) dp = new data_packet;
-      if((dp->size = digi->ReadMBLT(dp->buff))<0){
-        if (dp->buff != nullptr) {
-	  delete[] dp->buff; // possible leak, catch here
-	  dp->buff = nullptr;
-          delete dp;
-          dp = nullptr;
-	}
+      if (digi->Read(fThreadPool) < 0)
         fStatus = DAXHelpers::Error;
-	break;
-      }
       if(dp->size>0){
         dp->bid = digi->bid();
 	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
@@ -295,14 +286,6 @@ void DAQController::ReadData(int link){
         dp = nullptr;
       }
     } // for digi in digitizers
-    if (local_buffer.size() > 0) {
-      const std::lock_guard<std::mutex> lg(fBufferMutex);
-      fBufferLength += local_buffer.size();
-      fBuffer.splice(fBuffer.end(), local_buffer); // clears local_buffer
-      fBufferSize += local_size;
-      fDataRate += local_size;
-      local_size = 0;
-    }
     readcycler++;
     usleep(1);
   } // while run

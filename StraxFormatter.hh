@@ -43,7 +43,7 @@ public:
   int  Initialize(Options *options, MongoLog *log, 
 		  DAQController *dataSource, std::string hostname);
   void Close(std::map<int,int>& ret);
-  
+
   int ReadAndInsertData();
   bool CheckError(){ bool ret = fErrorBit; fErrorBit = false; return ret;}
   long GetBufferSize() {return fFragmentSize.load();}
