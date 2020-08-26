@@ -207,7 +207,7 @@ uint32_t StraxInserter::ProcessEvent(uint32_t* buff, unsigned total_words, long 
 
   if(buff[1]&0x4000000){ // board fail
     const std::lock_guard<std::mutex> lg(fFC_mutex);
-    GenerateArtificialDeadtime(((clock_counter<<31) + header_time)*fmt["ns_per_clock"], bid,
+    GenerateArtificialDeadtime(((clock_counter<<31) + header_time)*fmt["ns_per_clk"], bid,
         event_time, clock_counter);
     fDataSource->CheckError(bid);
     fFailCounter[bid]++;
