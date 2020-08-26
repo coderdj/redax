@@ -161,9 +161,9 @@ int V1724::Reset() {
   return ret;
 }
 
-u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
-  u_int32_t idx = 0;
-  while(idx < size/sizeof(u_int32_t)){
+uint32_t V1724::GetHeaderTime(uint32_t *buff, int size){
+  int idx = 0;
+  while(idx < size/sizeof(uint32_t)){
     if(buff[idx]>>28==0xA){
       return buff[idx+3]&0x7FFFFFFF;
     }
@@ -172,7 +172,7 @@ u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
   return 0xFFFFFFFF;
 }
 
-int V1724::GetClockCounter(u_int32_t timestamp){
+int V1724::GetClockCounter(uint32_t timestamp){
   // The V1724 has a 31-bit on board clock counter that counts 10ns samples.
   // So it will reset every 21 seconds. We need to count the resets or we
   // can't run longer than that. We can employ some clever logic
@@ -227,24 +227,22 @@ unsigned int V1724::ReadRegister(unsigned int reg){
 }
 
 int V1724::Read(ThreadPool* tp){
+  if ((GetAcquisitionStatus() & 0x8) == 0) return 0;
   // Initialize
-
-  int64_t blt_bytes=0;
-  int nb=0,ret=-5;
-  std::list<std::pair<u_int32_t*, int>> xfer_buffers;
+  int blt_bytes=0, nb=0, ret=-5;
+  std::list<std::pair<char*, int>> xfer_buffers;
+  const int overhead_bytes = 4*sizeof(int);
 
   int count = 0;
-  int alloc_size = BLT_SIZE/sizeof(u_int32_t)*fBLTSafety;
-  u_int32_t* thisBLT = nullptr;
-  if ((GetAcquisitionStatus() & 0x8) == 0) return 0;
+  int alloc_size = BLT_SIZE*fBLTSafety;
+  char* thisBLT = nullptr;
   // digitizer has at least one event
   do{
 
     // Reserve space for this block transfer
-    thisBLT = new u_int32_t[alloc_size];
+    thisBLT = new char[alloc_size];
 
-    ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
-				     ((unsigned char*)thisBLT),
+    ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress, thisBLT,
 				     BLT_SIZE, cvA32_U_MBLT, cvD64, &nb);
     if( (ret != cvSuccess) && (ret != cvBusError) ){
       fLog->Entry(MongoLog::Error,
@@ -256,13 +254,13 @@ int V1724::Read(ThreadPool* tp){
       for (auto& b : xfer_buffers) delete[] b.first;
       return -1;
     }
-    if (nb > (int)BLT_SIZE) fLog->Entry(MongoLog::Message,
+    if (nb > BLT_SIZE) fLog->Entry(MongoLog::Message,
         "Board %i got %i more bytes than asked for (headroom %i)",
         fBID, nb-BLT_SIZE, alloc_size-nb);
 
     count++;
     blt_bytes+=nb;
-    xfer_buffers.push_back(std::make_pair(thisBLT, nb));
+    xfer_buffers.emplace_back(thisBLT, nb);
 
   }while(ret != cvBusError);
 
@@ -276,23 +274,33 @@ int V1724::Read(ThreadPool* tp){
   // In tests this does not seem to impact our ability to read out the V1724 at the
   // maximum bandwidth of the link.
   if(blt_bytes>0){
-    u_int32_t bytes_copied = 0;
-    alloc_size = blt_bytes/sizeof(u_int32_t)*fBufferSafety;
-    buffer = new u_int32_t[alloc_size];
+    int bytes_copied = overhead_bytes;
+    alloc_size = blt_bytes*fBufferSafety + overhead_bytes;
+    std::string dp;
+    dp.reserve(alloc_size);
+    dp.append((char*)&fBLT, sizeof(fBLT));
+    dp.append((char*)&blt_bytes, sizeof(blt_bytes));
+    uint32_t header_time = GetHeaderTime(xfer_buffers.front().first, xfer_buffers.front().second);
+    int clock_counter = GetClockCounter(header_time);
+    dp.append((char*)&header_time, sizeof(header_time));
+    dp.append((char*)&clock_counter, sizeof(clock_counter));
+    // skip clock counter and header time for now
     for (auto& xfer : xfer_buffers) {
-      std::memcpy(((unsigned char*)buffer)+bytes_copied, xfer.first, xfer.second);
+      dp.append(xfer.first, xfer.second);
       bytes_copied += xfer.second;
     }
     fBLTCounter[count]++;
     if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Message,
         "Board %i funny buffer accumulation: %i/%i from %i BLTs",
         fBID, bytes_copied, blt_bytes, count);
+
+    tp->AddTask(&DPtoEvents, std::move(dp));
   }
   for (auto b : xfer_buffers) delete[] b.first;
   return blt_bytes;
 }
 
-int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){
+int V1724::LoadDAC(std::vector<uint16_t> &dac_values){
   // Loads DAC values into registers
   for(unsigned int x=0; x<fNChannels; x++){
     if(WriteRegister((fChDACRegister)+(0x100*x), dac_values[x])!=0){

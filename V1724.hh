@@ -18,10 +18,9 @@ class V1724{
   virtual ~V1724();
 
   virtual int Init(int link, int crate, int bid, unsigned int address=0);
-  virtual int ReadMBLT(u_int32_t* &buffer);
+  virtual int ReadData(ThreadPool*);
   virtual int WriteRegister(unsigned int reg, unsigned int value);
   virtual unsigned int ReadRegister(unsigned int reg);
-  virtual int GetClockCounter(u_int32_t timestamp);
   virtual int End();
 
   int bid() {return fBID;}
@@ -42,12 +41,15 @@ class V1724{
   virtual bool EnsureStarted(int ntries, int sleep);
   virtual bool EnsureStopped(int ntries, int sleep);
   virtual int CheckErrors();
-  virtual u_int32_t GetAcquisitionStatus();
-  u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
+  virtual uint32_t GetAcquisitionStatus();
 
   std::map<std::string, int> DataFormatDefinition;
 
 protected:
+  uint32_t GetHeaderTime(uint32_t *buff, int size);
+  virtual int GetClockCounter(uint32_t timestamp);
+  bool MonitorRegister(uint32_t reg, uint32_t mask, int ntries, int sleep, uint32_t val=1);
+  void DPtoEvents(std::string&);
   // Some values for base classes to override 
   unsigned int fAqCtrlRegister;
   unsigned int fAqStatusRegister;
@@ -67,24 +69,16 @@ protected:
   int BLT_SIZE;
   std::map<int, long> fBLTCounter;
 
-  bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep, u_int32_t val=1);
   Options *fOptions;
   int fBoardHandle;
   int fLink, fCrate, fBID;
   unsigned int fBaseAddress;
 
   // Stuff for clock reset tracking
-<<<<<<< HEAD
-  u_int32_t fRolloverCounter;
+  int fRolloverCounter;
   u_int32_t fLastClock;
   std::chrono::high_resolution_clock::time_point fLastClockTime;
   std::chrono::nanoseconds fClockPeriod;
-=======
-  u_int32_t clock_counter;
-  u_int32_t last_time;
-  bool seen_under_5;
-  bool seen_over_15;
->>>>>>> Work
 
   MongoLog *fLog;
 

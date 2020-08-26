@@ -6,13 +6,25 @@
 #include <mutex>
 #include <thread>
 #include <atomic>
+#include <string>
+#include <memory>
+
+// ABC to support thread pool
+class Processor {
+  public:
+    Processor() {}
+    virtual ~Processor();
+    virtual void Process(std::string&)=0;
+};
+
+typedef void (Processor::*WorkFunction)(std::string& input);
 
 class ThreadPool {
   public:
     ThreadPool(int);
     ~ThreadPool();
 
-    void AddTask((void*)(std::string&), std::string&&);
+    void AddTask(WorkFunction, Processor*, std::string&&);
     void Kill() {fFinishNow = true; fCV.notify_all();}
     int GetWaiting() {return fWaitingTasks.load();}
     int GetRunning() {return fRunningTasks.load();}
@@ -20,7 +32,7 @@ class ThreadPool {
   private:
     void Run();
     std::vector<std::thread> fThreads;
-    std::list<task> fQueue;
+    std::list<std::unique_ptr<task_t>> fQueue;
     std::mutex fMutex;
     std::condition_variable fCV;
 
@@ -28,7 +40,8 @@ class ThreadPool {
     std::atomic_int fWaitingTasks, fRunningTasks;
 
     struct task_t {
-      void (*func)(std::string&);
+      WorkFunction func;
+      Processor* obj;
       std::string input;
     };
 };
