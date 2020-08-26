@@ -50,13 +50,3 @@ void ThreadPool::Run() {
     }
   }
 }
-
-task_t::task_t(WorkFunction func, Processor* obj, std::string&& input) : func(func), obj(obj), input(input) {}
-
-task_t::task_t(task_t&& rhs) : func(rhs.func), obj(rhs.obj), input(std::move(rhs.input)) {}
-
-task_t& task_t::operator=(task_t&& rhs) {
-  func=rhs.func;
-  obj=rhs.obj;
-  input=std::move(rhs.input);
-}

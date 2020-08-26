@@ -421,4 +421,3 @@ int StraxFormatter::ReadAndInsertData(){
   fRunning = false;
   return 0;
 }
-

@@ -59,11 +59,7 @@ private:
   void GenerateArtificialDeadtime(int64_t, int16_t, uint32_t, int);
   void AddFragmentToBuffer(std::string&, int64_t, uint32_t, int);
 
-  std::experimental::filesystem::path GetFilePath(std::string id, bool temp);
-  std::experimental::filesystem::path GetDirectoryPath(std::string id, bool temp);
-  std::string GetStringFormat(int id);
-  void CreateMissing(u_int32_t back_from_id);
-  int fMissingVerified;
+  int DPtoEvents(const uint32_t*, int);
 
   int64_t fChunkLength; // ns
   int64_t fChunkOverlap; // ns

@@ -33,7 +33,6 @@ class ThreadPool {
     void Run();
     std::vector<std::thread> fThreads;
     std::list<std::unique_ptr<task_t>> fQueue;
-    std::mutex fMutex;
     std::condition_variable fCV;
 
     std::atomic_bool fFinishNow;
@@ -44,6 +43,4 @@ class ThreadPool {
       Processor* obj;
       std::string input;
     };
-};
-
 #endif // _THREAD_POOL_HH_ defined
