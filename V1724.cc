@@ -294,7 +294,7 @@ int V1724::Read(ThreadPool* tp){
         "Board %i funny buffer accumulation: %i/%i from %i BLTs",
         fBID, bytes_copied, blt_bytes, count);
 
-    tp->AddTask(&DPtoEvents, std::move(dp));
+    tp->AddTask(&StraxFormatter::Process, fSF, std::move(dp));
   }
   for (auto b : xfer_buffers) delete[] b.first;
   return blt_bytes;

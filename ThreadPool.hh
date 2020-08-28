@@ -43,4 +43,5 @@ class ThreadPool {
       Processor* obj;
       std::string input;
     };
+};
 #endif // _THREAD_POOL_HH_ defined
