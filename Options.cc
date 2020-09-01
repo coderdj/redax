@@ -382,9 +382,8 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
   return;
 }
 
-void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
-    std::map<int, long>& buffer_counter,
-    double proc_time_dp_us, double proc_time_ev_us, double proc_time_ch_us, double comp_time_us) {
+void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>& counters, long bytes,
+    std::string sid, std::map<std::string, double>& times) {
   using namespace bsoncxx::builder::stream;
   int level = GetInt("benchmark_level", 2);
   if (level == 0) return;
@@ -393,15 +392,16 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
     run_id = std::stoi(GetString("run_identifier", "latest"));
   } catch (...) {
   }
-  std::map<int, long> bc;
+  std::map<std::string, std::map<int, long>> _counters;
   if (level == 2) {
-    for (const auto& p : buffer_counter)
-      if (p.first != 0)
-        bc[int(std::ceil(std::log2(p.first)))] += p.second;
-      else
-        bc[-1] += p.second;
+    for (const auto& p : counters)
+      for (const auto& pp : p.second)
+        if (pp.first != 0)
+          _counters[p.first][int(std::floor(std::log2(pp.first)))] += pp.second;
+        else
+          _counters[p.first][-1] += pp.second;
   } else if (level == 3) {
-    bc = buffer_counter;
+    _counters = counters;
   }
 
   auto search_doc = document{} << "run" << run_id << finalize;
@@ -409,20 +409,17 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
   update_doc << "$set" << open_document << "run" << run_id << close_document;
   update_doc << "$push" << open_document << "data" << open_document;
   update_doc << "host" << fHostname;
-  update_doc << "bytes" << byte_counter["bytes"];
-  update_doc << "fragments" << byte_counter["fragments"];
-  update_doc << "events" << byte_counter["events"];
-  update_doc << "data_packets" << byte_counter["data_packets"];
-  update_doc << "processing_time_dp_us" << proc_time_dp_us;
-  update_doc << "processing_time_ev_us" << proc_time_ev_us;
-  update_doc << "processing_time_ch_us" << proc_time_ch_us;
-  update_doc << "compression_time_us" << comp_time_us;
+  update_doc << "id" << sid;
+  update_doc << "bytes" << bytes;
+  for (auto& p : times)
+    update_doc << p.first << p.second;
   if (level >= 2) {
-    update_doc << "buffer_xfers" << open_document;
-    for (auto& p : bc) {
-      update_doc << std::to_string(p.first) << p.second;
+    for (auto& p : _counters) {
+      update_doc << p.first << open_document;
+      for (auto& pp : p.second)
+        update_doc << std::to_string(pp.first) << pp.second;
+      update_doc << close_document;
     }
-    update_doc << close_document; // buffer xfers
   }
 
   update_doc << close_document; // data

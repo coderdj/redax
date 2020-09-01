@@ -78,7 +78,8 @@ public:
   std::vector<uint16_t> GetThresholds(int);
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
-  void SaveBenchmarks(std::map<std::string, long>&, std::map<int, long>&, double, double, double, double);
+  void SaveBenchmarks(std::map<std::string, std::map<int, long>>&, long, std::string,
+      std::map<std::string, double>&);
 
 private:
   int Load(std::string, mongocxx::collection&, std::string);

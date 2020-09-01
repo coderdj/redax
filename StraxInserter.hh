@@ -54,7 +54,7 @@ public:
 private:
   void ProcessDatapacket(data_packet *dp);
   uint32_t ProcessEvent(uint32_t*, unsigned, long, uint32_t, int);
-  int ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int);
+  int ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int, int&);
   void WriteOutFiles(bool end=false);
   void GenerateArtificialDeadtime(int64_t, int16_t, uint32_t, int);
   void AddFragmentToBuffer(std::string&, int64_t, uint32_t, int);
@@ -88,10 +88,10 @@ private:
   std::map<int, std::atomic_int> fDataPerChan;
   std::mutex fDPC_mutex;
   std::map<int, long> fBufferCounter;
+  std::map<int, long> fFragsPerEvent;
+  std::map<int, long> fEvPerDP;
   std::atomic_int fBufferLength;
   long fBytesProcessed;
-  long fFragmentsProcessed;
-  long fEventsProcessed;
 
   double fProcTimeDP, fProcTimeEv, fProcTimeCh, fCompTime;
   std::thread::id fThreadId;
