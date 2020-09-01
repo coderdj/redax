@@ -72,7 +72,6 @@ StraxInserter::~StraxInserter(){
     fLog->Entry(MongoLog::Message, "Still waiting for thread %lx to stop", fThreadId);
     std::this_thread::sleep_for(std::chrono::seconds(2));
   }
-  auto accum = [&](long tot, std::pair<int, long> it){return std::move(tot) + pair.second;};
   std::stringstream ss;
   ss << std::hex << fThreadId;
   std::map<std::string, double> times {

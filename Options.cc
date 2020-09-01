@@ -382,7 +382,7 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
   return;
 }
 
-void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>& counters, long bytes,
+void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counters, long bytes,
     std::string sid, std::map<std::string, double>& times) {
   using namespace bsoncxx::builder::stream;
   int level = GetInt("benchmark_level", 2);
