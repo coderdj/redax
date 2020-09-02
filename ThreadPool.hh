@@ -7,24 +7,29 @@
 #include <thread>
 #include <atomic>
 #include <string>
+#include <string_view>
 #include <memory>
+
+class ThreadPool;
 
 // ABC to support thread pool
 class Processor {
   public:
-    Processor() {}
+    Processor(ThreadPool* tp, Processor* next) : fTP(tp), fNext(next) {}
     virtual ~Processor();
-    virtual void Process(std::string&)=0;
-};
+    virtual void Process(std::string_view)=0;
 
-typedef void (Processor::*WorkFunction)(std::string& input);
+  protected:
+    ThreadPool* fTP;
+    Processor* fNext;
+};
 
 class ThreadPool {
   public:
     ThreadPool(int);
     ~ThreadPool();
 
-    void AddTask(WorkFunction, Processor*, std::string&&);
+    void AddTask(Processor*, std::string&&);
     void Kill() {fFinishNow = true; fCV.notify_all();}
     int GetWaiting() {return fWaitingTasks.load();}
     int GetRunning() {return fRunningTasks.load();}
@@ -39,9 +44,9 @@ class ThreadPool {
     std::atomic_int fWaitingTasks, fRunningTasks;
 
     struct task_t {
-      WorkFunction func;
       Processor* obj;
       std::string input;
     };
 };
+
 #endif // _THREAD_POOL_HH_ defined

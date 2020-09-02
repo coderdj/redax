@@ -13,51 +13,37 @@
 #include <atomic>
 #include <vector>
 #include <thread>
+#include <exception>
+#include "TheadPool.hh"
 
-class DAQController;
+class InitException : public std::exception {};
+
 class Options;
 class MongoLog;
-class ThreadPool;
 
-struct data_packet{
-  public:
-    data_packet();
-    ~data_packet();
-    u_int32_t *buff;
-    int32_t size;
-    u_int32_t clock_counter;
-    u_int32_t header_time;
-    int bid;
-};
-
-
-class StraxFormatter{
+class StraxFormatter : public Processor {
   /*
     Reformats raw data into strax format
   */
-  
+
 public:
-  StraxFormatter();
-  ~StraxFormatter();
-  
-  int  Initialize(Options *options, MongoLog *log, 
-		  DAQController *dataSource, std::string hostname);
+  StraxFormatter(ThreadPool*, Processor*, Options*, MongoLog*, std::map<int, std::map<std::string, int>>&);
+  virtual ~StraxFormatter();
+
   void Close(std::map<int,int>& ret);
 
-  int ReadAndInsertData();
   bool CheckError(){ bool ret = fErrorBit; fErrorBit = false; return ret;}
   long GetBufferSize() {return fFragmentSize.load();}
   void GetDataPerChan(std::map<int, int>& ret);
   void CheckError(int bid);
-  int GetBufferLength() {return fBufferLength.load();}
+
+  void Process(std::string_view);
 
 private:
-  void ProcessDatapacket(data_packet *dp);
-  uint32_t ProcessEvent(uint32_t*, unsigned, long, uint32_t, int);
-  int ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int);
-  void WriteOutFiles(bool end=false);
+  void ProcessDatapacket(std::string_view);
+  void ProcessEvent(uint32_t*, unsigned, long, uint32_t, int);
+  void ProcessChannel(uint32_t*, unsigned, int, int, uint32_t, uint32_t, long, int);
   void GenerateArtificialDeadtime(int64_t, int16_t, uint32_t, int);
-  void AddFragmentToBuffer(std::string&, int64_t, uint32_t, int);
 
   int DPtoEvents(const uint32_t*, int);
 

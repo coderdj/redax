@@ -1,5 +1,4 @@
 #include "StraxFormatter.hh"
-#include "DAQController.hh"
 #include "MongoLog.hh"
 #include "Options.hh"
 #include "ThreadPool.hh"
@@ -21,27 +20,16 @@ double timespec_subtract(struct timespec& a, struct timespec& b) {
   return (a.tv_sec - b.tv_sec)*1e6 + (a.tv_nsec - b.tv_nsec)/1e3;
 }
 
-StraxFormatter::StraxFormatter(){
-  fOptions = NULL;
-  fDataSource = NULL;
+StraxFormatter::StraxFormatter(ThreadPool* tp, Processor* next, Options* opts, MongoLog* log,
+    std::map<int, std::map<std::string, int>>& fmt) : Processor(tp, next) {
+  fOptions = opts;
   fActive = true;
-  fChunkLength=0x7fffffff; // DAQ magic number
-  fChunkNameLength=6;
-  fChunkOverlap = 0x2FAF080;
   fStraxHeaderSize=24;
-  fFragmentBytes=110*2;
-  fLog = NULL;
+  fFragmentBytes=fOptions->GetInt("strax_fragment_payload_bytes", 220);
+  fLog = log;
   fErrorBit = false;
-  fMissingVerified = 0;
-  fOutputPath = "";
   fThreadId = std::this_thread::get_id();
-  fBytesProcessed = 0;
-  fFragmentSize = 0;
-  fForceQuit = false;
-  fFullChunkLength = fChunkLength+fChunkOverlap;
-  fFragmentsProcessed = 0;
-  fEventsProcessed = 0;
-  fProcTimeDP = fProcTimeEv = fProcTimeCh = fCompTime = 0.;
+  fProcTimeDP = fProcTimeEv = fProcTimeCh = 0.;
 }
 
 StraxFormatter::~StraxFormatter(){
@@ -85,35 +73,6 @@ StraxFormatter::~StraxFormatter(){
       fProcTimeDP, fProcTimeEv, fProcTimeCh, fCompTime);
 }
 
-int StraxFormatter::Initialize(Options *options, MongoLog *log, DAQController *dataSource,
-			      std::string hostname){
-  fOptions = options;
-  fFragmentBytes = fOptions->GetInt("strax_fragment_payload_bytes", 110*2);
-
-  fDataSource = dataSource;
-  dataSource->GetDataFormat(fFmt);
-  fLog = log;
-  fErrorBit = false;
-
-  fBufferNumChunks = fOptions->GetInt("strax_buffer_num_chunks", 2);
-  fWarnIfChunkOlderThan = fOptions->GetInt("strax_chunk_phase_limit", 2);
-
-  std::string output_path = fOptions->GetString("strax_output_path", "./");
-  try{
-    fs::path op(output_path);
-    op /= run_name;
-    fOutputPath = op;
-    fs::create_directory(op);
-  }
-  catch(...){
-    fLog->Entry(MongoLog::Error, "StraxInserter::Initialize tried to create output directory but failed. Check that you have permission to write here.");
-    return -1;
-  }
-  fProcTimeDP = fProcTimeEv = fProcTimeCh = fCompTime = microseconds(0);
-
-  return 0;
-}
-
 void StraxFormatter::Close(std::map<int,int>& ret){
   fActive = false;
   const std::lock_guard<std::mutex> lg(fFC_mutex);
@@ -131,8 +90,17 @@ void StraxFormatter::GetDataPerChan(std::map<int, int>& ret) {
   return;
 }
 
+void StraxFormatter::Process(std::string_view input) {
+  if (input[0] == 0) return ProcessDatapacket(input);
+  if (input[0] == 1) return ProcessEvent(input);
+  if (input[0] == 2) return ProcessChannel(input);
+  else fLog->Entry(MongoLog::Warning, "Unknown task code %c, %i bytes scrapped", input[0], input.size());
+  return;
+}
+
 void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, int16_t bid, uint32_t et, int ro) {
   std::string fragment;
+  fragment.reserve(fFragmentBytes + fStraxHeaderSize);
   fragment.append((char*)&timestamp, sizeof(timestamp));
   int32_t length = fFragmentBytes>>1;
   fragment.append((char*)&length, sizeof(length));
@@ -152,23 +120,20 @@ void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, int16_t bid, 
   AddFragmentToBuffer(fragment, timestamp, et, ro);
 }
 
-void StraxFormatter::ProcessDatapacket(std::string&& str, const int& bid, const int& words, const uint32_t& clock_counter, const uint32_t& header_time){
-
-  struct timespec dp_start, dp_end, ev_start, ev_end;
-
-  // Take a buffer and break it up into one document per channel
-
-  u_int32_t *buff = dp->buff;
-  u_int32_t idx = 0;
-  unsigned total_words = dp->size/sizeof(u_int32_t);
+void StraxFormatter::ProcessDatapacket(std::string_view dp){
+  // One datapacket contains one or more events, we split those up here
+  const int header_size = 4*sizeof(int) + sizeof(char);
+  const uint32_t const *buff = (const uint32_t const*)(dp.data()+header_size);
+  uint32_t this_idx = 1, last_idx = 0;
+  unsigned total_words = (dp.size()-header_size)/sizeof(uint32_t);
+  char code = 1;
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &dp_start);
-  while(idx < total_words && fForceQuit == false){
-
+  while(idx < total_words){
     if(buff[idx]>>28 == 0xA){ // 0xA indicates header at those bits
-      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_start);
-      idx += ProcessEvent(buff+idx, total_words-idx, dp->clock_counter, dp->header_time, dp->bid);
-      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_end);
-      fProcTimeEv += timespec_subtract(ev_end, ev_start);
+      std::string event(this_idx-last_idx+1);
+      event[0] = 1;
+      event.replace(1, this_idx-last_idx, dp.substr(last_idx, this_idx-last_idx));
+      fTP->AddTask(fNext, std::move(event));
     } else
       idx++;
   }

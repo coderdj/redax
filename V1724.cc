@@ -230,8 +230,8 @@ int V1724::Read(ThreadPool* tp){
   if ((GetAcquisitionStatus() & 0x8) == 0) return 0;
   // Initialize
   int blt_bytes=0, nb=0, ret=-5;
-  std::list<std::pair<char*, int>> xfer_buffers;
-  const int overhead_bytes = 4*sizeof(int);
+  std::vector<std::pair<char*, int>> xfer_buffers;
+  const int overhead_bytes = 4*sizeof(int) + sizeof(char);
 
   int count = 0;
   int alloc_size = BLT_SIZE*fBLTSafety;
@@ -278,7 +278,9 @@ int V1724::Read(ThreadPool* tp){
     alloc_size = blt_bytes*fBufferSafety + overhead_bytes;
     std::string dp;
     dp.reserve(alloc_size);
-    dp.append((char*)&fBLT, sizeof(fBLT));
+    char code = 0;
+    dp.append(&code, sizeof(code));
+    dp.append((char*)&fBID, sizeof(fBID));
     dp.append((char*)&blt_bytes, sizeof(blt_bytes));
     uint32_t header_time = GetHeaderTime(xfer_buffers.front().first, xfer_buffers.front().second);
     int clock_counter = GetClockCounter(header_time);
@@ -294,7 +296,7 @@ int V1724::Read(ThreadPool* tp){
         "Board %i funny buffer accumulation: %i/%i from %i BLTs",
         fBID, bytes_copied, blt_bytes, count);
 
-    tp->AddTask(&StraxFormatter::Process, fSF, std::move(dp));
+    tp->AddTask(fNext, std::move(dp));
   }
   for (auto b : xfer_buffers) delete[] b.first;
   return blt_bytes;
