@@ -5,13 +5,14 @@
 #include <vector>
 #include <map>
 #include <chrono>
+#include <tuple>
+#include <string_view>
+#include "ThreadPool.hh"
 
 class MongoLog;
 class Options;
-class data_packet;
-class ThreadPool;
 
-class V1724{
+class V1724 : public Processor{
 
  public:
   V1724(MongoLog *log, Options *options);
@@ -25,10 +26,10 @@ class V1724{
 
   int bid() {return fBID;}
 
-  virtual int LoadDAC(std::vector<u_int16_t> &dac_values);
-  void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
+  virtual int LoadDAC(std::vector<uint16_t> &dac_values);
+  void ClampDACValues(std::vector<uint16_t>&, std::map<std::string, std::vector<double>>&);
   unsigned GetNumChannels() {return fNChannels;}
-  int SetThresholds(std::vector<u_int16_t> vals);
+  int SetThresholds(std::vector<uint16_t> vals);
 
   // Acquisition Control
 
@@ -42,6 +43,11 @@ class V1724{
   virtual bool EnsureStopped(int ntries, int sleep);
   virtual int CheckErrors();
   virtual uint32_t GetAcquisitionStatus();
+
+  virtual void Process(std::string_view);
+
+  virtual std::tuple<int, int uint32_t> UnpackEventHeader(std::string_view);
+  virtual std::tuple<int, int64_t, uint16_t> UnpackChannelHeader(std::string_view);
 
   std::map<std::string, int> DataFormatDefinition;
 
@@ -76,7 +82,7 @@ protected:
 
   // Stuff for clock reset tracking
   int fRolloverCounter;
-  u_int32_t fLastClock;
+  uint32_t fLastClock;
   std::chrono::high_resolution_clock::time_point fLastClockTime;
   std::chrono::nanoseconds fClockPeriod;
 
@@ -86,5 +92,16 @@ protected:
 
 };
 
+inline std::tuple<int, int, uint32_t> V1724::UnpackEventHeader(std::string_view sv) {
+  // returns {words this event, channel mask, header timestamp}
+  uint32_t* buff = (uint32_t*)sv.data();
+  return {buff[0]&0xFFFFFFF, buff[1]&0xFF, buff[3]&0x7FFFFFFF};
+}
+
+inline std::tuple<int64_t, uint16_t, std::string_view> V1724::UnpackChannelHeader(std::string_vew sv, long rollovers, uint32_t) {
+  // returns {timestamp, baseline, string view of the waveform}
+  uint32_t* buff = (uint32_t*)sv.data();
+  return {(rollovers<<31)+long(buff[1]&0x7FFFFFFF), 0, sv.substr(sv+2*sizeof(uint32_t))};
+}
 
 #endif

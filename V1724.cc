@@ -226,7 +226,7 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int V1724::Read(ThreadPool* tp){
+int V1724::Read(){
   if ((GetAcquisitionStatus() & 0x8) == 0) return 0;
   // Initialize
   int blt_bytes=0, nb=0, ret=-5;
@@ -296,7 +296,7 @@ int V1724::Read(ThreadPool* tp){
         "Board %i funny buffer accumulation: %i/%i from %i BLTs",
         fBID, bytes_copied, blt_bytes, count);
 
-    tp->AddTask(fNext, std::move(dp));
+    fTP->AddTask(this, std::move(dp));
   }
   for (auto b : xfer_buffers) delete[] b.first;
   return blt_bytes;
@@ -361,4 +361,8 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
   fLog->Entry(MongoLog::Warning,"Board %i MonitorRegister failed for 0x%04x with mask 0x%04x and register value 0x%04x, wanted 0x%04x",
           fBID, reg, mask, rval,val);
   return false;
+}
+
+void V1724::Process(std::string_view sv) {
+  char code = sv[0];
 }
