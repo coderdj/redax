@@ -6,10 +6,12 @@
 class V1730 : public V1724 {
 
 public:
-  V1730(MongoLog *log, Options *options);
+  V1730(std::shared_ptr<ThreadPool>&, std::shared_ptr<Processor>&, std::shared_ptr<Options>&, std::shared_ptr<MongoLog>&);
   virtual ~V1730();
 
 private:
+  virtual std::tuple<int, int, bool, uint32_t> UnpackEventHeader(std::u32string_view);
+  virtual std::tuple<int64_t, uint16_t, std::u32string_view> UnpackChannelHeader(std::u32string_view, long, uint32_t, uint32_t);
 
 };
 

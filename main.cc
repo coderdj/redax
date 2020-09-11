@@ -2,16 +2,18 @@
 #include <string>
 #include <iomanip>
 #include <csignal>
-#include "DAQController.hh"
 #include <thread>
 #include <unistd.h>
-#include "MongoLog.hh"
-#include "Options.hh"
 #include <limits.h>
 #include <chrono>
 #include <thread>
 #include <atomic>
 #include <getopt.h>
+#include <memory>
+
+#include "DAQController.hh"
+#include "MongoLog.hh"
+#include "Options.hh"
 
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
@@ -26,7 +28,7 @@ void SignalHandler(int signum) {
     return;
 }
 
-void UpdateStatus(std::string suri, std::string dbname, DAQController* controller) {
+void UpdateStatus(std::string suri, std::string dbname, std::shared_ptr<DAQController> controller&) {
   mongocxx::uri uri(suri);
   mongocxx::client c(uri);
   mongocxx::collection status = c[dbname]["status"];
@@ -39,9 +41,9 @@ void UpdateStatus(std::string suri, std::string dbname, DAQController* controlle
         "time" << bsoncxx::types::b_date(system_clock::now())<<
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
-	"buffer_length" << controller->GetBufferLength() <<
-        "buffer_size" << controller->GetBufferSize()/1e6 <<
-        "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
+        "waiting" << controller->GetWaiting() <<
+        "running" << controller->GetRunning() <<
+	"buffer" << controller->GetBufferSize() <<
 	"run_mode" << controller->run_mode() <<
 	"channels" << bsoncxx::builder::stream::open_document <<
 	[&](bsoncxx::builder::stream::key_context<> doc){
@@ -125,7 +127,7 @@ int main(int argc, char** argv){
   mongocxx::collection dac_collection = db["dac_calibration"];
 
   // Logging
-  MongoLog *logger = new MongoLog(log_retention, log_dir);
+  auto logger = std::make_shared<MongoLog>(log_retention, log_dir);
   int ret = logger->Initialize(suri, dbname, "log", hostname, true);
   if(ret!=0){
     std::cout<<"Exiting"<<std::endl;
@@ -133,11 +135,11 @@ int main(int argc, char** argv){
   }
 
   //Options
-  Options *fOptions = NULL;
-  
+  std::shared_ptr<Options> fOptions;
+
   // The DAQController object is responsible for passing commands to the
   // boards and tracking the status
-  DAQController *controller = new DAQController(logger, hostname);
+  auto controller = std::make_shared<DAQController>(logger, hostname);
   std::vector<std::thread*> readoutThreads;
   std::thread status_update(&UpdateStatus, suri, dbname, controller);
   using namespace std::chrono;
@@ -328,6 +330,4 @@ int main(int argc, char** argv){
   exit(0);
 
 }
-
-
 

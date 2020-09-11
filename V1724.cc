@@ -8,19 +8,15 @@
 #include <iostream>
 #include "MongoLog.hh"
 #include "Options.hh"
-#include "StraxInserter.hh"
 #include <CAENVMElib.h>
 #include <sstream>
-#include <list>
 #include <utility>
-#include "ThreadPool.hh"
 
 
-V1724::V1724(MongoLog  *log, Options *options){
-  fOptions = options;
+V1724::V1724(std::shared_ptr<ThreadPool>& tp, std::shared_ptr<Processor>& next, std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log) : 
+  Processor(tp, next, opts, log), fDPoverhead(3), fEVoverhead(3), fCHoverhead(5) {
   fBoardHandle=fLink=fCrate=fBID=-1;
   fBaseAddress=0;
-  fLog = log;
 
   fAqCtrlRegister = 0x8100;
   fAqStatusRegister = 0x8104;
@@ -36,23 +32,16 @@ V1724::V1724(MongoLog  *log, Options *options){
   fReadoutStatusRegister = 0xEF04;
   fBoardErrRegister = 0xEF00;
 
+  fArtificialDeadtimeChannel = 790;
+  fClockCycle = 10; // ns
+  fSampleWidth = 10; // ns
+
   BLT_SIZE=512*1024; // one channel's memory
 
-  DataFormatDefinition = {
-    {"channel_mask_msb_idx", -1},
-    {"channel_mask_msb_mask", -1},
-    {"channel_header_words", 2},
-    {"ns_per_sample", 10},
-    {"ns_per_clk", 10},   
-    // Channel indices are given relative to start of channel
-    // i.e. the channel size is at index '0'
-    {"channel_time_msb_idx", -1},
-    {"channel_time_msb_mask", -1},
-
-  };
-
   fBLTSafety = 1.4;
-  fBufferSafety = 1.1;
+  fMissed = 0;
+  fFailures = 0;
+  fCheckFail = false;
 }
 
 V1724::~V1724(){
@@ -102,7 +91,6 @@ int V1724::CheckErrors(){
   return ret;
 }
 
-
 int V1724::Init(int link, int crate, int bid, unsigned int address){
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
@@ -120,14 +108,13 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   fBaseAddress=address;
   fRolloverCounter = 0;
   fLastClock = 0;
-  u_int32_t word(0);
+  uint32_t word(0);
   int my_bid(0);
-  
+
   fBLTSafety = fOptions->GetDouble("blt_safety_factor", 1.5);
-  fBufferSafety = fOptions->GetDouble("buffer_safety_factor", 1.1);
   BLT_SIZE = fOptions->GetInt("blt_size", 512*1024);
   // there's a more elegant way to do this, but I'm not going to write it
-  fClockPeriod = std::chrono::nanoseconds((1l<<31)*DataFormatDefinition["ns_per_clk"]);
+  fClockPeriod = std::chrono::nanoseconds((1l<<31)*fClockCycle);
 
   if (Reset()) {
     fLog->Entry(MongoLog::Error, "Board %i unable to pre-load registers", fBID);
@@ -161,9 +148,9 @@ int V1724::Reset() {
   return ret;
 }
 
-uint32_t V1724::GetHeaderTime(uint32_t *buff, int size){
+uint32_t V1724::GetHeaderTime(char32_t* buff, int size){
   int idx = 0;
-  while(idx < size/sizeof(uint32_t)){
+  while(idx < size){
     if(buff[idx]>>28==0xA){
       return buff[idx+3]&0x7FFFFFFF;
     }
@@ -200,8 +187,7 @@ int V1724::GetClockCounter(uint32_t timestamp){
 }
 
 int V1724::WriteRegister(unsigned int reg, unsigned int value){
-  u_int32_t write=0;
-  write+=value;
+  uint32_t write=value;
   int ret = 0;
   if((ret = CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg,
 			&write,cvA32_U_DATA,cvD32)) != cvSuccess){
@@ -226,21 +212,18 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int V1724::Read(){
+int V1724::Read(std::u32string* outptr){
   if ((GetAcquisitionStatus() & 0x8) == 0) return 0;
   // Initialize
-  int blt_bytes=0, nb=0, ret=-5;
-  std::vector<std::pair<char*, int>> xfer_buffers;
-  const int overhead_bytes = 4*sizeof(int) + sizeof(char);
+  int blt_words=0, nb=0, ret=-5;
+  std::vector<std::pair<char32_t*, int>> xfer_buffers;
 
   int count = 0;
-  int alloc_size = BLT_SIZE*fBLTSafety;
-  char* thisBLT = nullptr;
-  // digitizer has at least one event
+  int alloc_size = BLT_SIZE*fBLTSafety/sizeof(char32_t);
+  char32_t* thisBLT = nullptr;
   do{
-
     // Reserve space for this block transfer
-    thisBLT = new char[alloc_size];
+    thisBLT = new char32_t[alloc_size];
 
     ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress, thisBLT,
 				     BLT_SIZE, cvA32_U_MBLT, cvD64, &nb);
@@ -256,11 +239,11 @@ int V1724::Read(){
     }
     if (nb > BLT_SIZE) fLog->Entry(MongoLog::Message,
         "Board %i got %i more bytes than asked for (headroom %i)",
-        fBID, nb-BLT_SIZE, alloc_size-nb);
+        fBID, nb-BLT_SIZE, alloc_size*sizeof(char32_t)-nb);
 
     count++;
-    blt_bytes+=nb;
-    xfer_buffers.emplace_back(thisBLT, nb);
+    blt_words+=nb/sizeof(char32_t);
+    xfer_buffers.emplace_back(thisBLT, nb/sizeof(char32_t));
 
   }while(ret != cvBusError);
 
@@ -273,33 +256,36 @@ int V1724::Read(){
   // data and free up the rest of the memory reserved as buffer.
   // In tests this does not seem to impact our ability to read out the V1724 at the
   // maximum bandwidth of the link.
-  if(blt_bytes>0){
-    int bytes_copied = overhead_bytes;
-    alloc_size = blt_bytes*fBufferSafety + overhead_bytes;
-    std::string dp;
+  if(blt_words>0){
+    // data packet header:
+    // 1 word, task code
+    // 1 word, header time
+    // 1 word, clock counter
+    alloc_size = blt_words + fDPoverhead;
+    std::u32string dp;
     dp.reserve(alloc_size);
-    char code = 0;
-    dp.append(&code, sizeof(code));
-    dp.append((char*)&fBID, sizeof(fBID));
-    dp.append((char*)&blt_bytes, sizeof(blt_bytes));
-    uint32_t header_time = GetHeaderTime(xfer_buffers.front().first, xfer_buffers.front().second);
+    dp += ThreadPool::TaskCode::UnpackDatapacket;
+    uint32_t word = 0;
+    word = GetHeaderTime(xfer_buffers.front().first, xfer_buffers.front().second);
     int clock_counter = GetClockCounter(header_time);
-    dp.append((char*)&header_time, sizeof(header_time));
-    dp.append((char*)&clock_counter, sizeof(clock_counter));
-    // skip clock counter and header time for now
+    dp += word;
+    dp += clock_counter;
+    int words_copied = 0;
     for (auto& xfer : xfer_buffers) {
       dp.append(xfer.first, xfer.second);
-      bytes_copied += xfer.second;
+      words_copied += xfer.second;
     }
     fBLTCounter[count]++;
-    if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Message,
+    if (words_copied != blt_words) fLog->Entry(MongoLog::Message,
         "Board %i funny buffer accumulation: %i/%i from %i BLTs",
-        fBID, bytes_copied, blt_bytes, count);
-
-    fTP->AddTask(this, std::move(dp));
+        fBID, words_copied, blt_words, count);
+    if (outptr != nullptr)
+      *outptr = dp.substr(fDPoverhead);
+    else
+      fTP->AddTask(this, std::move(dp));
   }
-  for (auto b : xfer_buffers) delete[] b.first;
-  return blt_bytes;
+  for (auto& b : xfer_buffers) delete[] b.first;
+  return blt_words;
 }
 
 int V1724::LoadDAC(std::vector<uint16_t> &dac_values){
@@ -363,6 +349,119 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
   return false;
 }
 
-void V1724::Process(std::string_view sv) {
-  char code = sv[0];
+void V1724::Process(std::u32string_view sv) {
+  if (sv[0] == ThreadPool::TaskCode::UnpackDatapacket) return DPtoEvents(sv);
+  if (sv[0] == ThreadPool::TaskCode::UnpackEvent) return EventToChannels(sv);
+  fLog->Entry(MongoLog::Warning, "V1724::Process received unknown task code %i, %i words scrapped", sv[0], sv.size());
+  return;
 }
+
+void V1724::DPtoEvents(std::u32string_view sv) {
+  // event header format:
+  // 1 word, task code
+  // 1 word, header time
+  // 1 word, clock counter
+  uint32_t word;
+  auto it = sv.begin() + fDPoverhead;
+  bool bMissed = false;
+  while (it < sv.end()) {
+    if ((*it)>>28 == 0xA) {
+      std::u32string event;
+      word = (*it)&0xFFFFFFF;
+      event.reserve(word + fEVoverhead);
+      event += ThreadPool::TaskCode::UnpackEvent;
+      event += sv[1]; // header time
+      event += sv[2]; // clock counter
+      event.append(it, it+word);
+      it += word;
+      bMissed = false;
+      fTP->AddTask(this, std::move(event));
+    } else {
+      if (!bMissed) {
+        fMissed++;
+        bMissed = true;
+      }
+      it++;
+    }
+  }
+}
+
+void V1724::EventToChannels(std::u32string_view sv) {
+  // channel header format:
+  // 2 words timestamp
+  // 1 word (ch in MSB, board id in LSB)
+  // 1 word (sample width, baseline)
+  const int event_header_words(4);
+  uint32_t header_time = sv[1];
+  long clock_counter = sv[2];
+  sv.remove_prefix(fEVoverhead);
+  auto [words, mask, fail, event_time] = UnpackEventHeader(sv);
+  if (fail) {
+    fFailures++;
+    fCheckFail = true;
+    return GenerateArtificialDeadtime(((clock_counter<<31)+event_time)*fClockCycle);
+  }
+  sv.remove_prefix(event_header_words);
+  int n_channels = std::bitset<16>(mask).count();
+
+  for (int ch = 0; ch < fNChannels; ch++) {
+    if (mask & (1<<ch)) {
+      std::u32string channel;
+      auto [timestamp, words_this_ch, baseline, wf] = UnpackChannelHeader(sv,
+          clock_counter, header_time, event_time, words, n_channels);
+      channel.reserve(fCHoverhead + wf.size());
+      channel += ThreadPool::TaskCode::UnpackChannel;
+      sv.remove_prefix(words_this_ch);
+
+      channel.append((char32_t*)&timestamp, sizeof(timestamp)/sizeof(char32_t));
+      uint32_t word = fBID;
+      word |= (ch << 16);
+      channel += word;
+      word = baseline;
+      word |= (fSampleWidth << 16);
+      channel += word;
+      channel += wf;
+
+      fTP->AddTask(fNext.get(), std::move(channel));
+    } // if mask
+  } // for ch in channels
+}
+
+void V1724::GenerateArtificialDeadtime(int64_t ts) {
+  std::u32string data;
+  data.reserve(fCHoverhead + 1);
+  data.append((char32_t*)&ts, sizeof(ts)/sizeof(char32_t));
+  uint32_t word = fBID;
+  word |= (fArtificialDeadtimeChannel << 16);
+  data += word;
+  word = fSampleWidth << 16;
+  data += word;
+  word = 0;
+  data += word;
+  fTP->AddTask(fNext.get(), std::move(data));
+  return;
+}
+
+int V1724::WordsThisChannel(std::u32string_view sv, int, int) {
+  // sv points to the start of the channel
+  return sv[0]&0x7FFFFF;
+}
+
+std::tuple<int, int, bool, uint32_t> V1724::UnpackEventHeader(std::u32string_view sv) {
+  // returns {words this event, channel mask, board fail, header timestamp}
+  return {sv[0]&0xFFFFFFF, sv[1]&0xFF, sv[1]&0x4000000, sv[3]&0x7FFFFFFF};
+}
+
+std::tuple<int64_t, int, uint16_t, std::u32string_view> V1724::UnpackChannelHeader(std::u32string_view sv, long rollovers, uint32_t header_time, uint32_t, int, int) {
+  // returns {timestamp (ns), words this channel, baseline, waveform}
+  long ch_time = sv[1]&0x7FFFFFFF;
+  int words = sv[0]&0x7FFFFF;
+  // More rollover logic here, because channels are independent and the
+  // processing is multithreaded. We leverage the fact that readout windows are
+  // short and polled frequently compared to the rollover timescale, so there
+  // will never be a large difference in timestamps in one data packet
+  if (ch_time > 15e8 && header_time < 5e8 && rollovers != 0) rollovers--;
+  else if (ch_time < 5e8 && header_time > 15e8) rollovers++;
+  return {((rollovers<<31)+ch_time)*fClockCycle, words, 0, sv.substr(2, words-2)};
+}
+

@@ -51,14 +51,17 @@ std::string DAQController::run_mode(){
   }
 }
 
-int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys){
+int DAQController::InitializeElectronics(std::shared_ptr<Options>& options){
 
   End();
-  
+
   fOptions = options;
-  fNProcessingThreads = fOptions->GetNestedInt("processing_threads."+fHostname, 8);
-  fLog->Entry(MongoLog::Local, "Beginning electronics initialization with %i threads",
-	      fNProcessingThreads);
+  fLog->Entry(MongoLog::Local, "Beginning electronics initialization");
+
+  fTP = std::make_shared(fOptions->GetProcessingThreads());
+  std::shared_ptr<Processor> blank = nullptr;
+  fCompressor = std::make_shared<Compressor>(fTP, blank, fOptions, fLog);
+  fFormatter = std::make_shared<StraxFormatter>(fTP, fCompressor, fOptions, fLog);
 
   // Initialize digitizers
   fStatus = DAXHelpers::Arming;
@@ -66,30 +69,19 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   for(auto d : fOptions->GetBoards("V17XX")){
     fLog->Entry(MongoLog::Local, "Arming new digitizer %i", d.board);
 
-    V1724 *digi;
+    std::shared_ptr<V1724> digi;
     if(d.type == "V1724_MV")
-      digi = new V1724_MV(fLog, fOptions);
+      digi = std::make_shared<V1724_MV>(fTP, fFormatter, fOptions, fLog);
     else if(d.type == "V1730")
-      digi = new V1730(fLog, fOptions);
+      digi = std::make_shared<V1730>(fTP, fFormatter, fOptions, fLog);
     else
-      digi = new V1724(fLog, fOptions);
-
+      digi = std::make_shared<V1724>(fTP, fFormatter, fOptions, fLog);
 
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
-	fDigitizers[d.link].push_back(digi);
-        BIDs.push_back(digi->bid());
-        fBoardMap[digi->bid()] = digi;
-        fCheckFails[digi->bid()] = false;
-
-	if(std::find(keys.begin(), keys.end(), d.link) == keys.end()){
-	  fLog->Entry(MongoLog::Local, "Defining a new optical link at %i", d.link);
-	  keys.push_back(d.link);
-	}
-	fLog->Entry(MongoLog::Debug, "Initialized digitizer %i", d.board);
-	
-    }
-    else{
-      delete digi;
+      fDigitizers[d.link].push_back(digi);
+      BIDs.push_back(digi->bid());
+      fLog->Entry(MongoLog::Debug, "Initialized digitizer %i", d.board);
+    }else{
       fLog->Entry(MongoLog::Warning, "Failed to initialize digitizer %i", d.board);
       fStatus = DAXHelpers::Idle;
       return -1;
@@ -105,17 +97,17 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   std::map<int, std::map<std::string, std::vector<double>>> dac_values;
   if (fOptions->GetString("baseline_dac_mode") == "cached")
     fOptions->GetDAC(dac_values, BIDs);
-  std::vector<std::thread*> init_threads;
-  fMaxEventsPerThread = fOptions->GetInt("max_events_per_thread", 1024);
+  std::vector<std::thread> init_threads;
+  init_threads.reserve(fDigitizers.size());
   std::map<int,int> rets;
   // Parallel digitizer programming to speed baselining
   for( auto& link : fDigitizers ) {
     rets[link.first] = 1;
-    init_threads.push_back(new std::thread(&DAQController::InitLink, this,
-	  std::ref(link.second), std::ref(dac_values), std::ref(rets[link.first])));
+    init_threads.emplace_back(&DAQController::InitLink, this,
+      std::ref(link.second), std::ref(dac_values), std::ref(rets[link.first]));
   }
-  std::for_each(init_threads.begin(), init_threads.end(),
-      [](std::thread* t) {t->join(); delete t;});
+  for (auto& t : init_threads) if (t.joinable()) t.join();
+  init_threads.clear();
 
   if (std::any_of(rets.begin(), rets.end(), [](auto& p) {return p.second != 0;})) {
     fLog->Entry(MongoLog::Warning, "Encountered errors during digitizer programming");
@@ -131,16 +123,15 @@ int DAQController::InitializeElectronics(Options *options, std::vector<int>&keys
   for(auto const& link : fDigitizers ) {
     for(auto digi : link.second){
       if(fOptions->GetInt("run_start", 0) == 1)
-	digi->SINStart();
+        digi->SINStart();
       else
-	digi->AcquisitionStop();
+        digi->AcquisitionStop();
     }
   }
   sleep(1);
   fStatus = DAXHelpers::Armed;
 
   fLog->Entry(MongoLog::Local, "Arm command finished, returning to main loop");
-
 
   return 0;
 }
@@ -183,7 +174,7 @@ int DAQController::Stop(){
     if (one_still_running) std::this_thread::sleep_for(std::chrono::milliseconds(100));
   }while(one_still_running && counter++ < 10);
   if (counter >= 10) fLog->Entry(MongoLog::Local, "Boards taking a while to clear");
-  std::cout<<"Deactivating boards"<<std::endl;
+  fLog->Entry(MongoLog::Local, "Deactivating boards");
   for( auto const& link : fDigitizers ){
     for(auto digi : link.second){
       digi->AcquisitionStop(true);
@@ -205,53 +196,31 @@ int DAQController::Stop(){
 void DAQController::End(){
   Stop();
   fLog->Entry(MongoLog::Local, "Closing Digitizers");
-  for( auto const& link : fDigitizers ){
-    for(auto digi : link.second){
+  for(auto& link : fDigitizers ){
+    for(auto& digi : link.second){
       digi->End();
-      delete digi;
+      digi.reset();
     }
+    link.clear();
   }
-  fLog->Entry(MongoLog::Local, "Closing Processing Threads");
-  CloseProcessingThreads();
   fDigitizers.clear();
+  fLog->Entry(MongoLog::Local, "Closing Processing Threads");
+  CloseThreads();
   fStatus = DAXHelpers::Idle;
 
-  if(fBuffer.size() != 0){
-    fLog->Entry(MongoLog::Warning, "Deleting uncleard buffer of size %i",
-		fBuffer.size());
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
-    fBuffer.clear();
-    fBufferLength = 0;
-    fBufferSize = 0;
-  }
-  fOptions = NULL;
+  fOptions.reset();
   std::cout<<"Finished end"<<std::endl;
 }
 
 void DAQController::ReadData(int link){
   fReadLoop = true;
-  
-  // Raw data buffer should be NULL. If not then maybe it was not cleared since last time
-  fBufferMutex.lock();
-  if(fBuffer.size() != 0){
-    fLog->Entry(MongoLog::Debug, "Raw data buffer being brute force cleared.");
-    std::for_each(fBuffer.begin(), fBuffer.end(), [](auto dp){delete dp;});
-    fBuffer.clear();
-  }
-  fBufferLength = 0;
-  fDataRate = 0;
-  fBufferSize = 0;
-  fBufferMutex.unlock();
 
-  u_int32_t board_status = 0;
+  uint32_t board_status = 0;
   int readcycler = 0;
   int err_val = 0;
-  std::list<data_packet*> local_buffer;
-  data_packet* dp = nullptr;
-  int local_size;
   fRunning[link] = true;
+  int words;
   while(fReadLoop){
-
     for(auto digi : fDigitizers[link]) {
 
       // Every 1k reads check board status
@@ -261,9 +230,8 @@ void DAQController::ReadData(int link){
         fLog->Entry(MongoLog::Local, "Board %i has status 0x%04x",
             digi->bid(), board_status);
       }
-      if (fCheckFails[digi->bid()]) {
-        fCheckFails[digi->bid()] = false;
-        err_val = fBoardMap[digi->bid()]->CheckErrors();
+      if (digi->CheckFail()) {
+        err_val = digi->CheckErrors();
         fLog->Entry(MongoLog::Local, "Error %i from board %i", err_val, digi->bid());
         if (err_val == -1 || err_val == 0) {
 
@@ -275,16 +243,10 @@ void DAQController::ReadData(int link){
                                          digi->bid());
         }
       }
-      if (digi->Read(fThreadPool) < 0)
+      if ((words = digi->Read()) < 0)
         fStatus = DAXHelpers::Error;
-      if(dp->size>0){
-        dp->bid = digi->bid();
-	dp->header_time = digi->GetHeaderTime(dp->buff, dp->size);
-	dp->clock_counter = digi->GetClockCounter(dp->header_time);
-        local_buffer.push_back(dp);
-        local_size += dp->size;
-        dp = nullptr;
-      }
+      else
+        fReadRate += words*sizeof(char32_t);
     } // for digi in digitizers
     readcycler++;
     usleep(1);
@@ -295,134 +257,25 @@ void DAQController::ReadData(int link){
 
 std::map<int, int> DAQController::GetDataPerChan(){
   // Return a map of data transferred per channel since last update
-  // Clears the private maps in the StraxInserters
-  const std::lock_guard<std::mutex> lg(fPTmutex);
-  std::map <int, int> retmap;
-  for (const auto& pt : fProcessingThreads)
-    pt.inserter->GetDataPerChan(retmap);
-  return retmap;
-}
-
-long DAQController::GetStraxBufferSize() {
-  const std::lock_guard<std::mutex> lg(fPTmutex);
-  return std::accumulate(fProcessingThreads.begin(), fProcessingThreads.end(), 0,
-      [=](long tot, processingThread pt) {return tot + pt.inserter->GetBufferSize();});
-}
-
-int DAQController::GetBufferLength() {
-  const std::lock_guard<std::mutex> lg(fPTmutex);
-  return fBufferLength.load() + std::accumulate(fProcessingThreads.begin(),
-      fProcessingThreads.end(), 0,
-      [](int tot, auto pt){return tot + pt.inserter->GetBufferLength();});
-}
-
-void DAQController::GetDataFormat(std::map<int, std::map<std::string, int>>& retmap){
-  for( auto const& link : fDigitizers )
-    for(auto digi : link.second)
-      retmap[digi->bid()] = digi->DataFormatDefinition;
-}
-
-int DAQController::GetData(std::list<data_packet*>* retQ, unsigned num){
-  if (fBufferLength == 0) return 0;
-  int ret = 0;
-  data_packet* dp = nullptr;
-  const std::lock_guard<std::mutex> lg(fBufferMutex);
-  if (fBuffer.size() == 0) {
-    return 0;
-  }
-  if (num == 0) num = std::max(16, std::min(fMaxEventsPerThread, fBufferLength >> 4));
-  do {
-    dp = fBuffer.front();
-    fBuffer.pop_front();
-    fBufferLength--;
-    fBufferSize -= dp->size;
-    ret += dp->size;
-    retQ->push_back(dp);
-  } while (retQ->size() < num && fBuffer.size()>0);
-  return ret;
-}
-
-int DAQController::GetData(data_packet* &dp) {
-  if (fBufferLength == 0) return 0;
-  const std::lock_guard<std::mutex> lg(fBufferMutex);
-  if (fBuffer.size() == 0) {
-    return 0;
-  }
-  dp = fBuffer.front();
-  fBuffer.pop_front();
-  fBufferSize -= dp->size;
-  fBufferLength--;
-  return 1;
-}
-
-void DAQController::AddFragmentToOutputBuffer(std::string&& fragment) {
-  fOutputThreads[fOutputBufferCounter.load()].compressor.AddFragmentToBuffer(fragment);
-  fOutputBufferCounter = (fOutputBufferCounter + 1) % fNumOutputThreads;
-}
-
-bool DAQController::CheckErrors(){
-
-  // This checks for errors from the threads by checking the
-  // error flag in each object. It's appropriate to poll this
-  // on the order of ~second(s) and initialize a STOP in case
-  // the function returns "true"
-
-  const std::lock_guard<std::mutex> lg(fPTmutex);
-  for(unsigned int i=0; i<fProcessingThreads.size(); i++){
-    if(fProcessingThreads[i].inserter->CheckError()){
-      fLog->Entry(MongoLog::Error, "Error found in processing thread.");
-      fStatus=DAXHelpers::Error;
-      return true;
-    }
-  }
-  return false;
-}
-
-void DAQController::ManageThreads() {
-  
-}
-
-int DAQController::StartThreads(){
-  int ret = 0;
-  const std::lock_guard<std::mutex> lg(fPTmutex);
-  for(int i=0; i<fNProcessingThreads; i++){
-    processingThread p;
-    p.inserter = new StraxInserter();
-    if (p.inserter->Initialize(fOptions, fLog, this, fHostname)) {
-      p.pthread = new std::thread(); // something to delete later
-      ret++;
-    } else
-      p.pthread = new std::thread(&StraxInserter::ReadAndInsertData, p.inserter);
-    fProcessingThreads.push_back(p);
-  }
-  return ret;
+  // Clears the private maps in the StraxFormatter
+  return fFormatter ? fFormatter->GetRate() : std::map<int, int>{};
 }
 
 void DAQController::StopThreads(){
-  std::map<int,int> board_fails;
-  const std::lock_guard<std::mutex> lg(fPTmutex);
-  for(unsigned int i=0; i<fProcessingThreads.size(); i++){
-    fProcessingThreads[i].inserter->Close(board_fails);
-    // two stage process so there's time to clear data
+  fFormatter->End();
+  fFormatter.reset();
+  fCompressor->End();
+  fCompressor.reset();
+  int tasks = fTP->GetWaiting() + fTP->GetRunning();
+  while (tasks > 0) {
+    fLog->Entry(MongoLog::Local, "Waiting for pool to drain (%i)", tasks);
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    tasks = fTP->GetWaiting() + fTP->GetRunning();
   }
-  std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  for(unsigned int i=0; i<fProcessingThreads.size(); i++){
-    delete fProcessingThreads[i].inserter;
-    fProcessingThreads[i].pthread->join();
-    delete fProcessingThreads[i].pthread;
-  }
-
-  fProcessingThreads.clear();
-  if (std::accumulate(board_fails.begin(), board_fails.end(), 0,
-	[=](int tot, std::pair<int,int> iter) {return tot + iter.second;})) {
-    std::stringstream msg;
-    msg << "Found board failures: ";
-    for (auto& iter : board_fails) msg << iter.first << ":" << iter.second << " | ";
-    fLog->Entry(MongoLog::Warning, msg.str());
-  }
+  fTP.reset();
 }
 
-void DAQController::InitLink(std::vector<V1724*>& digis,
+void DAQController::InitLink(std::vector<shared_ptr<V1724>>& digis,
     std::map<int, std::map<std::string, std::vector<double>>>& cal_values, int& ret) {
   std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
   std::map<int, std::vector<u_int16_t>> dac_values;

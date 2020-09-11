@@ -4,32 +4,33 @@
 #include <cstdint>
 #include <vector>
 #include <map>
-#include <chrono>
 #include <tuple>
 #include <string_view>
+#include <atomic>
+#include <memory>
 #include "ThreadPool.hh"
+#include "Processor.hh"
 
-class MongoLog;
-class Options;
 
 class V1724 : public Processor{
 
  public:
-  V1724(MongoLog *log, Options *options);
+  V1724(std::shared_ptr<ThreadPool>&, std::shared_ptr<Processor>&, std::shared_ptr<Options>&, std::shared_ptr<MongoLog>&);
   virtual ~V1724();
 
   virtual int Init(int link, int crate, int bid, unsigned int address=0);
-  virtual int ReadData(ThreadPool*);
+  virtual int Read(std::u32string*=nullptr);
   virtual int WriteRegister(unsigned int reg, unsigned int value);
   virtual unsigned int ReadRegister(unsigned int reg);
   virtual int End();
 
   int bid() {return fBID;}
 
-  virtual int LoadDAC(std::vector<uint16_t> &dac_values);
+  virtual int LoadDAC(std::vector<uint16_t>&);
   void ClampDACValues(std::vector<uint16_t>&, std::map<std::string, std::vector<double>>&);
   unsigned GetNumChannels() {return fNChannels;}
-  int SetThresholds(std::vector<uint16_t> vals);
+  int SetThresholds(std::vector<uint16_t>);
+  bool CheckFail() {bool ret = fCheckFail; fCheckFail = false; return ret;}
 
   // Acquisition Control
 
@@ -44,18 +45,19 @@ class V1724 : public Processor{
   virtual int CheckErrors();
   virtual uint32_t GetAcquisitionStatus();
 
-  virtual void Process(std::string_view);
+  virtual void Process(std::u32string_view);
 
-  virtual std::tuple<int, int uint32_t> UnpackEventHeader(std::string_view);
-  virtual std::tuple<int, int64_t, uint16_t> UnpackChannelHeader(std::string_view);
-
-  std::map<std::string, int> DataFormatDefinition;
 
 protected:
-  uint32_t GetHeaderTime(uint32_t *buff, int size);
+  uint32_t GetHeaderTime(char32_t*, int);
   virtual int GetClockCounter(uint32_t timestamp);
   bool MonitorRegister(uint32_t reg, uint32_t mask, int ntries, int sleep, uint32_t val=1);
-  void DPtoEvents(std::string&);
+  virtual void DPtoEvents(std::u32string_view);
+  virtual void EventToChannels(std::u32string_view);
+  void GenerateArtificialDeadtime(int64_t);
+  virtual std::tuple<int, int, bool, uint32_t> UnpackEventHeader(std::u32string_view);
+  virtual std::tuple<int64_t, int, uint16_t, std::u32string_view> UnpackChannelHeader(std::u32string_view, long, uint32_t, uint32_t, int, int);
+
   // Some values for base classes to override 
   unsigned int fAqCtrlRegister;
   unsigned int fAqStatusRegister;
@@ -71,11 +73,13 @@ protected:
   unsigned int fReadoutStatusRegister;
   unsigned int fVMEAlignmentRegister;
   unsigned int fBoardErrRegister;
+  int fArtificialDeadtimeChannel;
+
+  int fClockCycle, fSampleWidth;
 
   int BLT_SIZE;
   std::map<int, long> fBLTCounter;
 
-  Options *fOptions;
   int fBoardHandle;
   int fLink, fCrate, fBID;
   unsigned int fBaseAddress;
@@ -86,22 +90,12 @@ protected:
   std::chrono::high_resolution_clock::time_point fLastClockTime;
   std::chrono::nanoseconds fClockPeriod;
 
-  MongoLog *fLog;
 
-  float fBLTSafety, fBufferSafety;
+  float fBLTSafety;
+  const int fDPoverhead, fEVoverhead, fCHoverhead;
+  std::atomic_int fMissed, fFailures;
+  std::atomic_bool fCheckFail;
 
 };
-
-inline std::tuple<int, int, uint32_t> V1724::UnpackEventHeader(std::string_view sv) {
-  // returns {words this event, channel mask, header timestamp}
-  uint32_t* buff = (uint32_t*)sv.data();
-  return {buff[0]&0xFFFFFFF, buff[1]&0xFF, buff[3]&0x7FFFFFFF};
-}
-
-inline std::tuple<int64_t, uint16_t, std::string_view> V1724::UnpackChannelHeader(std::string_vew sv, long rollovers, uint32_t) {
-  // returns {timestamp, baseline, string view of the waveform}
-  uint32_t* buff = (uint32_t*)sv.data();
-  return {(rollovers<<31)+long(buff[1]&0x7FFFFFFF), 0, sv.substr(sv+2*sizeof(uint32_t))};
-}
 
 #endif
