@@ -22,7 +22,7 @@ int WFSim::sNumPMTs;
 vector<WFSim*> WFSim::sRegistry;
 vector<pair<double, double>> WFSim::sPMTxy;
 std::condition_variable WFSim::sCV;
-MongoLog* WFSim::sLog;
+std::shared_ptr<MongoLog> WFSim::sLog;
 
 pair<double, double> PMTiToXY(int i) {
   if (i == 0) return std::make_pair(0., 0.);
@@ -48,10 +48,8 @@ WFSim::~WFSim() {
   End();
 }
 
-int WFSim::End() {
-  fRun = false;
-  if (fGeneratorThread.joinable()) fGeneratorThread.join();
-  return 0;
+void WFSim::End() {
+  AcquisitionStop(true);
 }
 
 int WFSim::WriteRegister(unsigned int reg, unsigned int val) {
@@ -139,7 +137,7 @@ void WFSim::GlobalDeinit() {
 
 uint32_t WFSim::GetAcquisitionStatus() {
   uint32_t ret = 0;
-  ret |= 0x4*(fRun == true); // run status
+  ret |= 0x4*(sRun == true); // run status
   ret |= 0x8*(fBufferSize > 0); // event ready
   ret |= 0x80; // no PLL unlock
   ret |= 0x100*(sRun == true || sReady == true); // board is ready
@@ -164,8 +162,7 @@ int WFSim::SINStart() {
 int WFSim::AcquisitionStop(bool i_mean_it) {
   if (!i_mean_it) return 0;
   GlobalDeinit();
-  fRun = false;
-  if (fGeneratorThread.joinable()) fGeneratorThread.join();
+  sRun = false;
   Reset();
   return 0;
 }
@@ -178,7 +175,7 @@ int WFSim::Reset() {
   return 0;
 }
 
-int WFSim::Read(u32string* buffer) {
+int WFSim::Read(std::u32string* outptr) {
   if (fBufferSize == 0) return 0;
   const std::lock_guard<std::mutex> lg(fBufferMutex);
   std::u32string dp;
@@ -186,7 +183,7 @@ int WFSim::Read(u32string* buffer) {
   dp += ThreadPool::TaskCode::UnpackDatapacket;
   uint32_t word = 0;
   word = GetHeaderTime(fBuffer.data(), fBuffer.size());
-  int clock_counter = GetClockCounter(header_time);
+  int clock_counter = GetClockCounter(word);
   dp += word;
   dp += clock_counter;
   dp += fBuffer;
@@ -201,7 +198,7 @@ int WFSim::Read(u32string* buffer) {
 void WFSim::Process(std::u32string_view sv) {
   if (sv[0] == ThreadPool::TaskCode::UnpackDatapacket) return DPtoEvents(sv);
   if (sv[0] == ThreadPool::TaskCode::UnpackEvent) return EventToChannels(sv);
-  if (sv[0] == ThreadPool::TaskCode::GenerateEvent) return MakeWaveform(sv);
+  if (sv[0] == ThreadPool::TaskCode::GenerateWaveform) return MakeWaveform(sv);
   fLog->Entry(MongoLog::Warning, "V1724::Process received unknown task code %i, %i words scrapped", sv[0], sv.size());
   return;
 }
@@ -261,7 +258,7 @@ vector<pair<int, double>> WFSim::MakeHitpattern(int s_i, int photons, double x, 
 
 void WFSim::SendToWorkers(const vector<pair<int, double>>& hits) {
   vector<std::u32string> hits_per_board(sRegistry.size());
-  int overhead = 3;
+  unsigned int overhead = 3;
   for (auto& s : hits_per_board) {
     s += ThreadPool::TaskCode::GenerateWaveform;
     s.append((char32_t*)&sClock, sizeof(sClock)/sizeof(char32_t));
@@ -276,7 +273,7 @@ void WFSim::SendToWorkers(const vector<pair<int, double>>& hits) {
   }
   for (unsigned i = 0; i < sRegistry.size(); i++)
     if (hits_per_board[i].size() > overhead)
-      sRegistry[i].fTP->AddTask(sRegistry[i], std::move(hits_per_board[i]));
+      sRegistry[i]->fTP->AddTask(sRegistry[i], std::move(hits_per_board[i]));
   return;
 }
 

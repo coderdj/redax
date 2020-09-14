@@ -29,7 +29,7 @@ class ThreadPool {
       UnpackChannel,
       CompressChunk,
       // WFsim stuff
-      GenerateEvent
+      GenerateWaveform
     };
 
   private:

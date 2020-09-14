@@ -3,6 +3,7 @@
 #include "V1724.hh"
 #include "V1724_MV.hh"
 #include "V1730.hh"
+#include "WFSim.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
 #include "StraxFormatter.hh"
@@ -76,6 +77,8 @@ int DAQController::InitializeElectronics(std::shared_ptr<Options>& options){
       digi = std::make_shared<V1724_MV>(fTP, fFormatter, fOptions, fLog);
     else if(d.type == "V1730")
       digi = std::make_shared<V1730>(fTP, fFormatter, fOptions, fLog);
+    else if(d.type == "V1724_fax")
+      digi = std::make_shared<WFSim>(fTP, fFormatter, fOptions, fLog);
     else
       digi = std::make_shared<V1724>(fTP, fFormatter, fOptions, fLog);
 

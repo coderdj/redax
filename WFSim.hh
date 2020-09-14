@@ -2,6 +2,7 @@
 #define _WFSIM_HH_
 
 #include "V1724.hh"
+#include "Options.hh"
 #include <random>
 #include <utility>
 #include <tuple>
@@ -12,10 +13,10 @@ public:
   virtual ~WFSim();
 
   virtual int Init(int, int, int, unsigned int);
-  virtual int Read(u32string*);
+  virtual int Read(std::u32string* outptr=nullptr);
   virtual int WriteRegister(unsigned int, unsigned int);
   virtual unsigned int ReadRegister(unsigned int);
-  virtual int End();
+  virtual void End();
 
   virtual int SINStart();
   virtual int SoftwareStart();
@@ -23,10 +24,12 @@ public:
   virtual int SWTrigger();
   virtual int Reset();
   virtual bool EnsureReady(int, int) {return sReady || sRun;}
-  virtual bool EnsureStarted(int, int) {return fRun==true;}
-  virtual bool EnsureStopped(int, int) {return fRun==false;}
+  virtual bool EnsureStarted(int, int) {return sRun==true;}
+  virtual bool EnsureStopped(int, int) {return sRun==false;}
   virtual int CheckErrors() {return 0;}
   virtual uint32_t GetAcquisitionStatus();
+
+  virtual void Process(std::u32string_view);
 
 protected:
   static void GlobalRun();
@@ -51,7 +54,7 @@ protected:
   static std::vector<WFSim*> sRegistry;
   static std::vector<std::pair<double, double>> sPMTxy;
   static std::condition_variable sCV;
-  static shared_ptr<MongoLog> sLog;
+  static std::shared_ptr<MongoLog> sLog;
 
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
   void MakeWaveform(std::u32string_view);

@@ -8,7 +8,7 @@ LDFLAGS_CC = ${LDFLAGS} -lexpect -ltcl8.6
 
 SOURCES_SLAVE = DAQController.cc main.cc Options.cc MongoLog.cc \
     StraxFormatter.cc V1724.cc V1724_MV.cc V1730.cc Compressor.cc \
-    ThreadPool.cc
+    ThreadPool.cc WFSim.cc
 OBJECTS_SLAVE = $(SOURCES_SLAVE:%.cc=%.o)
 DEPS_SLAVE = $(OBJECTS_SLAVE:%.o=%.d)
 EXEC_SLAVE = main
