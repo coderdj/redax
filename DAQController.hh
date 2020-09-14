@@ -24,7 +24,7 @@ class DAQController{
   */
 
 public:
-  DAQController(std::share_ptr<MongoLog>&, std::string hostname="DEFAULT");
+  DAQController(std::shared_ptr<MongoLog>&, std::string hostname="DEFAULT");
   ~DAQController();
 
   int InitializeElectronics(std::shared_ptr<Options>&);
@@ -42,20 +42,20 @@ public:
 
   int GetDataSize(){int ds = fDataRate; fDataRate=0; return ds;}
   std::map<int, int> GetDataPerChan();
-  bool CheckErrors();
 
 private:
 
   void ReadData(int link);
   void StopThreads();
-  void InitLink(std::vector<shared_ptr<V1724>>&,
+  void InitLink(std::vector<std::shared_ptr<V1724>>&,
       std::map<int, std::map<std::string, std::vector<double>>>&, int&);
-  int FitBaselines(std::vector<shared_ptr<V1724>>&,
+  int FitBaselines(std::vector<std::shared_ptr<V1724>>&,
       std::map<int, std::vector<uint16_t>>&, int,
       std::map<int, std::map<std::string, std::vector<double>>>&);
 
+  std::vector<std::thread> fROthreads;
   std::map<int, std::vector<std::shared_ptr<V1724>>> fDigitizers;
-
+  std::string fHostname;
   std::atomic_bool fReadLoop;
   std::map<int, std::atomic_bool> fRunning;
   int fStatus;
@@ -68,6 +68,7 @@ private:
   std::atomic_int fBufferSize;
   std::atomic_int fBufferLength;
   std::atomic_int fDataRate;
+  std::mutex fMutex;
 };
 
 #endif

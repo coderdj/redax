@@ -7,7 +7,7 @@
 #include <vector>
 #include <exception>
 #include "Processor.hh"
-#include "TheadPool.hh"
+#include "ThreadPool.hh"
 
 class InitException : public std::exception {};
 
@@ -20,7 +20,6 @@ public:
   StraxFormatter(std::shared_ptr<ThreadPool>&, std::shared_ptr<Processor>&, std::shared_ptr<Options>&, std::shared_ptr<MongoLog>&);
   virtual ~StraxFormatter();
 
-  virtual void End();
   std::map<int, int> GetDataPerChan();
   void Process(std::u32string_view);
 
@@ -29,7 +28,7 @@ private:
   int fStraxHeaderSize; // bytes
   int fSamplesPerFrag;
   std::map<int, std::atomic_int> fDataPerChan;
-  std::mutex fDPC_mutex;
+  std::mutex fMutex;
 };
 
 #endif // _STRAXFORMATTER_HH_ defined

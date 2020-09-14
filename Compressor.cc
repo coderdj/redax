@@ -13,21 +13,23 @@ namespace fs=std::experimental::filesystem;
 using namespace std::chrono;
 
 Compressor::Compressor(std::shared_ptr<ThreadPool>& tp, std::shared_ptr<Processor>& next,
-    std::shared_ptr<Options>& opts, std::share_ptr<MongoLog>& log) :
+    std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log) :
     Processor(tp, next, opts, log) {
-  fNumWorkers = fOptions->GetNestedInt("output_files." + fHostname, 4);
+  fNumWorkers = fOptions->GetNestedInt("output_files." + fOptions->fHostname, 4);
   fWorkers.reserve(fNumWorkers);
   for (int i = 0; i < fNumWorkers; i++)
-    fWorkers.emplace_back(opts, log, fHostname, i);
+    fWorkers.emplace_back(std::make_unique<CompressorWorker>(opts, log, fOptions->fHostname, i));
 }
 
 Compressor::~Compressor(){
   fWorkers.clear();
 }
 
-CompressorWorker::CompressorWorker(std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log, std::string hostname, int id) {
+Compressor::CompressorWorker::CompressorWorker(std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log, std::string hostname, int id) {
   fOptions = opts;
   fLog = log;
+  fID = id;
+  fHostname = hostname;
   fChunkNameLength=6;
 
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
@@ -49,12 +51,12 @@ CompressorWorker::CompressorWorker(std::shared_ptr<Options>& opts, std::shared_p
     fs::create_directory(op);
   }catch(...){
     fLog->Entry(MongoLog::Error, "Compressor::Initialize tried to create output directory but failed. Check that you have permission to write here.");
-    throw std::exception("Could not create output directory");
+    throw std::runtime_error("Could not create output directory");
   }
   fMinChunk = fMaxChunk = 0;
 }
 
-CompressorWorker::~CompressorWorker() {
+Compressor::CompressorWorker::~CompressorWorker() {
   fs::path write_path(fOutputPath);
   write_path /= "THE_END";
   if(!fs::exists(write_path)){
@@ -64,20 +66,27 @@ CompressorWorker::~CompressorWorker() {
     }
     catch(...){};
   }
-  auto outpath = write_path / fHostname + "_" + std::to_string(fID);
+  std::string filename = fHostname + "_" + std::to_string(fID);
+  auto outpath = write_path / filename;
   std::ofstream outfile(outpath, std::ios::out);
   outfile<<"...my only friend";
   outfile.close();
 }
 
-std::u32string CompressorWorker::AddFragmentToBuffer(std::string&& fragment) {
+void Compressor::AddFragmentToBuffer(std::string&& frag) {
+  auto s = fWorkers[SelectBuffer()]->AddFragmentToBuffer(std::move(frag));
+  if (s.size()>0) fTP->AddTask(this, std::move(s));
+  return;
+}
+
+std::u32string Compressor::CompressorWorker::AddFragmentToBuffer(std::string&& fragment) {
   int64_t timestamp = *(int64_t*)fragment.data();
   // Get the CHUNK and decide if this event also goes into a PRE/POST file
   int chunk_id = timestamp/fFullChunkLength;
   bool overlap = (chunk_id+1)* fFullChunkLength - timestamp <= fChunkOverlap;
   // Minor mess to maintain the same width of file names and do the pre/post stuff
   {
-    const std::lock_guard<std::mutex> lg(fMutex);
+    const std::unique_lock<std::mutex> lg(fMutex);
     if (fMinChunk - chunk_id > fWarnIfChunkOlderThan) {
       int16_t ch = *(int16_t*)(fragment.data()+14);
       fLog->Entry(MongoLog::Warning, "Thread %i received a fragment from CH%i %i chunks behind phase (%i/%i)?",
@@ -97,7 +106,7 @@ std::u32string CompressorWorker::AddFragmentToBuffer(std::string&& fragment) {
     if (fMaxChunk - fBufferNumChunks > fMinChunk) {
       int write_lte = fMaxChunk - fBufferNumChunks;
       std::u32string task;
-      task.reserve(fBuffers.size()+fBufferNumChunks);
+      task.reserve(fBuffer.size()+fBufferNumChunks);
       task += ThreadPool::TaskCode::CompressChunk;
       char32_t word = fID;
       task += word;
@@ -105,14 +114,14 @@ std::u32string CompressorWorker::AddFragmentToBuffer(std::string&& fragment) {
       return task;
     }
   }
-  return "";
+  return std::u32string();
 }
 
 void Compressor::End() {
-  for (auto& w : fWorkers) fTP->AddTask(this, std::move(w.End()));
+  for (auto& w : fWorkers) fTP->AddTask(this, std::move(w->End()));
 }
 
-std::u32string CompressorWorker::End() {
+std::u32string Compressor::CompressorWorker::End() {
   // returns a Task for all remaining data
   const std::lock_guard<std::mutex> lg(fMutex);
   std::u32string ret;
@@ -123,11 +132,11 @@ std::u32string CompressorWorker::End() {
   return ret;
 }
 
-void Compressor::Process(std::string_view input) {
+void Compressor::Process(std::u32string_view input) {
   int buffer_num = input[1];
   input.remove_prefix(2);
   for (int chunk : input) {
-    fWorkers[buffer_num].WriteOutChunk(chunk);
+    fWorkers[buffer_num]->WriteOutChunk(chunk);
   }
 }
 
@@ -139,9 +148,9 @@ static const LZ4F_preferences_t kPrefs = {
     { 0, 0, 0 },  /* reserved, must be set to 0 */
 };
 
-void CompressorWorker::WriteOutChunk(int chunk_i){
+void Compressor::CompressorWorker::WriteOutChunk(int chunk_i){
   // Write the contents of fFragments to compressed files
-  auto buffers = {&fBuffer[chunk_i], &fOverlapBuffer[chunk_i]};
+  std::vector<std::list<std::string>*> buffers = {&fBuffer[chunk_i], &fOverlapBuffer[chunk_i]};
   std::vector<size_t> uncompressed_size(2);
   std::vector<std::string> uncompressed(2);
   {
@@ -151,13 +160,13 @@ void CompressorWorker::WriteOutChunk(int chunk_i){
       uncompressed_size[i] = std::accumulate(buffers[i]->begin(),
           buffers[i]->end(), 0L,
           [&](auto tot, auto& s){return std::move(tot) + s.size();});
-      uncompressed[i].reserve(uncompresed_size[i]);
-      for (auto it = buffers[i]->begin(); it < buffers[i]->end(); it++)
+      uncompressed[i].reserve(uncompressed_size[i]);
+      for (auto it = buffers[i]->begin(); it != buffers[i]->end(); it++)
         uncompressed[i] += *it;
       buffers[i]->clear();
     }
-    fBuffer[buffer_num].erase(chunk_i);
-    fOverlapBuffer[buffer_num].erase(chunk_i);
+    fBuffer.erase(chunk_i);
+    fOverlapBuffer.erase(chunk_i);
 
     auto [_min, _max] = std::minmax_element(fBuffer.begin(), fBuffer.end(),
         [&](auto& a, auto& b){return a.first < b.first;});
@@ -166,11 +175,11 @@ void CompressorWorker::WriteOutChunk(int chunk_i){
   }
 
   // Compress it
-  std::vector<unique_ptr<char[]>>(2);
+  std::vector<std::unique_ptr<char[]>> out_buffer(2);
   std::vector<int> wsize(2, 0);
   for (int i = 0; i < 2; i++) {
     if(fCompressor == "blosc"){
-      out_buffer[i] = std::make_unique<char[]>(uncompressed_size+BLOSC_MAX_OVERHEAD);
+      out_buffer[i] = std::make_unique<char[]>(uncompressed_size[i]+BLOSC_MAX_OVERHEAD);
       wsize[i] = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size[i],
           uncompressed[i].data(), out_buffer[i].get(), 
           uncompressed_size[i]+BLOSC_MAX_OVERHEAD, "lz4", 0, 2);
@@ -184,6 +193,7 @@ void CompressorWorker::WriteOutChunk(int chunk_i){
       out_buffer[i] = std::make_unique<char[]>(max_compressed_size);
       wsize[i] = LZ4F_compressFrame(out_buffer[i].get(), max_compressed_size,
           uncompressed[i].data(), uncompressed_size[i], &kPrefs);
+    }
   }
 
   // write to *_TEMP
@@ -202,12 +212,12 @@ void CompressorWorker::WriteOutChunk(int chunk_i){
   // shenanigans or skulduggery?
   if(fs::exists(filename)) {
     fLog->Entry(MongoLog::Warning, "Chunk %s from thread %x already exists? %li vs %li bytes",
-          chunk_index.c_str(), buffer_num, fs::file_size(filename), wsize[0]);
+          chunk_index.c_str(), fID, fs::file_size(filename), wsize[0]);
   }
 
   // Move this chunk from *_TEMP to the same path without TEMP
   if(!fs::exists(output_dir))
-    fs::create_directory(outputdir);
+    fs::create_directory(output_dir);
   fs::rename(filename_temp, filename);
 
   // now redo half again for the overlap chunk
@@ -226,37 +236,34 @@ void CompressorWorker::WriteOutChunk(int chunk_i){
     // check for overwrite
     if (fs::exists(filename)) {
       fLog->Entry(MongoLog::Warning, "Chunk %s from thread %x already exists? %li vs %li bytes",
-          n.c_str(), buffer_num, fs::file_size(filename), wsize[1]);
+          n.c_str(), fID, fs::file_size(filename), wsize[1]);
     }
     // rename from *_TEMP to not _TEMP
     if (!fs::exists(output_dir))
-      fs::create_directory(ouput_dir);
+      fs::create_directory(output_dir);
     fs::rename(filename_temp, filename);
   }
   out_buffer[1].reset();
 
   CreateEmpty(chunk_i);
+  return;
 }
 
-void Compressor::End() {
-
-}
-
-std::string CompressorWorker::GetStringFormat(int id){
+std::string Compressor::CompressorWorker::GetStringFormat(int id){
   std::string chunk_index = std::to_string(id);
   while(chunk_index.size() < fChunkNameLength)
     chunk_index.insert(0, "0");
   return chunk_index;
 }
 
-fs::path CompressorWorker::GetDirectoryPath(const std::string& id, bool temp){
+fs::path Compressor::CompressorWorker::GetDirectoryPath(const std::string& id, bool temp){
   fs::path write_path(fOutputPath);
   write_path /= id;
   if(temp) write_path+="_temp";
   return write_path;
 }
 
-fs::path CompressorWorker::GetFilePath(const std::string& id, bool temp){
+fs::path Compressor::CompressorWorker::GetFilePath(const std::string& id, bool temp){
   fs::path write_path = GetDirectoryPath(id, temp);
   std::string filename = fHostname;
   filename += "_" + std::to_string(fID);
@@ -264,7 +271,7 @@ fs::path CompressorWorker::GetFilePath(const std::string& id, bool temp){
   return write_path;
 }
 
-void CompressorWorker::CreateEmpty(int check_up_to){
+void Compressor::CompressorWorker::CreateEmpty(int check_up_to){
   int chunk = fEmptyVerified;
   fEmptyVerified = check_up_to;
   for(; chunk<check_up_to; chunk++){

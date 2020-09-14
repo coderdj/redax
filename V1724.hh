@@ -19,10 +19,10 @@ class V1724 : public Processor{
   virtual ~V1724();
 
   virtual int Init(int link, int crate, int bid, unsigned int address=0);
-  virtual int Read(std::u32string*=nullptr);
+  virtual int Read(std::u32string* outptr=nullptr);
   virtual int WriteRegister(unsigned int reg, unsigned int value);
   virtual unsigned int ReadRegister(unsigned int reg);
-  virtual int End();
+  virtual void End();
 
   int bid() {return fBID;}
 
@@ -47,6 +47,8 @@ class V1724 : public Processor{
 
   virtual void Process(std::u32string_view);
 
+  virtual std::tuple<int, int, bool, uint32_t> UnpackEventHeader(std::u32string_view);
+  virtual std::tuple<int64_t, int, uint16_t, std::u32string_view> UnpackChannelHeader(std::u32string_view, long, uint32_t, uint32_t, int, int);
 
 protected:
   uint32_t GetHeaderTime(char32_t*, int);
@@ -55,8 +57,6 @@ protected:
   virtual void DPtoEvents(std::u32string_view);
   virtual void EventToChannels(std::u32string_view);
   void GenerateArtificialDeadtime(int64_t);
-  virtual std::tuple<int, int, bool, uint32_t> UnpackEventHeader(std::u32string_view);
-  virtual std::tuple<int64_t, int, uint16_t, std::u32string_view> UnpackChannelHeader(std::u32string_view, long, uint32_t, uint32_t, int, int);
 
   // Some values for base classes to override 
   unsigned int fAqCtrlRegister;

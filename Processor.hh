@@ -12,9 +12,8 @@ class MongoLog;
 class Processor {
   public:
     Processor(std::shared_ptr<ThreadPool>& tp, std::shared_ptr<Processor>& next, std::shared_ptr<Options>& options, std::shared_ptr<MongoLog>& log) : fTP(tp), fNext(next), fOptions(options), fLog(log) {}
-    virtual ~Processor();
-    virtual void Process(std::string_view) {}
-    virtual void Process(std::u32string_view) {}
+    virtual ~Processor() {}
+    virtual void Process(std::u32string_view)=0;
     virtual void End() {}
 
   protected:

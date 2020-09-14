@@ -267,7 +267,7 @@ int V1724::Read(std::u32string* outptr){
     dp += ThreadPool::TaskCode::UnpackDatapacket;
     uint32_t word = 0;
     word = GetHeaderTime(xfer_buffers.front().first, xfer_buffers.front().second);
-    int clock_counter = GetClockCounter(header_time);
+    int clock_counter = GetClockCounter(word);
     dp += word;
     dp += clock_counter;
     int words_copied = 0;
@@ -308,12 +308,12 @@ int V1724::SetThresholds(std::vector<u_int16_t> vals) {
   return ret;
 }
 
-int V1724::End(){
+void V1724::End(){
   if(fBoardHandle>=0)
     CAENVME_End(fBoardHandle);
   fBoardHandle=fLink=fCrate=-1;
   fBaseAddress=0;
-  return 0;
+  return;
 }
 
 void V1724::ClampDACValues(std::vector<u_int16_t> &dac_values,
@@ -404,7 +404,7 @@ void V1724::EventToChannels(std::u32string_view sv) {
   sv.remove_prefix(event_header_words);
   int n_channels = std::bitset<16>(mask).count();
 
-  for (int ch = 0; ch < fNChannels; ch++) {
+  for (unsigned ch = 0; ch < fNChannels; ch++) {
     if (mask & (1<<ch)) {
       std::u32string channel;
       auto [timestamp, words_this_ch, baseline, wf] = UnpackChannelHeader(sv,
@@ -440,11 +440,6 @@ void V1724::GenerateArtificialDeadtime(int64_t ts) {
   data += word;
   fTP->AddTask(fNext.get(), std::move(data));
   return;
-}
-
-int V1724::WordsThisChannel(std::u32string_view sv, int, int) {
-  // sv points to the start of the channel
-  return sv[0]&0x7FFFFF;
 }
 
 std::tuple<int, int, bool, uint32_t> V1724::UnpackEventHeader(std::u32string_view sv) {

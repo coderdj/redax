@@ -2,6 +2,7 @@
 #include "MongoLog.hh"
 #include "Options.hh"
 #include "ThreadPool.hh"
+#include "Compressor.hh"
 #include <thread>
 #include <cstring>
 #include <cstdarg>
@@ -23,7 +24,7 @@ double timespec_subtract(struct timespec& a, struct timespec& b) {
 StraxFormatter::StraxFormatter(std::shared_ptr<ThreadPool>& tp, std::shared_ptr<Processor>& next, std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log) : Processor(tp, next, opts, log) {
   fStraxHeaderSize=24;
   fFragmentBytes=fOptions->GetInt("strax_fragment_payload_bytes", 220);
-  fSamplesPerFragment = fFragmentBytes/sizeof(uint32_t);
+  fSamplesPerFrag = fFragmentBytes/sizeof(uint16_t);
 }
 
 StraxFormatter::~StraxFormatter(){
@@ -31,12 +32,12 @@ StraxFormatter::~StraxFormatter(){
 
 std::map<int, int> StraxFormatter::GetDataPerChan() {
   std::map<int, int> ret;
-  fDPC_mutex.lock();
+  fMutex.lock();
   for (auto& pair : fDataPerChan) {
     ret[pair.first] += pair.second;
     pair.second = 0;
   }
-  fDPC_mutex.unlock();
+  fMutex.unlock();
   return ret;
 }
 
@@ -49,7 +50,7 @@ void StraxFormatter::Process(std::u32string_view protofrag) {
   uint16_t sw = word>>16, bl = word&0xFFFF;
   int16_t global_ch;
   const int samples_per_word = 2;
-  if ((glocal_ch = fOptions->GetChannel(bid, ch)) == -1) {
+  if ((global_ch = fOptions->GetChannel(bid, ch)) == -1) {
     // can't parse channel map, so commit suicide
     std::string message = "Can't parse cable map, bid " + std::to_string(bid) + " " + std::to_string(ch);
     throw std::runtime_error(message.c_str());
@@ -61,7 +62,7 @@ void StraxFormatter::Process(std::u32string_view protofrag) {
   uint16_t* wf= (uint16_t*)protofrag.data();
 
   {
-    const std::lock_guard<std::mutex> lg(fDPC_mutex);
+    const std::lock_guard<std::mutex> lg(fMutex);
     fDataPerChan[global_ch] += protofrag.size()*sizeof(char32_t);
   }
 
@@ -70,9 +71,9 @@ void StraxFormatter::Process(std::u32string_view protofrag) {
     fragment.reserve(fFragmentBytes);
     uint32_t samples_this_fragment = fSamplesPerFrag;
     if (frag_i == num_frags-1)
-      samples_this_fragment = samples_in_pulse - frag_i*samples_per_fragment;
+      samples_this_fragment = samples_in_pulse - frag_i*fSamplesPerFrag;
 
-    int64_t time_this_fragment = timestamp + samples_per_fragment*sw*frag_i;
+    int64_t time_this_fragment = timestamp + fSamplesPerFrag*sw*frag_i;
     fragment.append((char*)&time_this_fragment, sizeof(time_this_fragment));
     fragment.append((char*)&samples_this_fragment, sizeof(samples_this_fragment));
     fragment.append((char*)&sw, sizeof(sw));
@@ -82,12 +83,12 @@ void StraxFormatter::Process(std::u32string_view protofrag) {
     fragment.append((char*)&bl, sizeof(bl));
 
     // Copy the raw buffer
-    fragment.append((char*)(wf + frag_i*samples_per_fragment), samples_this_fragment*2);
+    fragment.append((char*)(wf + frag_i*fSamplesPerFrag), samples_this_fragment*2);
     uint16_t zero_filler = 0;
     while((int)fragment.size()<fFragmentBytes+fStraxHeaderSize)
       fragment.append((char*)&zero_filler, sizeof(zero_filler));
 
-    fNext->AddFragmentToBuffer(std::move(fragment));
+    static_cast<Compressor*>(fNext.get())->AddFragmentToBuffer(std::move(fragment));
   }
   return;
 }

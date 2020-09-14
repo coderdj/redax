@@ -4,7 +4,7 @@
 
 #include <cmath>
 #include <thread>
-#include <stringstream>
+#include <sstream>
 
 #include <mongocxx/uri.hpp>
 #include <mongocxx/database.hpp>
@@ -111,7 +111,7 @@ int Options::Override(bsoncxx::document::view override_opts){
   return 0;  
 }
 
-long int Options::GetLongInt(std::string path, long int default_value){
+long int Options::GetLongInt(const std::string& path, long int default_value){
   try{
     return bson_options[path.c_str()].get_int64();
   }
@@ -130,7 +130,7 @@ long int Options::GetLongInt(std::string path, long int default_value){
   return -1;
 }
 
-double Options::GetDouble(std::string path, double default_value) {
+double Options::GetDouble(const std::string& path, double default_value) {
   try{
     return bson_options[path].get_double();
   } catch (const std::exception& e) {
@@ -139,7 +139,7 @@ double Options::GetDouble(std::string path, double default_value) {
   }
 }
 
-int Options::GetInt(std::string path, int default_value){
+int Options::GetInt(const std::string& path, int default_value){
 
   try{
     return bson_options[path].get_int32();
@@ -152,7 +152,7 @@ int Options::GetInt(std::string path, int default_value){
   return -1;
 }
 
-int Options::GetNestedInt(std::string path, int default_value){
+int Options::GetNestedInt(const std::string& path, int default_value){
   // Parse string
   std::vector<std::string> fields;
   std::stringstream ss(path);
@@ -173,7 +173,7 @@ int Options::GetNestedInt(std::string path, int default_value){
   return 0;
 }
 
-std::string Options::GetString(std::string path, std::string default_value){
+std::string Options::GetString(const std::string& path, std::string default_value){
   try{
     return bson_options[path].get_utf8().value.to_string();
   }
@@ -185,7 +185,7 @@ std::string Options::GetString(std::string path, std::string default_value){
   return "";
 }
 
-std::vector<BoardType> Options::GetBoards(std::string type){
+std::vector<BoardType> Options::GetBoards(const std::string& type){
   std::vector<BoardType> ret;
   bsoncxx::array::view subarr = bson_options["boards"].get_array().value;
 
@@ -328,9 +328,9 @@ int Options::GetProcessingThreads() {
     }catch(...){
       // it's either not an accepted value/type, or not there.
       fLog->Entry(MongoLog::Local, "Using default value for processing threads");
-      return 8;
     }
   }
+  return 8;
 }
 
 int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs,

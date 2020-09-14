@@ -9,6 +9,7 @@
 #include <string>
 #include <memory>
 #include <map>
+#include <condition_variable>
 
 class Processor;
 
@@ -32,6 +33,12 @@ class ThreadPool {
   private:
     void Run();
     void Kill() {fFinishNow = true; fCV.notify_all();}
+
+    struct task_t {
+      Processor* obj;
+      std::u32string input;
+    };
+
     std::vector<std::thread> fThreads;
     std::list<std::unique_ptr<task_t>> fQueue;
     std::condition_variable fCV;
@@ -39,11 +46,6 @@ class ThreadPool {
     std::atomic_bool fFinishNow;
     std::atomic_int fWaitingTasks, fRunningTasks;
     std::atomic_long fBufferBytes;
-
-    struct task_t {
-      Processor* obj;
-      std::u32string input;
-    };
 
     std::map<TaskCode, double> fBenchmarks;
     std::mutex fMutex, fMutex_;

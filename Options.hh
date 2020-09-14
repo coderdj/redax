@@ -80,6 +80,8 @@ public:
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
   void SaveBenchmarks(std::map<std::string, long>&, std::map<int, long>&, double, double, double, double);
 
+  std::string fHostname;
+
 private:
   int Load(std::string, mongocxx::collection&, std::string);
   int Override(bsoncxx::document::view);
@@ -89,7 +91,6 @@ private:
   std::shared_ptr<MongoLog> fLog;
   mongocxx::collection fDAC_collection;
   std::string fDBname;
-  std::string fHostname;
   std::string fDetector;
 };
 

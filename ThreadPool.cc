@@ -12,7 +12,7 @@ ThreadPool::ThreadPool(int num_threads) {
   fWaitingTasks = fRunningTasks = 0;
   fBufferBytes = 0;
   fThreads.reserve(num_threads);
-  for (int i = 0; i < num_threads; i++) fThreads.emplace_back(std::thread(&ThreadPool::Run, this));
+  for (int i = 0; i < num_threads; i++) fThreads.emplace_back(&ThreadPool::Run, this);
 }
 
 ThreadPool::~ThreadPool() {
@@ -23,9 +23,9 @@ ThreadPool::~ThreadPool() {
   fQueue.clear();
 }
 
-void AddTask(Processor* obj, std::u32string&& input) {
+void ThreadPool::AddTask(Processor* obj, std::u32string&& input) {
   {
-    std::lock_guard<std::mutex> lg(fMutex);
+    const std::unique_lock<std::mutex> lg(fMutex);
     fBufferBytes += input.size()*sizeof(char32_t);
     fQueue.emplace_back(new task_t{obj, std::move(input)});
     fWaitingTasks++;
@@ -43,18 +43,18 @@ void ThreadPool::Run() {
     fCV.wait(lk, [&]{return fWaitingTasks > 0 || fFinishNow;});
     if (fQueue.size() > 0 && !fFinishNow) {
       task = std::move(fQueue.front());
-      fQueue.pop_font();
+      fQueue.pop_front();
       fWaitingTasks--;
       fRunningTasks++;
       lk.unlock();
       fBufferBytes -= task->input.size()*sizeof(char32_t);
-      code = task->input[0];
+      code = static_cast<TaskCode>(task->input[0]);
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
       std::invoke(&Processor::Process, task->obj, task->input);
-      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &end);
+      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &stop);
       task.reset();
       fRunningTasks--;
-      benchmarks[code] += timespec_subtract(end, start);
+      benchmarks[code] += timespec_subtract(stop, start);
     } else {
       lk.unlock();
     }
