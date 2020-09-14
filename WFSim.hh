@@ -2,24 +2,17 @@
 #define _WFSIM_HH_
 
 #include "V1724.hh"
-#include "Options.hh"
-#include <thread>
 #include <random>
-#include <mutex>
-#include <atomic>
-#include <vector>
 #include <utility>
 #include <tuple>
-#include <array>
-#include <condition_variable>
 
 class WFSim : public V1724 {
 public:
-  WFSim(MongoLog* log, Options* options);
+  WFSim(std::shared_ptr<ThreadPool>&, std::shared_ptr<Processor>&, std::shared_ptr<Options>&, std::shared_ptr<MongoLog>&);
   virtual ~WFSim();
 
   virtual int Init(int, int, int, unsigned int);
-  virtual int ReadMBLT(uint32_t*&);
+  virtual int Read(u32string*);
   virtual int WriteRegister(unsigned int, unsigned int);
   virtual unsigned int ReadRegister(unsigned int);
   virtual int End();
@@ -37,10 +30,10 @@ public:
 
 protected:
   static void GlobalRun();
-  static void GlobalInit(fax_options_t&, MongoLog*);
+  static void GlobalInit(fax_options_t&, std::shared_ptr<MongoLog>&);
   static void GlobalDeinit();
   static std::tuple<double, double, double> GenerateEventLocation();
-  static std::array<int, 3> GenerateEventSize(double, double, double);
+  static std::vector<int> GenerateEventSize(double, double, double);
   static std::vector<std::pair<int, double>> MakeHitpattern(int, int, double, double, double);
   static void SendToWorkers(const std::vector<std::pair<int, double>>&);
 
@@ -58,33 +51,26 @@ protected:
   static std::vector<WFSim*> sRegistry;
   static std::vector<std::pair<double, double>> sPMTxy;
   static std::condition_variable sCV;
-  static MongoLog* sLog;
+  static shared_ptr<MongoLog> sLog;
 
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
-  void Run();
-  void ReceiveFromGenerator(std::vector<std::pair<int, double>>&&, long);
-  std::vector<std::vector<double>> MakeWaveform(const std::vector<std::pair<int, double>>&, int&);
+  void MakeWaveform(std::u32string_view);
   void ConvertToDigiFormat(const std::vector<std::vector<double>>&, int);
   std::vector<std::vector<double>> GenerateNoise(int, int=0xFF);
 
-  std::thread fGeneratorThread;
-  std::string fBuffer;
+  std::u32string fBuffer;
   std::mutex fBufferMutex;
   std::atomic_int fBufferSize;
   std::random_device fRD;
   std::mt19937_64 fGen;
   std::uniform_real_distribution<> fFlatDist;
   std::vector<double> fSPEtemplate;
-  std::mutex fMutex;
-  std::vector<std::pair<int, double>> fWFprimitive;
-  std::condition_variable fCV;
   std::vector<double> fBLoffset, fBLslope;
   std::vector<double> fNoiseRMS;
   std::vector<double> fBaseline;
   fax_options_t fFaxOptions;
-  long fTimestamp;
-  int fEventCounter;
-  std::atomic_bool fRun;
+  std::atomic_long fTimestamp;
+  std::atomic_int fEventCounter;
 };
 
 #endif // _WFSIM_HH_ defined

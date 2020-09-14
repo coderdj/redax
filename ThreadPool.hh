@@ -27,7 +27,9 @@ class ThreadPool {
       UnpackDatapacket = 0,
       UnpackEvent,
       UnpackChannel,
-      CompressChunk
+      CompressChunk,
+      // WFsim stuff
+      GenerateEvent
     };
 
   private:
