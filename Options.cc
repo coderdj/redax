@@ -3,6 +3,8 @@
 #include "MongoLog.hh"
 
 #include <cmath>
+#include <thread>
+#include <sstream>
 
 #include <mongocxx/uri.hpp>
 #include <mongocxx/database.hpp>
@@ -12,8 +14,9 @@
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
 
-Options::Options(MongoLog *log, std::string options_name, std::string hostname,
-          std::string suri, std::string dbname, std::string override_opts) : 
+Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name,
+    std::string hostname, std::string suri, std::string dbname,
+    std::string override_opts) : 
     fLog(log), fDBname(dbname), fHostname(hostname) {
   bson_value = NULL;
   mongocxx::uri uri{suri};
@@ -108,7 +111,7 @@ int Options::Override(bsoncxx::document::view override_opts){
   return 0;  
 }
 
-long int Options::GetLongInt(std::string path, long int default_value){
+long int Options::GetLongInt(const std::string& path, long int default_value){
   try{
     return bson_options[path.c_str()].get_int64();
   }
@@ -127,7 +130,7 @@ long int Options::GetLongInt(std::string path, long int default_value){
   return -1;
 }
 
-double Options::GetDouble(std::string path, double default_value) {
+double Options::GetDouble(const std::string& path, double default_value) {
   try{
     return bson_options[path].get_double();
   } catch (const std::exception& e) {
@@ -136,7 +139,7 @@ double Options::GetDouble(std::string path, double default_value) {
   }
 }
 
-int Options::GetInt(std::string path, int default_value){
+int Options::GetInt(const std::string& path, int default_value){
 
   try{
     return bson_options[path].get_int32();
@@ -149,7 +152,7 @@ int Options::GetInt(std::string path, int default_value){
   return -1;
 }
 
-int Options::GetNestedInt(std::string path, int default_value){
+int Options::GetNestedInt(const std::string& path, int default_value){
   // Parse string
   std::vector<std::string> fields;
   std::stringstream ss(path);
@@ -170,7 +173,7 @@ int Options::GetNestedInt(std::string path, int default_value){
   return 0;
 }
 
-std::string Options::GetString(std::string path, std::string default_value){
+std::string Options::GetString(const std::string& path, std::string default_value){
   try{
     return bson_options[path].get_utf8().value.to_string();
   }
@@ -182,13 +185,13 @@ std::string Options::GetString(std::string path, std::string default_value){
   return "";
 }
 
-std::vector<BoardType> Options::GetBoards(std::string type){
+std::vector<BoardType> Options::GetBoards(const std::string& type){
   std::vector<BoardType> ret;
   bsoncxx::array::view subarr = bson_options["boards"].get_array().value;
 
   std::vector <std::string> types;
   if(type == "V17XX")
-    types = {"V1724", "V1730", "V1724_MV", "V1724_fax"};
+    types = {"V1724", "V1730", "V1724_MV"};
   else
     types.push_back(type);
   
@@ -311,6 +314,25 @@ int Options::GetHEVOpt(HEVOptions &ret){
   return 0;
 }
 
+int Options::GetProcessingThreads() {
+  std::map<int, int> x;
+  // count readout links
+  for (const auto& b : GetBoards("V17XX")) x[b.link] = 1;
+  try{ // first, is the value "auto"?
+    auto elem = bson_options["processing_threads"][fHostname];
+    if(elem.get_utf8().value.to_string() == "auto")
+      return std::thread::hardware_concurrency()-x.size()-1;
+  }catch(...){
+    try{
+      return bson_options["processing_threads"][fHostname].get_int32();
+    }catch(...){
+      // it's either not an accepted value/type, or not there.
+      fLog->Entry(MongoLog::Local, "Using default value for processing threads");
+    }
+  }
+  return 8;
+}
+
 int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs,
                     std::vector<int>& bids) {
   board_dacs.clear();
@@ -382,19 +404,6 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
   return;
 }
 
-int Options::GetFaxOptions(fax_options_t& options) {
-  try{
-    options.rate = bson_options["fax_options"]["rate"].get_double().value;
-    options.tpc_size = bson_options["fax_options"]["tpc_size"].get_int32().value;
-    options.e_absorbtion_length = bson_options["fax_options"]["e_absorbtion_length"].get_double().value;
-    options.drift_speed = bson_options["fax_options"]["drift_speed"].get_double().value;
-    return 0;
-  }catch(std::exception& e) {
-    fLog->Entry(MongoLog::Warning, "Error getting fax options: %s", e.what());
-    return -1;
-  }
-}
-
 void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
     std::map<int, long>& buffer_counter,
     double proc_time_dp_us, double proc_time_ev_us, double proc_time_ch_us, double comp_time_us) {
@@ -411,6 +420,8 @@ void Options::SaveBenchmarks(std::map<std::string, long>& byte_counter,
     for (const auto& p : buffer_counter)
       if (p.first != 0)
         bc[int(std::ceil(std::log2(p.first)))] += p.second;
+      else
+        bc[-1] += p.second;
   } else if (level == 3) {
     bc = buffer_counter;
   }

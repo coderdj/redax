@@ -8,6 +8,7 @@
 #include <chrono>
 #include <csignal>
 #include <atomic>
+#include <getopt.h>
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
@@ -21,23 +22,50 @@ void SignalHandler(int signum) {
     return;
 }
 
+int PrintUsage() {
+  std::cout<<"Welcome to REDAX crate controller\nAccepted command-line arguments:\n"
+    << "--id <id number>: id number of this controller instance, required\n"
+    << "--uri <mongo uri>: full MongoDB URI, required\n"
+    << "--db <database name>: name of the database to use, default \"daq\"\n"
+    << "--logdir <directory>: where to write the logs\n"
+    << "--help: print this message\n"
+    << "\n";
+  return 1;
+}
+
 int main(int argc, char** argv){
 
   mongocxx::instance instance{};
-  // Parse arguments
-  if(argc < 3){
-    std::cout<<"USAGE: ./ccontrol {ID} {MONGO_URI}"<<std::endl;
-    std::cout<<"Where MONGO_URI is the URI of the command DB"<<std::endl;
-    return -1;
+  std::string mongo_uri = "", dbname="daq", sid="", log_dir = "";
+  int log_retention = 7, c, opt_index;
+  struct option longopts[] = {
+    {"id", required_argument, 0, 0},
+    {"uri", required_argument, 0, 1},
+    {"db", required_argument, 0, 2},
+    {"logdir", required_argument, 0, 3},
+    {"help", no_argument, 0, 4}
+  };
+  while ((c = getopt_long(argc, argv, "", longopts, &opt_index)) != -1) {
+    switch(c) {
+      case 0:
+        sid = optarg; break;
+      case 1:
+        mongo_uri = optarg; break;
+      case 2:
+        dbname = optarg; break;
+      case 3:
+        log_dir = optarg; break;
+      case 4:
+      default:
+        std::cout<<"Received unknown arg\n";
+        return PrintUsage();
+    }
   }
-  std::string dbname = "daq";
-  if(argc >=3)
-    dbname = argv[3];
+  if (mongo_uri== "" || sid == "") return PrintUsage();
 
   // Control and status DB connectivity
   // We're going to poll control for commands
   // and update status with a heartbeat
-  std::string mongo_uri = argv[2];
   mongocxx::uri uri(mongo_uri.c_str());
   mongocxx::client client(uri);
   mongocxx::database db = client[dbname];
@@ -52,11 +80,11 @@ int main(int argc, char** argv){
   gethostname(chostname, HOST_NAME_MAX);
   std::string hostname = chostname;
   hostname += "_controller_";
-  hostname += argv[1];
+  hostname += sid;
   std::cout<<"I dub thee "<<hostname<<std::endl;
 
   // Logging
-  MongoLog *logger = new MongoLog();
+  MongoLog *logger = new MongoLog(log_retention, log_dir);
   int ret = logger->Initialize(mongo_uri, dbname, "log", hostname, true);
   if(ret!=0){
     std::cout<<"Log couldn't be initialized. Exiting."<<std::endl;

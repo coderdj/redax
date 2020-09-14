@@ -116,7 +116,7 @@ class DAQController():
         if goal_state['tpc']['link_mv'] == 'false' and goal_state['muon_veto']['active'] == 'false':
             if latest_status['muon_veto']['status'] in active_states:
                 self.StopDetectorGently(detector='muon_veto')
-            elif latest_status['tpc']['status'] == STATUS.TIMEOUT:
+            elif latest_status['muon_veto']['status'] == STATUS.TIMEOUT:
                 self.CheckTimeouts('muon_veto')
         # 1c - deal with NV but only if NV not linked to TPC
         if goal_state['tpc']['link_nv'] == 'false' and goal_state['neutron_veto']['active'] == 'false':
@@ -291,7 +291,8 @@ class DAQController():
             if command == 'start' and self.mongo.InsertRunDoc(detector, self.goal_state):
                 # db having a moment
                 return
-            if command == 'stop' and self.mongo.SetStopTime(self.latest_status[detector]['number'], detector, force):
+            if (command == 'stop' and 'number' in self.latest_status[detector] and 
+                    self.mongo.SetStopTime(self.latest_status[detector]['number'], detector, force)):
                 # db having a moment
                 return
 

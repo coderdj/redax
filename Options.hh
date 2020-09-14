@@ -3,10 +3,9 @@
 
 #include <string>
 #include <vector>
-#include <fstream>
-#include <streambuf>
-#include <iostream>
 #include <stdexcept>
+#include <memory>
+#include <map>
 #include <bsoncxx/document/view.hpp>
 #include <bsoncxx/document/value.hpp>
 #include <mongocxx/collection.hpp>
@@ -55,38 +54,33 @@ struct HEVOptions{
 
 };
 
-struct fax_options_t {
-  int tpc_size; // PMTs
-  double rate; // 1/ns
-  double drift_speed; // PMTs/ns
-  double e_absorbtion_length; // TPC lengths
-};
-
 class MongoLog;
 
 class Options{
 
 public:
-  Options(MongoLog*, std::string, std::string, std::string, std::string, std::string);
+  Options(std::shared_ptr<MongoLog>&, std::string, std::string, std::string, std::string, std::string);
   ~Options();
 
-  int GetInt(std::string, int=-1);
-  long int GetLongInt(std::string, long int=-1);
-  double GetDouble(std::string, double=-1);
-  std::string GetString(std::string, std::string="");
+  int GetInt(const std::string&, int=-1);
+  long int GetLongInt(const std::string&, long int=-1);
+  double GetDouble(const std::string&, double=-1);
+  std::string GetString(const std::string&, std::string="");
 
-  std::vector<BoardType> GetBoards(std::string);
+  std::vector<BoardType> GetBoards(const std::string&);
   std::vector<RegisterType> GetRegisters(int, bool=false);
   int GetDAC(std::map<int, std::map<std::string, std::vector<double>>>&, std::vector<int>&);
   int GetCrateOpt(CrateOptions &ret);
   int GetHEVOpt(HEVOptions &ret);
   int16_t GetChannel(int, int);
-  int GetNestedInt(std::string, int);
+  int GetNestedInt(const std::string&, int);
   std::vector<uint16_t> GetThresholds(int);
+  int GetProcessingThreads();
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
   void SaveBenchmarks(std::map<std::string, long>&, std::map<int, long>&, double, double, double, double);
-  int GetFaxOptions(fax_options_t&);
+
+  std::string fHostname;
 
 private:
   int Load(std::string, mongocxx::collection&, std::string);
@@ -94,10 +88,9 @@ private:
   mongocxx::client fClient;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
-  MongoLog *fLog;
+  std::shared_ptr<MongoLog> fLog;
   mongocxx::collection fDAC_collection;
   std::string fDBname;
-  std::string fHostname;
   std::string fDetector;
 };
 
