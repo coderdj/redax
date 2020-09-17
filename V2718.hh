@@ -2,12 +2,13 @@
 #define _V2718_HH_
 
 #include "Options.hh"
+#include <memory>
 
 class MongoLog;
 
 class V2718{
 public:
-  V2718(MongoLog *log);
+  V2718(std::shared_ptr<MongoLog>& log);
   virtual ~V2718();
 
   virtual int CrateInit(CrateOptions c_opts, int link, int crate);
@@ -21,7 +22,7 @@ protected:
   int fBoardHandle;
   CrateOptions fCopts;
   int fCrate, fLink;
-  MongoLog *fLog;
+  std::shared_ptr<MongoLog> fLog;
 
 };
 

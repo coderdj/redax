@@ -84,7 +84,7 @@ int main(int argc, char** argv){
   std::cout<<"I dub thee "<<hostname<<std::endl;
 
   // Logging
-  MongoLog *logger = new MongoLog(log_retention, log_dir);
+  auto logger = std::make_shared<MongoLog>(log_retention, log_dir);
   int ret = logger->Initialize(mongo_uri, dbname, "log", hostname, true);
   if(ret!=0){
     std::cout<<"Log couldn't be initialized. Exiting."<<std::endl;
@@ -92,10 +92,10 @@ int main(int argc, char** argv){
   }
 
   // Options
-  Options *options = NULL;
-  
+  std::shared_ptr<Options> options = nullptr;
+
   // Holds session data
-  CControl_Handler *fHandler = new CControl_Handler(logger, hostname);
+  auto fHandler = std::make_unique<CControl_Handler>(logger, hostname);
   using namespace std::chrono;
 
   while(b_run){
@@ -157,11 +157,8 @@ int main(int argc, char** argv){
           }
 
           //Here are our options
-          if(options != NULL) {
-            delete options;
-            options = NULL;
-          }
-          options = new Options(logger, mode, hostname, mongo_uri, dbname, override_json);
+          options = std::make_shared<Options>(logger, mode, hostname,
+              mongo_uri, dbname, override_json);
 
           // Initialise the V2178, V1495 and DDC10...etc.
           if(fHandler->DeviceArm(run, options) != 0){
@@ -184,6 +181,7 @@ int main(int argc, char** argv){
           auto start_time = system_clock::now();
           logger->Entry(MongoLog::Local, "Ack to Stop took %i us",
             duration_cast<microseconds>(start_time-ack_time).count());
+          options.reset();
         }
       } //end for
     } catch (const std::exception& e) {
@@ -199,8 +197,8 @@ int main(int argc, char** argv){
     }
     std::this_thread::sleep_for(seconds(1));
   } // while run
-  if (options != NULL) delete options;
-  delete fHandler;
-  delete logger;
+  options.reset();
+  fHandler.reset();
+  logger.reset();
   return 0;
 }
