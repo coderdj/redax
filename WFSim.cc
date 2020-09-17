@@ -42,6 +42,14 @@ pair<double, double> PMTiToXY(int i) {
 
 WFSim::WFSim(std::shared_ptr<ThreadPool>& tp, std::shared_ptr<Processor>& next, std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log) : V1724(tp, next, opts, log) {
   fLog->Entry(MongoLog::Warning, "Initializing fax digitizer");
+  fGen = std::mt19937_64(fRD());
+  fFlatDist = std::uniform_real_distribution<>(0., 1.);
+  fSPEtemplate = {0.0, 0.0, 0.0, 2.81e-2, 7.4, 6.07e1, 3.26e1, 1.33e1, 7.60, 5.71,
+    7.75, 4.46, 3.68, 3.31, 2.97, 2.74, 2.66, 2.48, 2.27, 2.15, 2.03, 1.93, 1.70,
+    1.68, 1.26, 7.86e-1, 5.36e-1, 4.36e-1, 3.11e-1, 2.15e-1};
+  fEventCounter = 0;
+  fSeenUnder5 = true;
+  fSeenOver15 = false;
 }
 
 WFSim::~WFSim() {
@@ -76,19 +84,15 @@ unsigned int WFSim::ReadRegister(unsigned int) {
 
 int WFSim::Init(int, int, int bid, unsigned int) {
   fBID = bid;
-  fGen = std::mt19937_64(fRD());
-  fFlatDist = std::uniform_real_distribution<>(0., 1.);
-  fSPEtemplate = {0.0, 0.0, 0.0, 2.81e-2, 7.4, 6.07e1, 3.26e1, 1.33e1, 7.60, 5.71,
-    7.75, 4.46, 3.68, 3.31, 2.97, 2.74, 2.66, 2.48, 2.27, 2.15, 2.03, 1.93, 1.70,
-    1.68, 1.26, 7.86e-1, 5.36e-1, 4.36e-1, 3.11e-1, 2.15e-1};
   if (fOptions->GetFaxOptions(fFaxOptions)) {
     fLog->Entry(MongoLog::Message, "Using default fax options");
-    fFaxOptions.rate = 1e-8; // 10 Hz in ns
+    fFaxOptions.rate = 10; // Hz
     fFaxOptions.tpc_size = 2; // radius in PMTs
     fFaxOptions.e_absorbtion_length = (fFlatDist(fGen)+1)*fFaxOptions.tpc_size; // TPC lengths
     fFaxOptions.drift_speed = 1e-4; // pmts/ns
   }
   GlobalInit(fFaxOptions, fLog);
+  Reset();
   sRegistry.push_back(this);
   fBLoffset = fBLslope = fNoiseRMS = fBaseline = vector<double>(PMTsPerDigi, 0);
   std::generate_n(fBLoffset.begin(), PMTsPerDigi, [&]{return 17000 + 400*fFlatDist(fGen);});
@@ -100,7 +104,7 @@ int WFSim::Init(int, int, int bid, unsigned int) {
 }
 
 int WFSim::SWTrigger() {
-  ConvertToDigiFormat(GenerateNoise(fSPEtemplate.size(), 0xFF), 0xFF);
+  ConvertToDigiFormat(GenerateNoise(fSPEtemplate.size(), 0xFF), 0xFF, sClock);
   return 0;
 }
 
@@ -110,8 +114,10 @@ void WFSim::GlobalInit(fax_options_t& fax_options, std::shared_ptr<MongoLog>& lo
     sFlatDist = std::uniform_real_distribution<>(0., 1.);
     sFaxOptions = fax_options;
     sLog = log;
+    sLog->Entry(MongoLog::Local, "WFSim global init");
 
-    sRun = sReady = true;
+    sReady = true;
+    sRun = false;
     sClock = 0;
     sEventCounter = 0;
     sNumPMTs = (1+3*fax_options.tpc_size*(fax_options.tpc_size+1))*2;
@@ -121,7 +127,8 @@ void WFSim::GlobalInit(fax_options_t& fax_options, std::shared_ptr<MongoLog>& lo
       sPMTxy.emplace_back(PMTiToXY(p % PMTsPerArray));
 
     sGeneratorThread = std::thread(&WFSim::GlobalRun);
-  }
+  } else
+    sLog->Entry(MongoLog::Local, "WFSim global already init");
 }
 
 void WFSim::GlobalDeinit() {
@@ -132,6 +139,7 @@ void WFSim::GlobalDeinit() {
     sGeneratorThread.join();
     sLog.reset();
     sRegistry.clear();
+    sPMTxy.clear();
   }
 }
 
@@ -147,6 +155,7 @@ uint32_t WFSim::GetAcquisitionStatus() {
 }
 
 int WFSim::SoftwareStart() {
+  fLastClockTime = std::chrono::high_resolution_clock::now();
   if (sReady == true) {
     sRun = true;
     sReady = false;
@@ -183,16 +192,71 @@ int WFSim::Read(std::u32string* outptr) {
   dp += ThreadPool::TaskCode::UnpackDatapacket;
   uint32_t word = 0;
   word = GetHeaderTime(fBuffer.data(), fBuffer.size());
-  int clock_counter = GetClockCounter(word);
+  int fRolloverCounter = GetClockCounter(word);
   dp += word;
-  dp += clock_counter;
+  dp += fRolloverCounter;
   dp += fBuffer;
+  fBuffer.clear();
+  fBufferSize = 0;
   int ret = dp.size();
   if (outptr != nullptr)
     *outptr = dp.substr(fDPoverhead);
   else
     fTP->AddTask(this, std::move(dp));
   return ret;
+}
+
+int WFSim::GetClockCounter(uint32_t timestamp) {
+  // Waveform generation is asynchronous, so we need different logic here
+  // from a hardware digitizer
+  if (timestamp > fLastClock) {
+    // Case 1. This is over 15s but fSeenUnder5 is true. Give 1 back
+    if(timestamp >= 15e8 && fSeenUnder5 && fRolloverCounter != 0)
+      return fRolloverCounter-1;
+
+    // Case 2. This is over 5s and fSeenUnder5 is true.
+    else if(fSeenUnder5 && 5e8 <= timestamp && timestamp < 15e8){
+      fSeenUnder5 = false;
+      fLastClock = timestamp;
+      return fRolloverCounter;
+    }
+
+    // Case 3. This is over 15s and fSeenUnder5 is false
+    else if(timestamp >= 15e8 && !fSeenUnder5){
+      fSeenOver15 = true;
+      fLastClock = timestamp;
+      return fRolloverCounter;
+    }
+
+    // Case 4. Anything else where the clock is progressing correctly
+    else{
+      fLastClock = timestamp;
+      return fRolloverCounter;
+    }
+  }
+
+  // Second, is this number less than the previous?
+  else if(timestamp < fLastClock){
+
+    // Case 1. Genuine clock reset. under 5s is false and over 15s is true
+    if(timestamp < 5e8 && !fSeenUnder5 && fSeenOver15){
+      fSeenUnder5 = true;
+      fSeenOver15 = false;
+      fLog->Entry(MongoLog::Local, "Bd %i rollover %i (%x/%x)",
+              fBID, fRolloverCounter, timestamp, fLastClock);
+      fLastClock = timestamp;
+      fRolloverCounter++;
+      return fRolloverCounter;
+    }
+
+    // Case 2: Any other jitter within the 21 seconds, just return
+    else{
+      return fRolloverCounter;
+    }
+  }
+  // timestamps are the same???
+  else
+    return fRolloverCounter;
 }
 
 void WFSim::Process(std::u32string_view sv) {
@@ -208,16 +272,14 @@ std::tuple<double, double, double> WFSim::GenerateEventLocation() {
   double z = -1.*sFlatDist(sGen)*((2*sFaxOptions.tpc_size+1)-offset)-offset;
   double r = sFlatDist(sGen)*sFaxOptions.tpc_size; // no, this isn't uniform
   double theta = sFlatDist(sGen)*2*PI();
-  sLog->Entry(MongoLog::Local, "Peak at %.1f %.1f %.1f", r, theta, z);
   return {r*std::cos(theta), r*std::sin(theta), z};
 }
 
 vector<int> WFSim::GenerateEventSize(double, double, double z) {
-  int s1 = sFlatDist(sGen)*19+1;
+  int s1 = sFlatDist(sGen)*19+11;
   std::normal_distribution<> s2_over_s1{100, 20};
   double elivetime_loss_fraction = std::exp(z/sFaxOptions.e_absorbtion_length);
   int s2 = s1*s2_over_s1(sGen)*elivetime_loss_fraction;
-  sLog->Entry(MongoLog::Local, "Peak at %i %i loss %.1f", s1, s2, elivetime_loss_fraction);
   return {0, s1, s2};
 }
 
@@ -235,9 +297,9 @@ vector<pair<int, double>> WFSim::MakeHitpattern(int s_i, int photons, double x, 
   } else {
     top_fraction = 0.65;
     // let's go with a Gaussian probability, because why not
-    double gaus_std = 1.3; // PMTs wide
+    double gaus_width = 2*1.3*1.3; // PMTs wide
     auto gen = [&](std::pair<double, double>& p){
-      return std::exp(-(std::pow(p.first-x, 2)+std::pow(p.second-y, 2))/(2*gaus_std*gaus_std));
+      return std::exp(-(std::pow(p.first-x, 2)+std::pow(p.second-y, 2))/gaus_width);
     };
 
     std::transform(sPMTxy.begin(), sPMTxy.begin()+TopPMTs, hit_prob.begin(), gen);
@@ -280,7 +342,7 @@ void WFSim::SendToWorkers(const vector<pair<int, double>>& hits) {
 void WFSim::MakeWaveform(std::u32string_view sv) {
   vector<pair<int, double>> hits;
   hits.reserve((sv.size()-3)/3);
-  fTimestamp = *(long*)(sv.data()+1);
+  long timestamp = *(long*)(sv.data()+1);
   sv.remove_prefix(3);
   while (sv.size() > 0) {
     hits.emplace_back(sv[0], *(double*)(sv.data()+1));
@@ -293,7 +355,7 @@ void WFSim::MakeWaveform(std::u32string_view sv) {
     last_hit_time = std::max(last_hit_time, hit.second);
     first_hit_time = std::min(first_hit_time, hit.second);
   }
-  fTimestamp += first_hit_time;
+  timestamp += first_hit_time;
   // which channels contribute?
   vector<int> pmt_to_ch(PMTsPerDigi, -1);
   vector<int> ch_to_pmt;
@@ -303,7 +365,6 @@ void WFSim::MakeWaveform(std::u32string_view sv) {
       ch_to_pmt.push_back(i);
     }
   }
-  //fLog->Entry(MongoLog::Local, "Bd %i Mask %x = %i ch", fBID, mask, j);
   int wf_length = fSPEtemplate.size() + last_hit_time/fSampleWidth;
   wf_length += wf_length % 2 ? 1 : 2; // ensure an even number of samples with room
   auto wf = GenerateNoise(wf_length, mask);
@@ -317,24 +378,26 @@ void WFSim::MakeWaveform(std::u32string_view sv) {
       wf[pmt_to_ch[hit.first]][offset+i] -= fSPEtemplate[i]*scale;
     }
   }
-  return ConvertToDigiFormat(wf, mask);
+  return ConvertToDigiFormat(wf, mask, timestamp);
 }
 
-void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
+void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask, long ts) {
   fEventCounter++;
   const int overhead_per_channel = 2, overhead_per_event = 4;
   std::u32string buffer;
   char32_t word = 0;
   for (auto& ch : wf) word += ch.size(); // samples
-  int words_this_event = word/2 + overhead_per_channel*wf.size() + overhead_per_event;
+  char32_t words_this_event = word/2 + overhead_per_channel*wf.size() + overhead_per_event;
   buffer.reserve(words_this_event);
   word = words_this_event | 0xA0000000;
   buffer += word;
-  buffer += mask;
-  buffer += fEventCounter;
-  uint32_t timestamp = (fTimestamp/fClockCycle)&0x7FFFFFFF;
+  buffer += (char32_t)mask;
+  word = fEventCounter.load();
+  buffer += word;
+  char32_t timestamp = (ts/fClockCycle)&0x7FFFFFFF;
+  fLog->Entry(MongoLog::Local, "Bd %i ts %lx/%08x", fBID, ts, timestamp);
   buffer += timestamp;
-  uint32_t sample;
+  int32_t sample;
   for (auto& ch_wf : wf) {
     word = ch_wf.size()/2 + overhead_per_channel; // size is in samples
     buffer += word;
@@ -347,8 +410,6 @@ void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask) {
       buffer += word;
     } // loop over samples
   } // loop over channels
-  fLog->Entry(MongoLog::Local, "Bd %i %08x %08x %08x %08x %08x %08x",
-      fBID, buffer[0], buffer[1], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5]);
   {
     const std::lock_guard<std::mutex> lg(fBufferMutex);
     fBuffer.append(buffer);
@@ -371,7 +432,7 @@ vector<vector<double>> WFSim::GenerateNoise(int length, int mask) {
 }
 
 void WFSim::GlobalRun() {
-  std::exponential_distribution<> rate(sFaxOptions.rate);
+  std::exponential_distribution<> rate(sFaxOptions.rate/1e9);
   double x, y, z, t_max;
   long time_to_next;
   vector<int> photons; // S1 = 1
@@ -383,6 +444,7 @@ void WFSim::GlobalRun() {
     sCV.wait(lg, []{return sReady == false;});
   }
   sLog->Entry(MongoLog::Local, "WFSim::GlobalRun");
+  auto t_start = std::chrono::high_resolution_clock::now();
   while (sRun == true) {
     std::tie(x,y,z) = GenerateEventLocation();
     photons = GenerateEventSize(x, y, z);
@@ -395,13 +457,16 @@ void WFSim::GlobalRun() {
         t_max = std::max(t_max, hit.second);
       }
 
-      time_to_next = (s_i == 1 ? std::abs(z/sFaxOptions.drift_speed) : 5e9) + t_max;
+      time_to_next = (s_i == 1 ? std::abs(z/sFaxOptions.drift_speed) : rate(sGen)) + t_max;
       sClock += time_to_next;
-      sLog->Entry(MongoLog::Local, "Sleeping for %li ns", time_to_next);
+      //sLog->Entry(MongoLog::Local, "Sleeping for %li ns", time_to_next);
       std::this_thread::sleep_for(std::chrono::nanoseconds(time_to_next));
     }
     sEventCounter++;
   }
+  auto t_end = std::chrono::high_resolution_clock::now();
+  sLog->Entry(MongoLog::Local, "Generation lasted %lx/%lx", sClock,
+          std::chrono::duration_cast<std::chrono::nanoseconds>(t_end-t_start).count());
   sLog->Entry(MongoLog::Local, "WFSim::GlobalRun finished");
 }
 

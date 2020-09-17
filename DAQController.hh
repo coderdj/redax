@@ -62,7 +62,7 @@ private:
   std::shared_ptr<MongoLog> fLog;
   std::shared_ptr<Options> fOptions;
   std::shared_ptr<ThreadPool> fTP;
-  std::shared_ptr<Processor> fCompressor, fFormatter;
+  std::vector<std::shared_ptr<Processor>> fProcessors;
 
   // For reporting to frontend
   std::atomic_int fBufferSize;

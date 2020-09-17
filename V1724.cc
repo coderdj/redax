@@ -35,6 +35,10 @@ V1724::V1724(std::shared_ptr<ThreadPool>& tp, std::shared_ptr<Processor>& next, 
   fArtificialDeadtimeChannel = 790;
   fClockCycle = 10; // ns
   fSampleWidth = 10; // ns
+  fRolloverCounter = 0;
+  fLastClock = 0;
+  // there's a more elegant way to do this, but I'm not going to write it
+  fClockPeriod = std::chrono::nanoseconds((1l<<31)*fClockCycle);
 
   BLT_SIZE=512*1024; // one channel's memory
 
@@ -106,15 +110,11 @@ int V1724::Init(int link, int crate, int bid, unsigned int address){
   fCrate = crate;
   fBID = bid;
   fBaseAddress=address;
-  fRolloverCounter = 0;
-  fLastClock = 0;
   uint32_t word(0);
   int my_bid(0);
 
   fBLTSafety = fOptions->GetDouble("blt_safety_factor", 1.5);
   BLT_SIZE = fOptions->GetInt("blt_size", 512*1024);
-  // there's a more elegant way to do this, but I'm not going to write it
-  fClockPeriod = std::chrono::nanoseconds((1l<<31)*fClockCycle);
 
   if (Reset()) {
     fLog->Entry(MongoLog::Error, "Board %i unable to pre-load registers", fBID);
@@ -179,6 +179,8 @@ int V1724::GetClockCounter(uint32_t timestamp){
   if (timestamp < fLastClock) {
     // actually rolled over
     fRolloverCounter++;
+    fLog->Entry(MongoLog::Local, "Board %i rollover %i (%x/%x)",
+            fBID, fRolloverCounter, fLastClock, timestamp);
   } else {
     // not a rollover
   }
@@ -313,6 +315,7 @@ void V1724::End(){
     CAENVME_End(fBoardHandle);
   fBoardHandle=fLink=fCrate=-1;
   fBaseAddress=0;
+  if (fMissed > 0) fLog->Entry(MongoLog::Local, "Board %i missed %i events", fBID, fMissed.load());
   return;
 }
 
@@ -363,7 +366,7 @@ void V1724::DPtoEvents(std::u32string_view sv) {
   // 1 word, clock counter
   uint32_t word;
   auto it = sv.begin() + fDPoverhead;
-  bool bMissed = false;
+  bool bMissed = true;
   while (it < sv.end()) {
     if ((*it)>>28 == 0xA) {
       std::u32string event;
@@ -375,9 +378,13 @@ void V1724::DPtoEvents(std::u32string_view sv) {
       event.append(it, it+word);
       it += word;
       bMissed = false;
+      //fLog->Entry(MongoLog::Local, "Bd %i dp %08x %08x %08x %08x",
+      //            fBID, event[1], event[5], event[6], event[8]);
       fTP->AddTask(this, std::move(event));
     } else {
       if (!bMissed) {
+        fLog->Entry(MongoLog::Local, "Bd %i missed at %i (%i)",
+                fBID, std::distance(it, sv.begin()), sv.size());
         fMissed++;
         bMissed = true;
       }
@@ -391,6 +398,8 @@ void V1724::EventToChannels(std::u32string_view sv) {
   // 2 words timestamp
   // 1 word (ch in MSB, board id in LSB)
   // 1 word (sample width, baseline)
+  //fLog->Entry(MongoLog::Local, "Bd %i event %08x %08x %08x %08x",
+  //        fBID, sv[1], sv[4], sv[5], sv[6]);
   const int event_header_words(4);
   uint32_t header_time = sv[1];
   long clock_counter = sv[2];
@@ -417,9 +426,10 @@ void V1724::EventToChannels(std::u32string_view sv) {
       uint32_t word = fBID;
       word |= (ch << 16);
       channel += word;
-      word = baseline;
-      word |= (fSampleWidth << 16);
+      word = baseline | (fSampleWidth << 16);
       channel += word;
+      //fLog->Entry(MongoLog::Local, "Bd %i ch %i %lx %08x %08x %08x %08x",
+      //        fBID, ch, timestamp, channel[1], channel[2], channel[3], channel[4]);
       channel += wf;
 
       fTP->AddTask(fNext.get(), std::move(channel));

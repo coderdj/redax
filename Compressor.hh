@@ -48,7 +48,7 @@ private:
     std::map<int, std::list<std::string>> fBuffer;
     std::map<int, std::list<std::string>> fOverlapBuffer;
     std::mutex fMutex;
-    int fMinChunk, fMaxChunk;
+    std::atomic_int fMinChunk, fMaxChunk;
     std::atomic_int fEmptyVerified;
     std::string fOutputPath, fHostname;
     std::string fCompressor;

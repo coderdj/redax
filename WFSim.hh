@@ -57,8 +57,9 @@ protected:
   static std::shared_ptr<MongoLog> sLog;
 
   virtual bool MonitorRegister(uint32_t, uint32_t, int, int, uint32_t) {return true;}
+  virtual int GetClockCounter(uint32_t timestamp);
   void MakeWaveform(std::u32string_view);
-  void ConvertToDigiFormat(const std::vector<std::vector<double>>&, int);
+  void ConvertToDigiFormat(const std::vector<std::vector<double>>&, int, long);
   std::vector<std::vector<double>> GenerateNoise(int, int=0xFF);
 
   std::u32string fBuffer;
@@ -74,6 +75,8 @@ protected:
   fax_options_t fFaxOptions;
   std::atomic_long fTimestamp;
   std::atomic_int fEventCounter;
+
+  bool fSeenUnder5, fSeenOver15;
 };
 
 #endif // _WFSIM_HH_ defined

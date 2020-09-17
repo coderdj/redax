@@ -207,6 +207,7 @@ int main(int argc, char** argv){
 	    logger->Entry(MongoLog::Error,
 			  "DAQ failed to stop. Will continue clearing program memory.");
 	  controller->End();
+      fOptions.reset();
 	}
 	else if(command == "arm"){
 	  // Can only arm if we're in the idle, arming, or armed state
@@ -228,8 +229,8 @@ int main(int argc, char** argv){
 	      logger->Entry(MongoLog::Debug, "No override options provided, continue without.");
 	    }
 
-	    fOptions.reset(new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
-				   hostname, suri, dbname, override_json));
+	    fOptions = std::make_shared<Options>(logger, (doc)["mode"].get_utf8().value.to_string(),
+				   hostname, suri, dbname, override_json);
 	    if(controller->InitializeElectronics(fOptions) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->End();
@@ -250,10 +251,10 @@ int main(int argc, char** argv){
 
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
-  status_update.join();
-  controller.reset();
-  fOptions.reset();
-  logger.reset();
+  status_update.join(); std::cout<<"Status update joined\n";
+  controller.reset(); std::cout<<"Controller reset\n";
+  fOptions.reset(); std::cout<<"Options reset\n";
+  logger.reset(); std::cout<<"Logger reset\n";
   exit(0);
 
 }

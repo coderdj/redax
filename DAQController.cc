@@ -63,8 +63,9 @@ int DAQController::InitializeElectronics(std::shared_ptr<Options>& options){
 
   fTP = std::make_shared<ThreadPool>(fOptions->GetProcessingThreads());
   std::shared_ptr<Processor> blank = nullptr;
-  fCompressor = std::make_shared<Compressor>(fTP, blank, fOptions, fLog);
-  fFormatter = std::make_shared<StraxFormatter>(fTP, fCompressor, fOptions, fLog);
+  fProcessors.resize(2);
+  fProcessors[1] = std::make_shared<Compressor>(fTP, blank, fOptions, fLog);
+  fProcessors[0] = std::make_shared<StraxFormatter>(fTP, fProcessors[1], fOptions, fLog);
 
   // Initialize digitizers
   fStatus = DAXHelpers::Arming;
@@ -74,16 +75,16 @@ int DAQController::InitializeElectronics(std::shared_ptr<Options>& options){
 
     std::shared_ptr<V1724> digi;
     if(d.type == "V1724_MV")
-      digi = std::make_shared<V1724_MV>(fTP, fFormatter, fOptions, fLog);
+      digi = std::make_shared<V1724_MV>(fTP, fProcessors[0], fOptions, fLog);
     else if(d.type == "V1730")
-      digi = std::make_shared<V1730>(fTP, fFormatter, fOptions, fLog);
+      digi = std::make_shared<V1730>(fTP, fProcessors[0], fOptions, fLog);
     else if(d.type == "V1724_fax")
-      digi = std::make_shared<WFSim>(fTP, fFormatter, fOptions, fLog);
+      digi = std::make_shared<WFSim>(fTP, fProcessors[0], fOptions, fLog);
     else
-      digi = std::make_shared<V1724>(fTP, fFormatter, fOptions, fLog);
+      digi = std::make_shared<V1724>(fTP, fProcessors[0], fOptions, fLog);
 
     if(digi->Init(d.link, d.crate, d.board, d.vme_address)==0){
-      fDigitizers[d.link].push_back(digi);
+      fDigitizers[d.link].emplace_back(digi);
       BIDs.push_back(digi->bid());
       fLog->Entry(MongoLog::Debug, "Initialized digitizer %i", d.board);
     }else{
@@ -194,6 +195,8 @@ int DAQController::Stop(){
       }
     }
   }
+  for (auto& t : fROthreads) if (t.joinable()) t.join();
+  fROthreads.clear();
   fLog->Entry(MongoLog::Debug, "Stopped digitizers");
 
   fStatus = DAXHelpers::Idle;
@@ -234,8 +237,8 @@ void DAQController::ReadData(int link){
       if(readcycler%10000==0){
         readcycler=0;
         board_status = digi->GetAcquisitionStatus();
-        fLog->Entry(MongoLog::Local, "Board %i has status 0x%04x",
-            digi->bid(), board_status);
+        //fLog->Entry(MongoLog::Local, "Board %i has status 0x%04x",
+        //    digi->bid(), board_status);
       }
       if (digi->CheckFail()) {
         err_val = digi->CheckErrors();
@@ -265,23 +268,27 @@ void DAQController::ReadData(int link){
 std::map<int, int> DAQController::GetDataPerChan(){
   // Return a map of data transferred per channel since last update
   // Clears the private maps in the StraxFormatter
-  if (fFormatter)
-    return static_cast<StraxFormatter*>(fFormatter.get())->GetDataPerChan();
+  if (fProcessors.size() > 0 && fProcessors[0])
+    return static_cast<StraxFormatter*>(fProcessors[0].get())->GetDataPerChan();
   return std::map<int, int>{};
 }
 
 void DAQController::StopThreads(){
-  if (fFormatter) fFormatter->End();
-  fFormatter.reset();
-  if (fCompressor) fCompressor->End();
-  fCompressor.reset();
-  int tasks = fTP->GetWaiting() + fTP->GetRunning();
-  while (tasks > 0) {
-    fLog->Entry(MongoLog::Local, "Waiting for pool to drain (%i)", tasks);
-    std::this_thread::sleep_for(std::chrono::seconds(1));
-    tasks = fTP->GetWaiting() + fTP->GetRunning();
+  if (fTP) {
+    for (auto& p : fProcessors) {
+      fLog->Entry(MongoLog::Local, "Ending processor");
+      if (p) p->End();
+      int tasks = fTP->GetWaiting() + fTP->GetRunning();
+      while (tasks > 0) {
+        fLog->Entry(MongoLog::Local, "Waiting for pool to drain (%i)", tasks);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        tasks = fTP->GetWaiting() + fTP->GetRunning();
+      }
+      p.reset();
+    }
+    fProcessors.clear();
+    fTP.reset();
   }
-  fTP.reset();
 }
 
 void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,

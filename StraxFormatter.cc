@@ -32,34 +32,37 @@ StraxFormatter::~StraxFormatter(){
 
 std::map<int, int> StraxFormatter::GetDataPerChan() {
   std::map<int, int> ret;
-  fMutex.lock();
+  const std::lock_guard<std::mutex> lg(fMutex);
   for (auto& pair : fDataPerChan) {
     ret[pair.first] += pair.second;
     pair.second = 0;
   }
-  fMutex.unlock();
   return ret;
 }
 
 void StraxFormatter::Process(std::u32string_view protofrag) {
   // Transform digitizer-agnostic packets into fragments
+  protofrag.remove_prefix(1);
   int64_t timestamp = *(int64_t*)protofrag.data();
   uint32_t word = protofrag[2];
   int16_t ch = word>>16, bid = word&0xFFFF;
   word = protofrag[3];
   uint16_t sw = word>>16, bl = word&0xFFFF;
+  fLog->Entry(MongoLog::Local, "SF %lx %x %x %x %x %x %x",
+          timestamp, protofrag[2], protofrag[3], ch, bid, sw, bl);
   int16_t global_ch;
   const int samples_per_word = 2;
   if ((global_ch = fOptions->GetChannel(bid, ch)) == -1) {
     // can't parse channel map, so commit suicide
     std::string message = "Can't parse cable map, bid " + std::to_string(bid) + " " + std::to_string(ch);
+    fLog->Entry(MongoLog::Fatal, message);
     throw std::runtime_error(message.c_str());
   }
 
   protofrag.remove_prefix(4);
   int samples_in_pulse = protofrag.size()*samples_per_word;
   int num_frags = std::ceil(1.*samples_in_pulse/fSamplesPerFrag);
-  uint16_t* wf= (uint16_t*)protofrag.data();
+  uint16_t* wf = (uint16_t*)protofrag.data();
 
   {
     const std::lock_guard<std::mutex> lg(fMutex);
