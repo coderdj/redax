@@ -395,7 +395,7 @@ void WFSim::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask, long
   word = fEventCounter.load();
   buffer += word;
   char32_t timestamp = (ts/fClockCycle)&0x7FFFFFFF;
-  fLog->Entry(MongoLog::Local, "Bd %i ts %lx/%08x", fBID, ts, timestamp);
+  //fLog->Entry(MongoLog::Local, "Bd %i ts %lx/%08x", fBID, ts, timestamp);
   buffer += timestamp;
   int32_t sample;
   for (auto& ch_wf : wf) {

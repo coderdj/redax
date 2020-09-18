@@ -48,8 +48,8 @@ void StraxFormatter::Process(std::u32string_view protofrag) {
   int16_t ch = word>>16, bid = word&0xFFFF;
   word = protofrag[3];
   uint16_t sw = word>>16, bl = word&0xFFFF;
-  fLog->Entry(MongoLog::Local, "SF %lx %x %x %x %x %x %x",
-          timestamp, protofrag[2], protofrag[3], ch, bid, sw, bl);
+  //fLog->Entry(MongoLog::Local, "SF %lx %x %x %x %x %x %x",
+  //        timestamp, protofrag[2], protofrag[3], ch, bid, sw, bl);
   int16_t global_ch;
   const int samples_per_word = 2;
   if ((global_ch = fOptions->GetChannel(bid, ch)) == -1) {

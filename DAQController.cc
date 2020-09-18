@@ -237,8 +237,8 @@ void DAQController::ReadData(int link){
       if(readcycler%10000==0){
         readcycler=0;
         board_status = digi->GetAcquisitionStatus();
-        //fLog->Entry(MongoLog::Local, "Board %i has status 0x%04x",
-        //    digi->bid(), board_status);
+        fLog->Entry(MongoLog::Local, "Board %i has status 0x%04x",
+            digi->bid(), board_status);
       }
       if (digi->CheckFail()) {
         err_val = digi->CheckErrors();
