@@ -367,6 +367,8 @@ void V1724::DPtoEvents(std::u32string_view sv) {
   uint32_t word;
   auto it = sv.begin() + fDPoverhead;
   bool bMissed = true;
+  std::vector<std::u32string> events;
+  events.reserve(6); // magic number? no clue
   while (it < sv.end()) {
     if ((*it)>>28 == 0xA) {
       std::u32string event;
@@ -378,9 +380,7 @@ void V1724::DPtoEvents(std::u32string_view sv) {
       event.append(it, it+word);
       it += word;
       bMissed = false;
-      //fLog->Entry(MongoLog::Local, "Bd %i dp %08x %08x %08x %08x",
-      //            fBID, event[1], event[5], event[6], event[8]);
-      fTP->AddTask(this, std::move(event));
+      events.emplace_back(std::move(event));
     } else {
       if (!bMissed) {
         fLog->Entry(MongoLog::Local, "Bd %i missed at %i (%i)",
@@ -391,6 +391,10 @@ void V1724::DPtoEvents(std::u32string_view sv) {
       it++;
     }
   }
+  if (events.size() == 1)
+    fTP->AddTask(this, std::move(events[0]));
+  else
+    fTP->AddTask(this, events);
 }
 
 void V1724::EventToChannels(std::u32string_view sv) {
@@ -412,7 +416,9 @@ void V1724::EventToChannels(std::u32string_view sv) {
   }
   sv.remove_prefix(event_header_words);
   int n_channels = std::bitset<16>(mask).count();
-
+  std::vector<std::u32string> channels;
+  if (n_channels > 1)
+    channels.reserve(n_channels);
   for (unsigned ch = 0; ch < fNChannels; ch++) {
     if (mask & (1<<ch)) {
       std::u32string channel;
@@ -432,9 +438,12 @@ void V1724::EventToChannels(std::u32string_view sv) {
       //        fBID, ch, timestamp, channel[1], channel[2], channel[3], channel[4]);
       channel += wf;
 
-      fTP->AddTask(fNext.get(), std::move(channel));
+      if (n_channels == 1)
+        return fTP->AddTask(fNext.get(), std::move(channel));
+      channels.emplace_back(std::move(channel));
     } // if mask
   } // for ch in channels
+  fTP->AddTask(fNext.get(), channels);
 }
 
 void V1724::GenerateArtificialDeadtime(int64_t ts) {

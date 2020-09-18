@@ -21,6 +21,7 @@ public:
 
   void Process(std::u32string_view);
   void AddFragmentToBuffer(std::string&&);
+  void AddFragmentToBuffer(std::vector<std::string>&);
   void End();
 
 private:
@@ -33,7 +34,8 @@ private:
     ~CompressorWorker();
 
     void WriteOutChunk(int);
-    std::u32string AddFragmentToBuffer(std::string&&);
+    std::u32string AddFragmentToBuffer(std::string);
+    std::u32string AddFragmentToBuffer(std::vector<std::string>&);
     std::u32string End();
 
   private:

@@ -73,13 +73,19 @@ Compressor::CompressorWorker::~CompressorWorker() {
   outfile.close();
 }
 
-void Compressor::AddFragmentToBuffer(std::string&& frag) {
+void Compressor::AddFragmentToBuffer(std::string frag) {
   auto s = fWorkers[SelectBuffer()]->AddFragmentToBuffer(std::move(frag));
   if (s.size()>0) fTP->AddTask(this, std::move(s));
   return;
 }
 
-std::u32string Compressor::CompressorWorker::AddFragmentToBuffer(std::string&& fragment) {
+void Compressor::AddFragmentToBuffer(std::vector<std::string>& frags) {
+  auto s = fWorkers[SelectBuffer()]->AddFragmentToBuffer(frags);
+  if (s.size()>0) fTP->AddTask(this, std::move(s));
+  return;
+}
+
+std::u32string Compressor::CompressorWorker::AddFragmentToBuffer(std::string fragment) {
   int64_t timestamp = *(int64_t*)fragment.data();
   // Get the CHUNK and decide if this event also goes into a PRE/POST file
   int chunk_id = timestamp/fFullChunkLength;
@@ -100,6 +106,54 @@ std::u32string Compressor::CompressorWorker::AddFragmentToBuffer(std::string&& f
     } else {
       fOverlapBuffer[chunk_id].emplace_back(std::move(fragment));
     }
+    for (auto& p : fBuffer)
+      if (p.second.size() > 10) // protects against one random fragment
+        fMaxChunk = std::max(p.first, fMaxChunk.load());
+
+    if (fMaxChunk - fBufferNumChunks >= fMinChunk) {
+      int write_lte = fMaxChunk - fBufferNumChunks;
+      fLog->Entry(MongoLog::Local, "CW %i %i/%i write %i",
+              fID, fMinChunk.load(), fMaxChunk.load(), write_lte);
+      fMinChunk = write_lte + 1;
+      std::u32string task;
+      task.reserve(fBuffer.size()+fBufferNumChunks);
+      task += ThreadPool::TaskCode::CompressChunk;
+      char32_t word = fID;
+      task += word;
+      for (auto& p : fBuffer) if (p.first <= write_lte) task += p.first;
+      return task;
+    } else {
+    }
+  }
+  return std::u32string();
+}
+
+std::u32string Compressor::CompressorWorker::AddFragmentToBuffer(std::vector<std::string>& fragments) {
+  bool warn = true;
+  {
+    const std::lock_guard<std::mutex> lg(fMutex);
+    for (auto& fragment : fragments) {
+      int64_t timestamp = *(int64_t*)fragment.data();
+      // Get the CHUNK and decide if this event also goes into a PRE/POST file
+      int chunk_id = timestamp/fFullChunkLength;
+      bool overlap = (chunk_id+1)* fFullChunkLength - timestamp <= fChunkOverlap;
+      if (fMinChunk - chunk_id > fWarnIfChunkOlderThan && warn) {
+        int16_t ch = *(int16_t*)(fragment.data()+14);
+        fLog->Entry(MongoLog::Warning, "Thread %i received a fragment from CH%i %i chunks behind phase (%i/%i)?",
+          fID, ch, fMinChunk-chunk_id, fMinChunk.load(), fMaxChunk.load());
+        warn = false;
+      } else if (chunk_id - fMaxChunk > 1 && warn) {
+        fLog->Entry(MongoLog::Message, "Thread %i skipped %i chunks (%i/%i/%i)",
+              fID, chunk_id-fMaxChunk-1, fMinChunk.load(), fMaxChunk.load(), chunk_id);
+        warn = false;
+      }
+
+      if(!overlap){
+        fBuffer[chunk_id].emplace_back(std::move(fragment));
+      } else {
+        fOverlapBuffer[chunk_id].emplace_back(std::move(fragment));
+      }
+    } // frag in fragments
     for (auto& p : fBuffer)
       if (p.second.size() > 10) // protects against one random fragment
         fMaxChunk = std::max(p.first, fMaxChunk.load());

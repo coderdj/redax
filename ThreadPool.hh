@@ -18,7 +18,8 @@ class ThreadPool {
     ThreadPool(int);
     ~ThreadPool();
 
-    void AddTask(Processor*, std::u32string&&);
+    void AddTask(Processor*, std::u32string);
+    void AddTask(Processor*, std::vector<std::u32string>&);
     int GetWaiting() {return fWaitingTasks.load();}
     int GetRunning() {return fRunningTasks.load();}
     long GetBytes() {return fBufferBytes.load();}
@@ -40,6 +41,8 @@ class ThreadPool {
       Processor* obj;
       std::u32string input;
     };
+
+    int fMaxPerPull;
 
     std::vector<std::thread> fThreads;
     std::list<std::unique_ptr<task_t>> fQueue;

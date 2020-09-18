@@ -69,6 +69,12 @@ void StraxFormatter::Process(std::u32string_view protofrag) {
     fDataPerChan[global_ch] += protofrag.size()*sizeof(char32_t);
   }
 
+  std::vector<std::string> fragments;
+  if (num_frags > 1)
+    fragments.reserve(num_frags);
+
+  auto next = static_cast<Compressor*>(fNext.get());
+
   for (int frag_i = 0; frag_i < num_frags; frag_i++) {
     std::string fragment;
     fragment.reserve(fFragmentBytes);
@@ -91,8 +97,10 @@ void StraxFormatter::Process(std::u32string_view protofrag) {
     while((int)fragment.size()<fFragmentBytes+fStraxHeaderSize)
       fragment.append((char*)&zero_filler, sizeof(zero_filler));
 
-    static_cast<Compressor*>(fNext.get())->AddFragmentToBuffer(std::move(fragment));
+    if (num_frags > 1)
+      return next->AddFragmentToBuffer(std::move(fragment));
+    fragments.emplace_back(std::move(fragment));
   }
-  return;
+  return next->AddFragmentToBuffer(fragments);
 }
 

@@ -209,17 +209,42 @@ void DAQController::End(){
   for(auto& link : fDigitizers ){
     for(auto& digi : link.second){
       digi->End();
-      digi.reset();
+      //digi.reset(); // can't reset here, pool might not be empty
     }
-    link.second.clear();
+    //link.second.clear();
   }
-  fDigitizers.clear();
+  //fDigitizers.clear();
   fLog->Entry(MongoLog::Local, "Closing Processing Threads");
   StopThreads();
   fStatus = DAXHelpers::Idle;
 
   fOptions.reset();
   std::cout<<"Finished end"<<std::endl;
+}
+
+void DAQController::StopThreads(){
+  if (fTP) {
+    int tasks = fTP->GetWaiting() + fTP->GetRunning();
+    while (tasks > 0) {
+      fLog->Entry(MongoLog::Local, "Waiting for pool to drain (%i)", tasks);
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      tasks = fTP->GetWaiting() + fTP->GetRunning();
+    }
+    fDigitizers.clear();
+    for (auto& p : fProcessors) {
+      fLog->Entry(MongoLog::Local, "Ending processor");
+      if (p) p->End();
+      tasks = fTP->GetWaiting() + fTP->GetRunning();
+      while (tasks > 0) {
+        fLog->Entry(MongoLog::Local, "Waiting for pool to drain (%i)", tasks);
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        tasks = fTP->GetWaiting() + fTP->GetRunning();
+      }
+      p.reset();
+    }
+    fProcessors.clear();
+    fTP.reset();
+  }
 }
 
 void DAQController::ReadData(int link){
@@ -271,24 +296,6 @@ std::map<int, int> DAQController::GetDataPerChan(){
   if (fProcessors.size() > 0 && fProcessors[0])
     return static_cast<StraxFormatter*>(fProcessors[0].get())->GetDataPerChan();
   return std::map<int, int>{};
-}
-
-void DAQController::StopThreads(){
-  if (fTP) {
-    for (auto& p : fProcessors) {
-      fLog->Entry(MongoLog::Local, "Ending processor");
-      if (p) p->End();
-      int tasks = fTP->GetWaiting() + fTP->GetRunning();
-      while (tasks > 0) {
-        fLog->Entry(MongoLog::Local, "Waiting for pool to drain (%i)", tasks);
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        tasks = fTP->GetWaiting() + fTP->GetRunning();
-      }
-      p.reset();
-    }
-    fProcessors.clear();
-    fTP.reset();
-  }
 }
 
 void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
