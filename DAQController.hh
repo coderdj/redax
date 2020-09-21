@@ -39,6 +39,7 @@ public:
   int GetWaiting() {return fTP ? fTP->GetWaiting() : 0;}
   int GetRunning() {return fTP ? fTP->GetRunning() : 0;}
   long GetBufferSize() {return fTP ? fTP->GetBytes() : 0;}
+  void PrintStatus() {if (fTP) fTP->PrintStatus();}
 
   int GetDataSize(){int ds = fDataRate; fDataRate=0; return ds;}
   std::map<int, int> GetDataPerChan();

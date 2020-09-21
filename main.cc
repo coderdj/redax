@@ -55,6 +55,7 @@ void UpdateStatus(std::string suri, std::string dbname, std::shared_ptr<DAQContr
       std::cout<<"Can't connect to DB to update."<<std::endl;
       std::cout<<e.what()<<std::endl;
     }
+    controller->PrintStatus();
     std::this_thread::sleep_for(std::chrono::seconds(1));
   }
   std::cout<<"Status update returning\n";

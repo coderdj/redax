@@ -92,7 +92,7 @@ protected:
 
 
   float fBLTSafety;
-  const int fDPoverhead, fEVoverhead, fCHoverhead;
+  const int fDPoverhead, fCHoverhead;
   std::atomic_int fMissed, fFailures;
   std::atomic_bool fCheckFail;
 
