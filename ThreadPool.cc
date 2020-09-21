@@ -28,7 +28,7 @@ void ThreadPool::AddTask(Processor* obj, std::u32string input) {
   {
     const std::lock_guard<std::mutex> lg(fMutex);
     fBufferBytes += input.size()*sizeof(char32_t);
-    fQueue.emplace_back(std::make_unique<task_t>(obj, std::move(input)));
+    fQueue.emplace_back(new task_t{obj, std::move(input)});
     fWaitingTasks++;
   }
   fCV.notify_one();
@@ -39,7 +39,7 @@ void ThreadPool::AddTask(Processor* obj, std::vector<std::u32string>& input) {
     const std::lock_guard<std::mutex> lg(fMutex);
     for (auto& s : input) {
       fBufferBytes += s.size()*sizeof(char32_t);
-      fQueue.emplace_back(std::make_unique<task_t>(obj, std::move(s)));
+      fQueue.emplace_back(new task_t{obj, std::move(s)});
       fWaitingTasks++;
     }
   }
