@@ -30,7 +30,9 @@ class ThreadPool {
       UnpackChannel,
       CompressChunk,
       // WFsim stuff
-      GenerateWaveform
+      GenerateWaveform,
+
+      NUM_CODES
     };
 
   private:
@@ -40,6 +42,7 @@ class ThreadPool {
     struct task_t {
       Processor* obj;
       std::u32string input;
+      TaskCode code() {return input.size() > 0 ? input[0] : TaskCode::NUM_CODES;}
     };
 
     int fMaxPerPull;

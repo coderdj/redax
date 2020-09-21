@@ -19,16 +19,16 @@ ThreadPool::ThreadPool(int num_threads) {
 ThreadPool::~ThreadPool() {
   fWaitingTasks = 0;
   Kill();
-  for (auto& t : fThreads) t.join();
+  for (auto& t : fThreads) if (t.joinable()) t.join();
   fThreads.clear();
   fQueue.clear();
 }
 
 void ThreadPool::AddTask(Processor* obj, std::u32string input) {
   {
-    const std::unique_lock<std::mutex> lg(fMutex);
+    const std::lock_guard<std::mutex> lg(fMutex);
     fBufferBytes += input.size()*sizeof(char32_t);
-    fQueue.emplace_back(new task_t{obj, std::move(input)});
+    fQueue.emplace_back(std::make_unique<task_t>(obj, std::move(input)));
     fWaitingTasks++;
   }
   fCV.notify_one();
@@ -39,7 +39,7 @@ void ThreadPool::AddTask(Processor* obj, std::vector<std::u32string>& input) {
     const std::lock_guard<std::mutex> lg(fMutex);
     for (auto& s : input) {
       fBufferBytes += s.size()*sizeof(char32_t);
-      fQueue.emplace_back(new task_t{obj, std::move(s)});
+      fQueue.emplace_back(std::make_unique<task_t>(obj, std::move(s)));
       fWaitingTasks++;
     }
   }
@@ -55,22 +55,20 @@ void ThreadPool::Run() {
     std::unique_lock<std::mutex> lk(fMutex);
     fCV.wait(lk, [&]{return fWaitingTasks > 0 || fFinishNow;});
     if (fQueue.size() > 0 && !fFinishNow) {
-      tasks.emplace_back(std::move(fQueue.front()));
-      fQueue.pop_front();
-      while (fQueue.front()->input[0] == tasks.front()->input[0] && tasks.size() < fMaxPerPull) {
-        tasks.emplace_back(fQueue.front());
+      do {
+        tasks.emplace_back(std::move(fQueue.front()));
         fQueue.pop_front();
-      }
+      } while (fQueue.size() > 0 && fQueue.front()->code() == tasks.front()->code() && tasks.size() < fMaxPerPull);
       fWaitingTasks -= tasks.size();
       fRunningTasks += tasks.size();
       lk.unlock();
-      code = static_cast<TaskCode>(task->input[0]);
+      code = static_cast<TaskCode>(tasks.front()->code());
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
       for (auto& task : tasks) {
         std::invoke(&Processor::Process, task->obj, task->input);
+        fBufferBytes -= task->input.size()*sizeof(char32_t);
         task.reset();
         fRunningTasks--;
-        fBufferBytes -= task->input.size()*sizeof(char32_t);
       }
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &stop);
       tasks.clear();
@@ -84,3 +82,4 @@ void ThreadPool::Run() {
     for (auto& p : benchmarks) fBenchmarks[p.first] += p.second;
   }
 }
+

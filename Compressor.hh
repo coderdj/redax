@@ -44,7 +44,6 @@ private:
     std::string GetStringFormat(int);
     void CreateEmpty(int);
 
-    std::shared_ptr<Options> fOptions;
     std::shared_ptr<MongoLog> fLog;
 
     std::map<int, std::list<std::string>> fBuffer;
@@ -57,6 +56,7 @@ private:
 
     int fBufferNumChunks;
     int fWarnIfChunkOlderThan;
+    int fBytesPerFrag;
     long fChunkLength;
     long fChunkOverlap;
     unsigned fChunkNameLength;

@@ -16,9 +16,10 @@ Compressor::Compressor(std::shared_ptr<ThreadPool>& tp, std::shared_ptr<Processo
     std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log) :
     Processor(tp, next, opts, log) {
   fNumWorkers = fOptions->GetNestedInt("output_files." + fOptions->fHostname, 4);
+  std::string host = fOptions->fHostname;
   fWorkers.reserve(fNumWorkers);
   for (int i = 0; i < fNumWorkers; i++)
-    fWorkers.emplace_back(std::make_unique<CompressorWorker>(opts, log, fOptions->fHostname, i));
+    fWorkers.emplace_back(std::make_unique<CompressorWorker>(opts, log, host, i));
 }
 
 Compressor::~Compressor(){
@@ -26,24 +27,25 @@ Compressor::~Compressor(){
 }
 
 Compressor::CompressorWorker::CompressorWorker(std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log, std::string hostname, int id) {
-  fOptions = opts;
   fLog = log;
   fID = id;
   fHostname = hostname;
   fChunkNameLength=6;
 
-  fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
-  fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
-  fCompressor = fOptions->GetString("compressor", "lz4");
+  fChunkLength = long(opts->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
+  fChunkOverlap = long(opts->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
+  int header_size=24;
+  fBytesPerFrag = opts->GetInt("strax_fragment_payload_bytes", 220) + header_size;
+  fCompressor = opts->GetString("compressor", "lz4");
   fFullChunkLength = fChunkLength+fChunkOverlap;
-  std::string run_name = fOptions->GetString("run_identifier", "run");
+  std::string run_name = opts->GetString("run_identifier", "run");
 
   fEmptyVerified = 0;
 
-  fBufferNumChunks = fOptions->GetInt("strax_buffer_num_chunks", 2);
-  fWarnIfChunkOlderThan = fOptions->GetInt("strax_chunk_phase_limit", 1);
+  fBufferNumChunks = opts->GetInt("strax_buffer_num_chunks", 2);
+  fWarnIfChunkOlderThan = opts->GetInt("strax_chunk_phase_limit", 1);
 
-  std::string output_path = fOptions->GetString("strax_output_path", "./");
+  std::string output_path = opts->GetString("strax_output_path", "./");
   try{
     fs::path op(output_path);
     op /= run_name;
@@ -216,8 +218,7 @@ void Compressor::CompressorWorker::WriteOutChunk(int chunk_i){
     const std::lock_guard<std::mutex> lg(fMutex);
 
     for (int i = 0; i < 2; i++) {
-      for (auto it = buffers[i]->begin(); it != buffers[i]->end(); it++)
-        uncompressed_size[i] += it->size();
+      uncompressed_size[i] = buffers[i]->size()*fBytesPerFrag;
       uncompressed[i].reserve(uncompressed_size[i]);
       for (auto it = buffers[i]->begin(); it != buffers[i]->end(); it++)
         uncompressed[i] += *it;
@@ -318,6 +319,7 @@ fs::path Compressor::CompressorWorker::GetFilePath(const std::string& id, bool t
 void Compressor::CompressorWorker::CreateEmpty(int check_up_to){
   int chunk = fEmptyVerified;
   fEmptyVerified = check_up_to;
+  std::ofstream fout;
   for(; chunk<check_up_to; chunk++){
     std::string chunk_index = GetStringFormat(chunk);
     std::string chunk_index_pre = chunk_index+"_pre";
@@ -325,22 +327,20 @@ void Compressor::CompressorWorker::CreateEmpty(int check_up_to){
     if(!fs::exists(GetFilePath(chunk_index, false))){
       if(!fs::exists(GetDirectoryPath(chunk_index, false)))
 	fs::create_directory(GetDirectoryPath(chunk_index, false));
-      std::ofstream o(GetFilePath(chunk_index, false));
-      o.close();
+      fout.open(GetFilePath(chunk_index, false));
+      fout.close();
     }
     if(chunk!=0 && !fs::exists(GetFilePath(chunk_index_pre, false))){
       if(!fs::exists(GetDirectoryPath(chunk_index_pre, false)))
 	fs::create_directory(GetDirectoryPath(chunk_index_pre, false));
-      std::ofstream o;
-      o.open(GetFilePath(chunk_index_pre, false));
-      o.close();
+      fout.open(GetFilePath(chunk_index_pre, false));
+      fout.close();
     }
     if(!fs::exists(GetFilePath(chunk_index_post, false))){
       if(!fs::exists(GetDirectoryPath(chunk_index_post, false)))
 	fs::create_directory(GetDirectoryPath(chunk_index_post, false));
-      std::ofstream o;
-      o.open(GetFilePath(chunk_index_post, false));
-      o.close();
+      fout.open(GetFilePath(chunk_index_post, false));
+      fout.close();
     }
   }
 }
