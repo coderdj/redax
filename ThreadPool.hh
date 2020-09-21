@@ -42,10 +42,10 @@ class ThreadPool {
     struct task_t {
       Processor* obj;
       std::u32string input;
-      TaskCode code() {return input.size() > 0 ? input[0] : TaskCode::NUM_CODES;}
+      TaskCode code() {return input.size() > 0 ? static_cast<TaskCode>(input[0]) : TaskCode::NUM_CODES;}
     };
 
-    int fMaxPerPull;
+    unsigned int fMaxPerPull;
 
     std::vector<std::thread> fThreads;
     std::list<std::unique_ptr<task_t>> fQueue;

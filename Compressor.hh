@@ -34,7 +34,7 @@ private:
     ~CompressorWorker();
 
     void WriteOutChunk(int);
-    std::u32string AddFragmentToBuffer(std::string);
+    std::u32string AddFragmentToBuffer(std::string&&);
     std::u32string AddFragmentToBuffer(std::vector<std::string>&);
     std::u32string End();
 
