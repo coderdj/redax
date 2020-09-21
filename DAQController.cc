@@ -24,7 +24,6 @@
 // 3-running
 // 4-error
 
-const int MAX_THREADS = std::thread::hardware_concurrency();
 
 DAQController::DAQController(std::shared_ptr<MongoLog>& log, std::string hostname){
   fLog=log;

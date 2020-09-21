@@ -352,35 +352,21 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
   return false;
 }
 
-void V1724::Process(std::u32string_view sv) {
-  if (sv[0] == ThreadPool::TaskCode::UnpackDatapacket) return DPtoEvents(sv);
-  if (sv[0] == ThreadPool::TaskCode::UnpackEvent) return EventToChannels(sv);
-  fLog->Entry(MongoLog::Warning, "V1724::Process received unknown task code %i, %i words scrapped", sv[0], sv.size());
-  return;
-}
-
-void V1724::DPtoEvents(std::u32string_view sv) {
-  // event header format:
-  // 1 word, task code
-  // 1 word, header time
-  // 1 word, clock counter
+void V1724::Process(std::u32string_view sv) { // sv = data packet
   uint32_t word;
   auto it = sv.begin() + fDPoverhead;
   bool bMissed = true;
-  std::vector<std::u32string> events;
-  events.reserve(6); // magic number? no clue
+  std::vector<std::u32string> channels;
+  channels.reserve(fNChannels); // magic number? no clue
+  uint32_t header_time = sv[1];
+  long clock_counter = sv[2];
   while (it < sv.end()) {
     if ((*it)>>28 == 0xA) {
-      std::u32string event;
-      word = (*it)&0xFFFFFFF;
-      event.reserve(word + fEVoverhead);
-      event += ThreadPool::TaskCode::UnpackEvent;
-      event += sv[1]; // header time
-      event += sv[2]; // clock counter
-      event.append(it, it+word);
-      it += word;
       bMissed = false;
-      events.emplace_back(std::move(event));
+      word = (*it)&0xFFFFFFF;
+      EventToChannels(sv.substr(std::distance(it, sv.begin()), word), header_time,
+          clock_counter, channels);
+      it += word
     } else {
       if (!bMissed) {
         fLog->Entry(MongoLog::Local, "Bd %i missed at %i (%i)",
@@ -391,34 +377,30 @@ void V1724::DPtoEvents(std::u32string_view sv) {
       it++;
     }
   }
-  if (events.size() == 1)
-    fTP->AddTask(this, std::move(events[0]));
+  if (channels.size() == 1)
+    fTP->AddTask(this, std::move(channels[0]));
   else
-    fTP->AddTask(this, events);
+    fTP->AddTask(this, channels);
+  return;
 }
 
-void V1724::EventToChannels(std::u32string_view sv) {
+void V1724::EventToChannels(std::u32string_view sv, uint32_t header_time,
+    long clock_counter, std::vector<std::u32string>& channels) {
   // channel header format:
   // 2 words timestamp
   // 1 word (ch in MSB, board id in LSB)
   // 1 word (sample width, baseline)
-  //fLog->Entry(MongoLog::Local, "Bd %i event %08x %08x %08x %08x",
-  //        fBID, sv[1], sv[4], sv[5], sv[6]);
   const int event_header_words(4);
-  uint32_t header_time = sv[1];
-  long clock_counter = sv[2];
-  sv.remove_prefix(fEVoverhead);
   auto [words, mask, fail, event_time] = UnpackEventHeader(sv);
   if (fail) {
     fFailures++;
     fCheckFail = true;
-    return GenerateArtificialDeadtime(((clock_counter<<31)+event_time)*fClockCycle);
+    auto s = GenerateArtificialDeadtime(((clock_counter<<31)+event_time)*fClockCycle);
+    channels.push_back(std::move(s));
+    return;
   }
   sv.remove_prefix(event_header_words);
   int n_channels = std::bitset<16>(mask).count();
-  std::vector<std::u32string> channels;
-  if (n_channels > 1)
-    channels.reserve(n_channels);
   for (unsigned ch = 0; ch < fNChannels; ch++) {
     if (mask & (1<<ch)) {
       std::u32string channel;
@@ -434,19 +416,14 @@ void V1724::EventToChannels(std::u32string_view sv) {
       channel += word;
       word = baseline | (fSampleWidth << 16);
       channel += word;
-      //fLog->Entry(MongoLog::Local, "Bd %i ch %i %lx %08x %08x %08x %08x",
-      //        fBID, ch, timestamp, channel[1], channel[2], channel[3], channel[4]);
       channel += wf;
 
-      if (n_channels == 1)
-        return fTP->AddTask(fNext.get(), std::move(channel));
       channels.emplace_back(std::move(channel));
     } // if mask
   } // for ch in channels
-  fTP->AddTask(fNext.get(), channels);
 }
 
-void V1724::GenerateArtificialDeadtime(int64_t ts) {
+std::32string V1724::GenerateArtificialDeadtime(int64_t ts) {
   std::u32string data;
   data.reserve(fCHoverhead + 1);
   data.append((char32_t*)&ts, sizeof(ts)/sizeof(char32_t));
@@ -457,8 +434,7 @@ void V1724::GenerateArtificialDeadtime(int64_t ts) {
   data += word;
   word = 0;
   data += word;
-  fTP->AddTask(fNext.get(), std::move(data));
-  return;
+  return data;
 }
 
 std::tuple<int, int, bool, uint32_t> V1724::UnpackEventHeader(std::u32string_view sv) {

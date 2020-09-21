@@ -23,10 +23,10 @@ class ThreadPool {
     int GetWaiting() {return fWaitingTasks.load();}
     int GetRunning() {return fRunningTasks.load();}
     long GetBytes() {return fBufferBytes.load();}
+    void PrintStatus();
 
     enum TaskCode : char32_t{
       UnpackDatapacket = 0,
-      UnpackEvent,
       UnpackChannel,
       CompressChunk,
       // WFsim stuff
@@ -45,7 +45,7 @@ class ThreadPool {
       TaskCode code() {return input.size() > 0 ? static_cast<TaskCode>(input[0]) : TaskCode::NUM_CODES;}
     };
 
-    unsigned int fMaxPerPull;
+    std::map<TaskCode, unsigned int> fMaxPerPull;
 
     std::vector<std::thread> fThreads;
     std::list<std::unique_ptr<task_t>> fQueue;
@@ -56,6 +56,7 @@ class ThreadPool {
     std::atomic_long fBufferBytes;
 
     std::map<TaskCode, double> fBenchmarks;
+    std::map<TaskCode, long> fCounter;
     std::mutex fMutex, fMutex_;
 };
 

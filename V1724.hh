@@ -54,9 +54,8 @@ protected:
   uint32_t GetHeaderTime(char32_t*, int);
   virtual int GetClockCounter(uint32_t timestamp);
   bool MonitorRegister(uint32_t reg, uint32_t mask, int ntries, int sleep, uint32_t val=1);
-  virtual void DPtoEvents(std::u32string_view);
-  virtual void EventToChannels(std::u32string_view);
-  void GenerateArtificialDeadtime(int64_t);
+  virtual void EventToChannels(std::u32string_view, uint32_t, long, std::vector<std::u32string>&);
+  std::u32string GenerateArtificialDeadtime(int64_t);
 
   // Some values for base classes to override 
   unsigned int fAqCtrlRegister;
