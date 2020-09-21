@@ -9,13 +9,13 @@ inline double timespec_subtract(const struct timespec& a, const struct timespec&
   return (a.tv_sec - b.tv_sec)*1e6 + (a.tv_nsec - b.tv_nsec)*0.001;
 }
 
-ThreadPool::ThreadPool(int num_threads) {
+ThreadPool::ThreadPool(int num_threads, bytes_per_pull) {
   fFinishNow = false;
   fWaitingTasks = fRunningTasks = 0;
   fBufferBytes = 0;
   fThreads.reserve(num_threads);
   for (int i = 0; i < num_threads; i++) fThreads.emplace_back(&ThreadPool::Run, this);
-  fBytesPerPull = 100*1024;
+  fBytesPerPull = bytes_per_pull;
 }
 
 ThreadPool::~ThreadPool() {

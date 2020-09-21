@@ -60,7 +60,8 @@ int DAQController::InitializeElectronics(std::shared_ptr<Options>& options){
   fOptions = options;
   fLog->Entry(MongoLog::Local, "Beginning electronics initialization");
 
-  fTP = std::make_shared<ThreadPool>(fOptions->GetProcessingThreads());
+  fTP = std::make_shared<ThreadPool>(fOptions->GetProcessingThreads(),
+      fOptions->GetInt("bytes_per_processing_cycle", 1024*1024));
   std::shared_ptr<Processor> blank = nullptr;
   fProcessors.resize(2);
   fProcessors[1] = std::make_shared<Compressor>(fTP, blank, fOptions, fLog);

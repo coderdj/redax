@@ -15,7 +15,7 @@ class Processor;
 
 class ThreadPool {
   public:
-    ThreadPool(int);
+    ThreadPool(int, int);
     ~ThreadPool();
 
     void AddTask(Processor*, std::u32string);
