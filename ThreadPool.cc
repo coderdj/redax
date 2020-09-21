@@ -35,7 +35,7 @@ void ThreadPool::AddTask(Processor* obj, std::u32string input) {
     const std::lock_guard<std::mutex> lg(fMutex);
     fBufferBytes += input.size()*sizeof(char32_t);
     fQueue.emplace_back(new task_t{obj, std::move(input)});
-    fCounter[fQueue.back().code()]++;
+    fCounter[fQueue.back()->code()]++;
     fWaitingTasks++;
   }
   fCV.notify_one();
@@ -47,7 +47,7 @@ void ThreadPool::AddTask(Processor* obj, std::vector<std::u32string>& input) {
     for (auto& s : input) {
       fBufferBytes += s.size()*sizeof(char32_t);
       fQueue.emplace_back(new task_t{obj, std::move(s)});
-      fCounter[fQueue.back().code()]++;
+      fCounter[fQueue.back()->code()]++;
       fWaitingTasks++;
     }
   }
@@ -72,7 +72,7 @@ void ThreadPool::Run() {
           && fQueue.front()->code() == tasks.front()->code());
       fWaitingTasks -= tasks.size();
       fRunningTasks += tasks.size();
-      fCounter[tasks.front().code()] -= tasks.size();
+      fCounter[tasks.front()->code()] -= tasks.size();
       counter[code] += tasks.size();
       lk.unlock();
       code = static_cast<TaskCode>(tasks.front()->code());

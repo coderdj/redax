@@ -14,7 +14,7 @@
 
 
 V1724::V1724(std::shared_ptr<ThreadPool>& tp, std::shared_ptr<Processor>& next, std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log) : 
-  Processor(tp, next, opts, log), fDPoverhead(3), fEVoverhead(3), fCHoverhead(5) {
+  Processor(tp, next, opts, log), fDPoverhead(3), fCHoverhead(5) {
   fBoardHandle=fLink=fCrate=fBID=-1;
   fBaseAddress=0;
 
@@ -353,6 +353,10 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
 }
 
 void V1724::Process(std::u32string_view sv) { // sv = data packet
+  return DPtoChannels(sv);
+}
+
+void V1724::DPtoChannels(std::u32string_view sv) {
   uint32_t word;
   auto it = sv.begin() + fDPoverhead;
   bool bMissed = true;
@@ -366,7 +370,7 @@ void V1724::Process(std::u32string_view sv) { // sv = data packet
       word = (*it)&0xFFFFFFF;
       EventToChannels(sv.substr(std::distance(it, sv.begin()), word), header_time,
           clock_counter, channels);
-      it += word
+      it += word;
     } else {
       if (!bMissed) {
         fLog->Entry(MongoLog::Local, "Bd %i missed at %i (%i)",
@@ -423,7 +427,7 @@ void V1724::EventToChannels(std::u32string_view sv, uint32_t header_time,
   } // for ch in channels
 }
 
-std::32string V1724::GenerateArtificialDeadtime(int64_t ts) {
+std::u32string V1724::GenerateArtificialDeadtime(int64_t ts) {
   std::u32string data;
   data.reserve(fCHoverhead + 1);
   data.append((char32_t*)&ts, sizeof(ts)/sizeof(char32_t));

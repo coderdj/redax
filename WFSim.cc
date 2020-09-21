@@ -260,8 +260,7 @@ int WFSim::GetClockCounter(uint32_t timestamp) {
 }
 
 void WFSim::Process(std::u32string_view sv) {
-  if (sv[0] == ThreadPool::TaskCode::UnpackDatapacket) return DPtoEvents(sv);
-  if (sv[0] == ThreadPool::TaskCode::UnpackEvent) return EventToChannels(sv);
+  if (sv[0] == ThreadPool::TaskCode::UnpackDatapacket) return DPtoChannels(sv);
   if (sv[0] == ThreadPool::TaskCode::GenerateWaveform) return MakeWaveform(sv);
   fLog->Entry(MongoLog::Warning, "V1724::Process received unknown task code %i, %i words scrapped", sv[0], sv.size());
   return;
