@@ -368,7 +368,7 @@ void V1724::DPtoChannels(std::u32string_view sv) {
     if ((*it)>>28 == 0xA) {
       bMissed = false;
       word = (*it)&0xFFFFFFF;
-      EventToChannels(sv.substr(std::distance(it, sv.begin()), word), header_time,
+      EventToChannels(sv.substr(std::distance(sv.begin(), it), word), header_time,
           clock_counter, channels);
       it += word;
     } else {
