@@ -45,7 +45,7 @@ class ThreadPool {
       TaskCode code() {return input.size() > 0 ? static_cast<TaskCode>(input[0]) : TaskCode::NUM_CODES;}
     };
 
-    std::map<TaskCode, unsigned int> fMaxPerPull;
+    int fBytesPerPull;
 
     std::vector<std::thread> fThreads;
     std::list<std::unique_ptr<task_t>> fQueue;

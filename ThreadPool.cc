@@ -3,6 +3,7 @@
 #include <functional>
 #include <ctime>
 #include <iostream>
+#include <cmath>
 
 inline double timespec_subtract(const struct timespec& a, const struct timespec& b) {
   return (a.tv_sec - b.tv_sec)*1e6 + (a.tv_nsec - b.tv_nsec)*0.001;
@@ -14,12 +15,7 @@ ThreadPool::ThreadPool(int num_threads) {
   fBufferBytes = 0;
   fThreads.reserve(num_threads);
   for (int i = 0; i < num_threads; i++) fThreads.emplace_back(&ThreadPool::Run, this);
-  fMaxPerPull = {
-    {TaskCode::UnpackDatapacket, 2},
-    {TaskCode::UnpackChannel, 32},
-    {TaskCode::CompressChunk, 2},
-    {TaskCode::GenerateWaveform, 2}
-  };
+  fBytesPerPull = 100*1024;
 }
 
 ThreadPool::~ThreadPool() {
@@ -28,6 +24,8 @@ ThreadPool::~ThreadPool() {
   for (auto& t : fThreads) if (t.joinable()) t.join();
   fThreads.clear();
   fQueue.clear();
+  for (auto& p : fBenchmarks)
+    std::cout<<"BM " <<p.first<<": "<<p.second<<" ("<<fCounter[p.first]<<")"<<std::endl;
 }
 
 void ThreadPool::AddTask(Processor* obj, std::u32string input) {
@@ -59,7 +57,7 @@ void ThreadPool::Run() {
   struct timespec start, stop;
   std::map<TaskCode, double> benchmarks;
   std::map<TaskCode, long> counter;
-  auto max_per_pull = fMaxPerPull; // copy for thread safety
+  int bytes_this_pull;
   TaskCode code;
   while (!fFinishNow) {
     std::unique_lock<std::mutex> lk(fMutex);
@@ -68,38 +66,40 @@ void ThreadPool::Run() {
       do {
         tasks.emplace_back(std::move(fQueue.front()));
         fQueue.pop_front();
-      } while (fQueue.size() > 0 && tasks.size() < max_per_pull[tasks.front()->code()] \
-          && fQueue.front()->code() == tasks.front()->code());
+        bytes_this_pull += tasks.back()->input.size()*sizeof(char32_t);
+        fCounter[tasks.back()->code()]--;
+      } while (fQueue.size() > 0 && bytes_this_pull < fBytesPerPull);
       fWaitingTasks -= tasks.size();
       fRunningTasks += tasks.size();
-      fCounter[tasks.front()->code()] -= tasks.size();
-      counter[code] += tasks.size();
       lk.unlock();
-      code = static_cast<TaskCode>(tasks.front()->code());
-      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
       for (auto& task : tasks) {
+        code = static_cast<TaskCode>(task->code());
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &start);
+        counter[code]++;
         std::invoke(&Processor::Process, task->obj, task->input);
         fBufferBytes -= task->input.size()*sizeof(char32_t);
         task.reset();
         fRunningTasks--;
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &stop);
+        benchmarks[code] += timespec_subtract(stop, start);
       }
-      clock_gettime(CLOCK_THREAD_CPUTIME_ID, &stop);
-      benchmarks[code] += timespec_subtract(stop, start);
+      bytes_this_pull = 0;
       tasks.clear();
     } else {
       lk.unlock();
     }
   }
   {
-    const std::unique_lock<std::mutex> lk(fMutex_);
+    const std::lock_guard<std::mutex> lk(fMutex_);
     for (auto& p : benchmarks) fBenchmarks[p.first] += p.second;
+    for (auto& p : counter) fCounter[p.first] += p.second;
   }
 }
 
 void ThreadPool::PrintStatus() {
-  std::cout<<"Running: "<<fRunningTasks.load()<<"| Waiting: "<<fWaitingTasks.load()
-    <<"Bytes: "<<fBufferBytes.load()<<"| Counters: ";
-  for (auto p : fCounter) std::cout<<p.first<<' '<<p.second<<'|';
+  std::cout<<"Running: "<<fRunningTasks.load()<<" | Waiting: "<<fWaitingTasks.load()
+    <<" | Bytes: "<<int(std::log2(fBufferBytes.load()))<<" | Counters: ";
+  for (auto p : fCounter) std::cout<<p.first<<' '<<p.second<<',';
   std::cout<<std::endl;
 }
 
