@@ -126,7 +126,7 @@ void StraxFormatter::ProcessDatapacket(std::unique_ptr<data_packet> dp){
     if((*it)>>28 == 0xA){
       missed = true; // it works out
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_start);
-      words = (*it)&0x7FFFFFFF;
+      words = (*it)&0xFFFFFFF;
       std::u32string_view sv(dp->buff.data() + std::distance(dp->buff.begin(), it), words);
       ProcessEvent(sv, dp, dpc);
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_end);
@@ -161,6 +161,7 @@ int StraxFormatter::ProcessEvent(std::u32string_view buff,
 
   // returns {words this event, channel mask, board fail, header timestamp}
   auto [words, channel_mask, fail, event_time] = dp->digi->UnpackEventHeader(buff);
+  fLog->Entry(MongoLog::Local, "SF %i %x %x", dp->digi->bid(), event_time, dp->header_time);
 
   if(fail){ // board fail
     GenerateArtificialDeadtime(((dp->clock_counter<<31) + dp->header_time), dp->digi);
