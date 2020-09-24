@@ -80,6 +80,7 @@ StraxFormatter::~StraxFormatter(){
 void StraxFormatter::Close(std::map<int,int>& ret){
   fActive = false;
   for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
+  fCV.notify_one();
 }
 
 void StraxFormatter::GetDataPerChan(std::map<int, int>& ret) {
