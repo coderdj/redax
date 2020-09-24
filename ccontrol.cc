@@ -84,18 +84,13 @@ int main(int argc, char** argv){
   std::cout<<"I dub thee "<<hostname<<std::endl;
 
   // Logging
-  MongoLog *logger = new MongoLog(log_retention, log_dir);
-  int ret = logger->Initialize(mongo_uri, dbname, "log", hostname, true);
-  if(ret!=0){
-    std::cout<<"Log couldn't be initialized. Exiting."<<std::endl;
-    exit(-1);
-  }
+  auto logger = std::make_shared<MongoLog>(log_retention, log_dir, mongo_uri, dbname, "log", hostname, true);
 
   // Options
-  Options *options = NULL;
-  
+  std::shared_ptr<Options> options;
+
   // Holds session data
-  CControl_Handler *fHandler = new CControl_Handler(logger, hostname);
+  auto fHandler = std::make_shared<CControl_Handler>(logger, hostname);
   using namespace std::chrono;
 
   while(b_run){
@@ -129,8 +124,8 @@ int main(int argc, char** argv){
         std::string command = "";
         try{
           command = doc["command"].get_utf8().value.to_string();
-          if(command == "arm" )
-          run = doc["number"].get_int32();
+          if(command == "arm")
+            run = doc["number"].get_int32();
         } catch(const std::exception E){
           logger->Entry(MongoLog::Warning,
               "ccontrol: Received a document from the dispatcher missing [command|number]");
@@ -157,11 +152,7 @@ int main(int argc, char** argv){
           }
 
           //Here are our options
-          if(options != NULL) {
-            delete options;
-            options = NULL;
-          }
-          options = new Options(logger, mode, hostname, mongo_uri, dbname, override_json);
+          options = std::make_shared<Options>(logger, mode, hostname, mongo_uri, dbname, override_json);
 
           // Initialise the V2178, V1495 and DDC10...etc.
           if(fHandler->DeviceArm(run, options) != 0){
@@ -199,8 +190,9 @@ int main(int argc, char** argv){
     }
     std::this_thread::sleep_for(seconds(1));
   } // while run
-  if (options != NULL) delete options;
-  delete fHandler;
-  delete logger;
+  options.reset();
+  fHandler.reset();
+  logger.reset();
   return 0;
 }
+

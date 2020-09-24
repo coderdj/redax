@@ -60,13 +60,14 @@ class MongoLog;
 class Options{
 
 public:
-  Options(MongoLog*, std::string, std::string, std::string, std::string, std::string);
+  Options(std::shared_ptr<MongoLog>&, std::string, std::string, std::string, std::string, std::string);
   ~Options();
 
   int GetInt(std::string, int=-1);
   long int GetLongInt(std::string, long int=-1);
   double GetDouble(std::string, double=-1);
   std::string GetString(std::string, std::string="");
+  std::string Hostname() {return fHostname;}
 
   std::vector<BoardType> GetBoards(std::string);
   std::vector<RegisterType> GetRegisters(int, bool=false);

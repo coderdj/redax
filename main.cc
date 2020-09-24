@@ -26,7 +26,7 @@ void SignalHandler(int signum) {
     return;
 }
 
-void UpdateStatus(std::string suri, std::string dbname, DAQController* controller) {
+void UpdateStatus(std::string suri, std::string dbname, std::shared_ptr<DAQController>& controller) {
   mongocxx::uri uri(suri);
   mongocxx::client c(uri);
   mongocxx::collection status = c[dbname]["status"];
@@ -39,7 +39,7 @@ void UpdateStatus(std::string suri, std::string dbname, DAQController* controlle
         "time" << bsoncxx::types::b_date(system_clock::now())<<
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
-	"buffer_length" << controller->GetBufferLength() <<
+	"buffer_length" << controller->GetBufferLength() << // TODO
         "buffer_size" << controller->GetBufferSize()/1e6 <<
         "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
 	"run_mode" << controller->run_mode() <<
@@ -53,7 +53,7 @@ void UpdateStatus(std::string suri, std::string dbname, DAQController* controlle
       std::cout<<"Can't connect to DB to update."<<std::endl;
       std::cout<<e.what()<<std::endl;
     }
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(seconds(1));
   }
   std::cout<<"Status update returning\n";
 }
@@ -125,20 +125,14 @@ int main(int argc, char** argv){
   mongocxx::collection dac_collection = db["dac_calibration"];
 
   // Logging
-  MongoLog *logger = new MongoLog(log_retention, log_dir);
-  int ret = logger->Initialize(suri, dbname, "log", hostname, true);
-  if(ret!=0){
-    std::cout<<"Exiting"<<std::endl;
-    exit(-1);
-  }
+  auto logger = std::make_shared<MongoLog>(log_retention, log_dir, suri, dbname, "log", hostname);
 
   //Options
-  Options *fOptions = NULL;
+  std::shared_ptr<Options> fOptions;
   
   // The DAQController object is responsible for passing commands to the
   // boards and tracking the status
-  DAQController *controller = new DAQController(logger, hostname);
-  std::vector<std::thread*> readoutThreads;
+  auto controller = std::make_shared<DAQController>(logger, hostname);
   std::thread status_update(&UpdateStatus, suri, dbname, controller);
   using namespace std::chrono;
   // Main program loop. Scan the database and look for commands addressed
@@ -193,66 +187,26 @@ int main(int argc, char** argv){
 
 	// Process commands
 	if(command == "start"){
-
 	  if(controller->status() == 2) {
-
 	    if(controller->Start()!=0){
 	      continue;
 	    }
-
-	    // Nested tried cause of nice C++ typing
-	    try{
-	      current_run_id = (doc)["run_identifier"].get_utf8().value.to_string();
-	    }
-	    catch(const std::exception &e){
-	      try{
-		current_run_id = std::to_string((doc)["run_identifier"].get_int32());
-	      }
-	      catch(const std::exception &e){
-		current_run_id = "na";
-	      }
-	    }
-
-	    //logger->Entry(MongoLog::Message, "Received start command from user %s",
-	//		  user.c_str());
 	  }
 	  else
 	    logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state");
-	}
-	else if(command == "stop"){
+	}else if(command == "stop"){
 	  // "stop" is also a general reset command and can be called any time
-	  //logger->Entry(MongoLog::Message, "Received stop command from user %s",
-	//		user.c_str());
 	  if(controller->Stop()!=0)
 	    logger->Entry(MongoLog::Error,
 			  "DAQ failed to stop. Will continue clearing program memory.");
 
-	  current_run_id = "none";
-	  if(readoutThreads.size()!=0){
-	    for(auto t : readoutThreads){
-	      t->join();
-	      delete t;
-	    }
-	    readoutThreads.clear();
-	  }
 	  controller->End();
-	}
-	else if(command == "arm"){
-	  
+	} else if(command == "arm"){
 	  // Can only arm if we're in the idle, arming, or armed state
-	  if(controller->status() == 0 || controller->status() == 1 || controller->status() == 2){
+	  if(controller->status() >= 0 || controller->status() <= 2){
 
 	    // Join readout threads if they still are out there
 	    controller->Stop();
-	    if(readoutThreads.size() !=0){
-	      for(auto t : readoutThreads){
-		logger->Entry(MongoLog::Local, "Joining orphaned readout thread");
-		t->join();
-		delete t;
-	      }
-	      readoutThreads.clear();
-	    }
-
 	    // Clear up any previously failed things
 	    if(controller->status() != 0)
 	      controller->End();
@@ -266,46 +220,15 @@ int main(int argc, char** argv){
 	    catch(const std::exception &e){
 	      logger->Entry(MongoLog::Debug, "No override options provided, continue without.");
 	    }
-
-	    bool initialized = false;
-
 	    // Mongocxx types confusing so passing json strings around
-	    if(fOptions != NULL) {
-	      delete fOptions;
-	      fOptions = NULL;
-	    }
-	    fOptions = new Options(logger, (doc)["mode"].get_utf8().value.to_string(),
+	    fOptions = std::make_shared<Options>(logger, (doc)["mode"].get_utf8().value.to_string(),
 				   hostname, suri, dbname, override_json);
-	    std::vector<int> links;
-	    if(controller->InitializeElectronics(fOptions, links) != 0){
+	    if(controller->InitializeElectronics(fOptions) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->End();
-	    }
-	  else{
-	    initialized = true;
-            logger->SetRunId(fOptions->GetString("run_identifier","none"));
-	    logger->Entry(MongoLog::Debug, "Initialized electronics");
-	  }
-	    
-	    if(readoutThreads.size()!=0){
-	      logger->Entry(MongoLog::Message,
-			    "Cannot start DAQ while readout thread from previous run active. Please perform a reset");
-	    }
-	    else if(!initialized){
-	      logger->Entry(MongoLog::Warning, "Skipping readout configuration since init failed");
-	    }
-	    else{
-	      controller->CloseProcessingThreads();
-	      // open nprocessingthreads
-	      if (controller->OpenProcessingThreads()) {
-		logger->Entry(MongoLog::Warning, "Could not open processing threads!");
-		controller->CloseProcessingThreads();
-		throw std::runtime_error("Error while arming");
-	      }
-	      for(unsigned int i=0; i<links.size(); i++){
-                readoutThreads.emplace_back(new std::thread(&DAQController::ReadData,
-                      controller, links[i]));
-	      }
+	    }else{
+              logger->SetRunId(fOptions->GetString("run_identifier","none"));
+	      logger->Entry(MongoLog::Debug, "Initialized electronics");
 	    }
 	  } // if status is ok
 	  else
@@ -318,16 +241,12 @@ int main(int argc, char** argv){
       std::cout<<"Can't connect to DB so will continue what I'm doing"<<std::endl;
     }
 
-    controller->CheckErrors();
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(seconds(1));
   }
   status_update.join();
-  delete controller;
-  if (fOptions != NULL) delete fOptions;
-  delete logger;
+  controller.reset();
+  fOptions.reset();
+  logger.reset();
   exit(0);
-
 }
-
-
 

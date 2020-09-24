@@ -2,13 +2,12 @@
 #include "MongoLog.hh"
 #include <CAENVMElib.h>
 
-V2718::V2718(MongoLog *log){
+V2718::V2718(std::shared_ptr<MongoLog>& log){
   fLog = log;
   fBoardHandle=fLink=fCrate=-1;
   fCopts.s_in = fCopts.neutron_veto = fCopts.muon_veto = -1;
   fCopts.led_trigger = fCopts.pulser_freq = -1;
 }
-
 
 V2718::~V2718(){
 }
@@ -97,7 +96,6 @@ int V2718::SendStartSignal(){
   }
   return 0;
 }
-
 
 int V2718::SendStopSignal(bool end){
 

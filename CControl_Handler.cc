@@ -9,14 +9,14 @@
 #include <bsoncxx/builder/stream/document.hpp>
 #include <chrono>
 
-CControl_Handler::CControl_Handler(MongoLog *log, std::string procname){
-  fOptions = NULL;
+CControl_Handler::CControl_Handler(std::shared_ptr<MongoLog>& log, std::string procname){
+  fOptions = nullptr;
   fLog = log;
   fProcname = procname;
   fCurrentRun = fBID = fBoardHandle-1;
-  fV2718 = NULL;
-  fV1495 = NULL;
-  fDDC10 = NULL;
+  fV2718 = nullptr;
+  fV1495 = nullptr;
+  fDDC10 = nullptr;
   fStatus = DAXHelpers::Idle;
 }
 
@@ -25,7 +25,7 @@ CControl_Handler::~CControl_Handler(){
 }
 
 // Initialising various devices namely; V2718 crate controller, V1495, DDC10...
-int CControl_Handler::DeviceArm(int run, Options *opts){
+int CControl_Handler::DeviceArm(int run, std::shared_ptr<Options>& opts){
 
   fStatus = DAXHelpers::Arming;
 
@@ -52,7 +52,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
     return -1;
   }
   BoardType cc_def = bv[0];
-  fV2718 = new V2718(fLog);
+  fV2718 = std::make_unique<V2718>(fLog);
   if (fV2718->CrateInit(copts, cc_def.link, cc_def.crate)!=0){
     fLog->Entry(MongoLog::Error, "Failed to initialize V2718 crate controller");
     fStatus = DAXHelpers::Idle;
@@ -69,7 +69,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   // Init DDC10 only when included in config - only for TPC
   if (dv.size() == 1){
      if(fOptions->GetHEVOpt(hopts) == 0){
-        fDDC10 = new DDC10();
+        fDDC10 = std::make_unique<DDC10>();
 	if(fDDC10->Initialize(hopts) != 0){
            fLog->Entry(MongoLog::Error, "Failed to initialise DDC10 HEV");
 	   fStatus = DAXHelpers::Idle;
@@ -90,7 +90,7 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
   if (mv.size() == 1){
     BoardType mv_def = mv[0];
     fBID = mv_def.board;
-    fV1495 = new V1495(fLog, fOptions, mv_def.board, fBoardHandle, mv_def.vme_address);
+    fV1495 = std::make_unique<V1495>(fLog, fOptions, mv_def.board, fBoardHandle, mv_def.vme_address);
 	// Writing registers to the V1495 board
 	for(auto regi : fOptions->GetRegisters(fBID, true)){
 		unsigned int reg = DAXHelpers::StringToHex(regi.reg);
@@ -110,16 +110,13 @@ int CControl_Handler::DeviceArm(int run, Options *opts){
 
 } // end devicearm
 
-
-
-
 // Send the start signal from crate controller
 int CControl_Handler::DeviceStart(){
   if(fStatus != DAXHelpers::Armed){
     fLog->Entry(MongoLog::Warning, "V2718 attempt to start without arming. Maybe unclean shutdown");
     return 0;
   }
-  if(fV2718 == NULL || fV2718->SendStartSignal()!=0){
+  if(!fV2718 || fV2718->SendStartSignal()!=0){
     fLog->Entry(MongoLog::Error, "V2718 either failed to start");
     fStatus = DAXHelpers::Error;
     return -1;
@@ -135,28 +132,19 @@ int CControl_Handler::DeviceStop(){
   //fLog->Entry(MongoLog::Local, "Beginning stop sequence");
 
   // If V2718 here then send stop signal
-  if(fV2718 != NULL){
+  if(fV2718){
     if(fV2718->SendStopSignal() != 0){
       fLog->Entry(MongoLog::Warning, "Failed to stop V2718");
     }
-    delete fV2718;
-    fV2718 = NULL;
+    fV2718.reset();
   }
   // Don't need to stop the DDC10 but just clean up a bit
-  if(fDDC10 != NULL){
-    delete fDDC10;
-    fDDC10 = NULL;
-  }
-
-  if(fV1495 != NULL){
-    delete fV1495;
-    fV1495 = NULL;
-  }
+  fDDC10.reset();
+  fV1495.reset();
 
   fStatus = DAXHelpers::Idle;
   return 0;
 }
-
 
 // Reporting back on the status of V2718, V1495, DDC10 etc...
 bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
@@ -168,7 +156,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
     "time" << bsoncxx::types::b_date(system_clock::now());
   auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
 
-  if(fV2718 != NULL){
+  if(fV2718){
     auto crate_options = fV2718->GetCrateOptions();
     in_array << bsoncxx::builder::stream::open_document
 	     << "run_number" << fCurrentRun
@@ -182,8 +170,9 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
   }
   auto after_array = in_array << bsoncxx::builder::stream::close_array;
   return after_array << bsoncxx::builder::stream::finalize;
+  /*
   // DDC10 parameters might change for future updates of the XENONnT HEV
-  if(fDDC10 != NULL){
+  if(fDDC10){
     auto hev_options = fDDC10->GetHEVOptions();
     in_array << bsoncxx::builder::stream::open_document
              << "type" << "DDC10"
@@ -207,7 +196,7 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
              << bsoncxx::builder::stream::close_document;
   }
   // Write the settings for the Muon Veto V1495 board into status doc 
-  if(fV1495 != NULL){
+  if(fV1495){
     auto registers = fOptions->GetRegisters(fBID);
      in_array << bsoncxx::builder::stream::open_document
 	      << "type" << "V1495"
@@ -223,5 +212,5 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
   
   after_array = in_array << bsoncxx::builder::stream::close_array;
   return after_array << bsoncxx::builder::stream::finalize;
-
-}  
+*/
+}

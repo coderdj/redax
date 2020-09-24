@@ -14,12 +14,6 @@ class StraxInserter;
 class MongoLog;
 class Options;
 class V1724;
-class data_packet;
-
-struct processingThread{
-  std::thread *pthread;
-  StraxInserter *inserter;
-};
 
 class DAQController{
   /*
@@ -28,10 +22,10 @@ class DAQController{
   */
 
 public:
-  DAQController(MongoLog *log=NULL, std::string hostname="DEFAULT");
+  DAQController(std::shared_ptr<MongoLog>&, std::string hostname="DEFAULT");
   ~DAQController();
 
-  int InitializeElectronics(Options *options, std::vector<int> &keys);
+  int InitializeElectronics(std::shared_ptr<Options>&);
 
   int status(){return fStatus;}
   int GetBufferLength();
@@ -39,50 +33,42 @@ public:
 
   int Start();
   int Stop();
-  void ReadData(int link);
   void End();
-
-  int GetData(std::list<data_packet*>* retQ, unsigned num = 0);
-  int GetData(data_packet* &dp);
 
   int GetDataSize(){int ds = fDataRate; fDataRate=0; return ds;}
   std::map<int, int> GetDataPerChan();
-  bool CheckErrors();
   void CheckError(int bid) {fCheckFails[bid] = true;}
-  int OpenProcessingThreads();
-  void CloseProcessingThreads();
   long GetStraxBufferSize();
   int GetBufferSize() {return fBufferSize.load();}
 
   void GetDataFormat(std::map<int, std::map<std::string, int>>&);
 
 private:
-
-  void InitLink(std::vector<V1724*>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
-  int FitBaselines(std::vector<V1724*>&, std::map<int, std::vector<u_int16_t>>&, int,
+  void ReadData(int link);
+  int OpenProcessingThreads();
+  void CloseProcessingThreads();
+  void InitLink(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
+  int FitBaselines(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::vector<uint16_t>>&, int,
       std::map<int, std::map<std::string, std::vector<double>>>&);
 
-  std::vector <processingThread> fProcessingThreads;
-  std::map<int, std::vector <V1724*>> fDigitizers;
-  std::list<data_packet*> fBuffer;
-  std::mutex fBufferMutex;
+  std::vector<std::unique_ptr<StraxInserter>> fFormatters;
+  std::vector<std::thread> fProcessingThreads;
+  std::map<int, std::vector<std::shared_ptr<V1724>>> fDigitizers;
   std::mutex fMapMutex;
-  std::mutex fPTmutex;
 
   std::atomic_bool fReadLoop;
   std::map<int, std::atomic_bool> fRunning;
   int fStatus;
   int fNProcessingThreads;
   std::string fHostname;
-  MongoLog *fLog;
-  Options *fOptions;
-  int fMaxEventsPerThread;
+  std::shared_ptr<MongoLog> fLog;
+  std::shared_ptr<Options> fOptions;
+  std::shared_ptr<ThreadPool> fTP;
 
   // For reporting to frontend
   std::atomic_int fBufferSize;
   std::atomic_int fBufferLength;
   std::atomic_int fDataRate;
-  std::map<int, V1724*> fBoardMap;
   std::map<int, std::atomic_bool> fCheckFails;
 };
 

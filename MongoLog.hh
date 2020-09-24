@@ -51,9 +51,9 @@ class MongoLog{
   /*
     Logging class that writes to MongoDB
   */
-  
+
 public:
-  MongoLog(int DeleteAfterDays=7, std::string log_dir="./");
+  MongoLog(int DeleteAfterDays, std::string log_dir, std::string, std::string, std::string, std::string);
   ~MongoLog();
   
   int  Initialize(std::string connection_string,

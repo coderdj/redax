@@ -16,8 +16,7 @@
 #include <fstream>
 
 
-V1724::V1724(MongoLog  *log, Options *options){
-  fOptions = options;
+V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts){
   fBoardHandle=fLink=fCrate=fBID=-1;
   fBaseAddress=0;
   fLog = log;
@@ -35,24 +34,58 @@ V1724::V1724(MongoLog  *log, Options *options){
   fBoardFailStatRegister = 0x8178;
   fReadoutStatusRegister = 0xEF04;
   fBoardErrRegister = 0xEF00;
+  fError = false;
 
-  BLT_SIZE=512*1024; // one channel's memory
+  fSampleWidth = 10;
+  fClockCycle = 10;
 
-  DataFormatDefinition = {
-    {"channel_mask_msb_idx", -1},
-    {"channel_mask_msb_mask", -1},
-    {"channel_header_words", 2},
-    {"ns_per_sample", 10},
-    {"ns_per_clk", 10},   
-    // Channel indices are given relative to start of channel
-    // i.e. the channel size is at index '0'
-    {"channel_time_msb_idx", -1},
-    {"channel_time_msb_mask", -1},
+  int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
+  if(a != cvSuccess){
+    fLog->Entry(MongoLog::Warning, "Board %i failed to init, error %i handle %i link %i bdnum %i",
+            bid, a, fBoardHandle, link, crate);
+    fBoardHandle = -1;
+    throw std::runtime_error();
+  }
+  fLog->Entry(MongoLog::Debug, "Board %i initialized with handle %i (link/crate)(%i/%i)",
+	      bid, fBoardHandle, link, crate);
 
-  };
+  fLink = link;
+  fCrate = crate;
+  fBID = bid;
+  fBaseAddress=address;
+  fRolloverCounter = 0;
+  fLastClock = 0;
+  uint32_t word(0);
+  int my_bid(0);
 
-  fBLTSafety = 1.4;
-  fBufferSafety = 1.1;
+  fBLTSafety = opts->GetDouble("blt_safety_factor", 1.5);
+  BLT_SIZE = opts->GetInt("blt_size", 512*1024);
+  // there's a more elegant way to do this, but I'm not going to write it
+  fClockPeriod = std::chrono::nanoseconds((1l<<31)*DataFormatDefinition["ns_per_clk"]);
+
+  if (Reset()) {
+    fLog->Entry(MongoLog::Error, "Board %i unable to pre-load registers", fBID);
+    throw std::runtime_error();
+  } else {
+    fLog->Entry(MongoLog::Local, "Board %i reset", fBID);
+  }
+  std::this_thread::sleep_for(std::chrono::milliseconds(10));
+  if (opts->GetInt("do_sn_check", 0) != 0) {
+    if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
+      fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBID);
+      throw std::runtime_error();
+    }
+    my_bid |= word&0xFF;
+    if ((word = ReadRegister(fSNRegisterMSB)) == 0xFFFFFFFF) {
+      fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBID);
+      throw std::runtime_error();
+    }
+    my_bid |= ((word&0xFF)<<8);
+    if (my_bid != fBID) {
+      fLog->Entry(MongoLog::Local, "Link %i crate %i should be SN %i but is actually %i",
+        link, crate, fBID, my_bid);
+    }
+  }
 }
 
 V1724::~V1724(){
@@ -87,7 +120,7 @@ bool V1724::EnsureStarted(int ntries, int tsleep){
 bool V1724::EnsureStopped(int ntries, int tsleep){
   return MonitorRegister(fAqStatusRegister, 0x4, ntries, tsleep, 0x0);
 }
-u_int32_t V1724::GetAcquisitionStatus(){
+uint32_t V1724::GetAcquisitionStatus(){
   return ReadRegister(fAqStatusRegister);
 }
 
@@ -102,77 +135,24 @@ int V1724::CheckErrors(){
   return ret;
 }
 
-
-int V1724::Init(int link, int crate, int bid, unsigned int address){
-  int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
-  if(a != cvSuccess){
-    fLog->Entry(MongoLog::Warning, "Board %i failed to init, error %i handle %i link %i bdnum %i",
-            bid, a, fBoardHandle, link, crate);
-    fBoardHandle = -1;
-    return -1;
-  }
-  fLog->Entry(MongoLog::Debug, "Board %i initialized with handle %i (link/crate)(%i/%i)",
-	      bid, fBoardHandle, link, crate);  
-
-  fLink = link;
-  fCrate = crate;
-  fBID = bid;
-  fBaseAddress=address;
-  fRolloverCounter = 0;
-  fLastClock = 0;
-  u_int32_t word(0);
-  int my_bid(0);
-  
-  fBLTSafety = fOptions->GetDouble("blt_safety_factor", 1.5);
-  fBufferSafety = fOptions->GetDouble("buffer_safety_factor", 1.1);
-  BLT_SIZE = fOptions->GetInt("blt_size", 512*1024);
-  // there's a more elegant way to do this, but I'm not going to write it
-  fClockPeriod = std::chrono::nanoseconds((1l<<31)*DataFormatDefinition["ns_per_clk"]);
-
-  if (Reset()) {
-    fLog->Entry(MongoLog::Error, "Board %i unable to pre-load registers", fBID);
-    return -1;
-  } else {
-    fLog->Entry(MongoLog::Local, "Board %i reset", fBID);
-  }
-  std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  if (fOptions->GetInt("do_sn_check", 0) != 0) {
-    if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
-      fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBID);
-      return -1;
-    }
-    my_bid |= word&0xFF;
-    if ((word = ReadRegister(fSNRegisterMSB)) == 0xFFFFFFFF) {
-      fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBID);
-      return -1;
-    }
-    my_bid |= ((word&0xFF)<<8);
-    if (my_bid != fBID) {
-      fLog->Entry(MongoLog::Local, "Link %i crate %i should be SN %i but is actually %i",
-        link, crate, fBID, my_bid);
-    }
-  }
-  return 0;
-}
-
 int V1724::Reset() {
   int ret = WriteRegister(fResetRegister, 0x1);
   ret += WriteRegister(fBoardErrRegister, 0x30);
   return ret;
 }
 
-u_int32_t V1724::GetHeaderTime(u_int32_t *buff, u_int32_t size){
-  u_int32_t idx = 0;
-  while(idx < size/sizeof(u_int32_t)){
-    if(buff[idx]>>28==0xA){
-      return buff[idx+3]&0x7FFFFFFF;
+std::tuple<uint32_t, long> V1724::GetClockInfo(std::u32string_view sv) {
+  auto it = sv.begin();
+  do {
+    if ((*it)>>28 == 0xA) {
+      uint32_t ht = *(it+3)&0x7FFFFFFF;
+      return {ht, GetClockCounter(ht)};
     }
-    idx++;
-  }
-  return 0xFFFFFFFF;
+  } while (++it < sv.end());
+  return {0xFFFFFFFF, -1};
 }
 
-int V1724::GetClockCounter(u_int32_t timestamp){
+int V1724::GetClockCounter(uint32_t timestamp){
   // The V1724 has a 31-bit on board clock counter that counts 10ns samples.
   // So it will reset every 21 seconds. We need to count the resets or we
   // can't run longer than that. We can employ some clever logic
@@ -200,7 +180,7 @@ int V1724::GetClockCounter(u_int32_t timestamp){
 }
 
 int V1724::WriteRegister(unsigned int reg, unsigned int value){
-  u_int32_t write=0;
+  uint32_t write=0;
   write+=value;
   int ret = 0;
   if((ret = CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg,
@@ -226,21 +206,19 @@ unsigned int V1724::ReadRegister(unsigned int reg){
   return temp;
 }
 
-int V1724::ReadMBLT(u_int32_t* &buffer){
+int V1724::Read(std::unique_ptr<data_packet>& outptr){
+  if ((GetAcquisitionStatus() & 0x8) == 0) return 0;
   // Initialize
-  int64_t blt_bytes=0;
-  int nb=0,ret=-5;
-  std::list<std::pair<u_int32_t*, int>> xfer_buffers;
+  int blt_words=0, nb=0, ret=-5;
+  std::list<std::pair<char32_t*, int>> xfer_buffers;
 
   int count = 0;
-  int alloc_size = BLT_SIZE/sizeof(u_int32_t)*fBLTSafety;
-  u_int32_t* thisBLT = nullptr;
-  if ((GetAcquisitionStatus() & 0x8) == 0) return 0;
-  // digitizer has at least one event
+  int alloc_words = BLT_SIZE/sizeof(char32_t)*fBLTSafety;
+  char32_t* thisBLT = nullptr;
   do{
 
     // Reserve space for this block transfer
-    thisBLT = new u_int32_t[alloc_size];
+    thisBLT = new char32_t[alloc_words];
 
     ret = CAENVME_FIFOBLTReadCycle(fBoardHandle, fBaseAddress,
 				     ((unsigned char*)thisBLT),
@@ -255,43 +233,40 @@ int V1724::ReadMBLT(u_int32_t* &buffer){
       for (auto& b : xfer_buffers) delete[] b.first;
       return -1;
     }
-    if (nb > (int)BLT_SIZE) fLog->Entry(MongoLog::Message,
+    if (nb > BLT_SIZE) fLog->Entry(MongoLog::Message,
         "Board %i got %i more bytes than asked for (headroom %i)",
-        fBID, nb-BLT_SIZE, alloc_size-nb);
+        fBID, nb-BLT_SIZE, alloc_words*sizeof(char32_t)-nb);
 
     count++;
-    blt_bytes+=nb;
-    xfer_buffers.push_back(std::make_pair(thisBLT, nb));
+    blt_words+=nb/sizeof(char32_t);
+    xfer_buffers.emplace_back(std::make_pair(thisBLT, nb));
 
   }while(ret != cvBusError);
 
-  // Now, unfortunately we need to make one copy of the data here or else our memory
-  // usage explodes. We declare above a buffer of several MB, which is the maximum capacity
-  // of the board in case every channel is 100% saturated (the practical largest
-  // capacity is certainly smaller depending on settings). But if we just keep reserving
-  // O(MB) blocks and filling 50kB with actual data, we're gonna run out of memory.
-  // So here we declare the return buffer as *just* large enough to hold the actual
-  // data and free up the rest of the memory reserved as buffer.
-  // In tests this does not seem to impact our ability to read out the V1724 at the
-  // maximum bandwidth of the link.
-  if(blt_bytes>0){
-    u_int32_t bytes_copied = 0;
-    alloc_size = blt_bytes/sizeof(u_int32_t)*fBufferSafety;
-    buffer = new u_int32_t[alloc_size];
+  /*Now, unfortunately we need to make one copy of the data here or else our memory
+    usage explodes. We declare above a buffer of several MB, which is the maximum capacity
+    of the board in case every channel is 100% saturated (the practical largest
+    capacity is certainly smaller depending on settings). But if we just keep reserving
+    O(MB) blocks and filling 50kB with actual data, we're gonna run out of memory.
+    So here we declare the return buffer as *just* large enough to hold the actual
+    data and free up the rest of the memory reserved as buffer.
+    In tests this does not seem to impact our ability to read out the V1724 at the
+    maximum bandwidth of the link. */
+  if(blt_words>0){
+    std::u32string s;
+    s.reserve(blt_words);
     for (auto& xfer : xfer_buffers) {
-      std::memcpy(((unsigned char*)buffer)+bytes_copied, xfer.first, xfer.second);
-      bytes_copied += xfer.second;
+      s.append(xfer.first, xfer.second);
     }
     fBLTCounter[count]++;
-    if (bytes_copied != blt_bytes) fLog->Entry(MongoLog::Message,
-        "Board %i funny buffer accumulation: %i/%i from %i BLTs",
-        fBID, bytes_copied, blt_bytes, count);
+    auto [ht, cc] = GetClockInfo(s);
+    outptr = std::make_unique<data_packet>(std::move(s), ht, cc);
   }
   for (auto b : xfer_buffers) delete[] b.first;
-  return blt_bytes;
+  return blt_words;
 }
 
-int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){
+int V1724::LoadDAC(std::vector<uint16_t> &dac_values){
   // Loads DAC values into registers
   for(unsigned int x=0; x<fNChannels; x++){
     if(WriteRegister((fChDACRegister)+(0x100*x), dac_values[x])!=0){
@@ -304,7 +279,7 @@ int V1724::LoadDAC(std::vector<u_int16_t> &dac_values){
   return 0;
 }
 
-int V1724::SetThresholds(std::vector<u_int16_t> vals) {
+int V1724::SetThresholds(std::vector<uint16_t> vals) {
   int ret = 0;
   for (unsigned ch = 0; ch < fNChannels; ch++)
     ret += WriteRegister(fChTrigRegister + 0x100*ch, vals[ch]);
@@ -319,9 +294,9 @@ int V1724::End(){
   return 0;
 }
 
-void V1724::ClampDACValues(std::vector<u_int16_t> &dac_values,
+void V1724::ClampDACValues(std::vector<uint16_t> &dac_values,
                   std::map<std::string, std::vector<double>> &cal_values) {
-  u_int16_t min_dac, max_dac(0xffff);
+  uint16_t min_dac, max_dac(0xffff);
   for (unsigned ch = 0; ch < fNChannels; ch++) {
     if (cal_values["yint"][ch] > 0x3fff) {
       min_dac = (0x3fff - cal_values["yint"][ch])/cal_values["slope"][ch];
@@ -336,8 +311,8 @@ void V1724::ClampDACValues(std::vector<u_int16_t> &dac_values,
   }
 }
 
-bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep, u_int32_t val){
-  u_int32_t rval = 0;
+bool V1724::MonitorRegister(uint32_t reg, uint32_t mask, int ntries, int sleep, uint32_t val){
+  uint32_t rval = 0;
   if(val == 0) rval = 0xffffffff;
   for(int counter = 0; counter < ntries; counter++){
     rval = ReadRegister(reg);
@@ -350,4 +325,22 @@ bool V1724::MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep
   fLog->Entry(MongoLog::Warning,"Board %i MonitorRegister failed for 0x%04x with mask 0x%04x and register value 0x%04x, wanted 0x%04x",
           fBID, reg, mask, rval,val);
   return false;
+}
+
+std::tuple<int, int, bool, uint32_t> V1724::UnpackEventHeader(std::u32string_view sv) {
+  // returns {words this event, channel mask, board fail, header timestamp}
+  return {sv[0]&0xFFFFFFF, sv[1]&0xFF, sv[1]&0x4000000, sv[3]&0x7FFFFFFF};
+}
+
+std::tuple<int64_t, int, uint16_t, std::u32string_view> V1724::UnpackChannelHeader(std::u32string_view sv, long rollovers, uint32_t header_time, uint32_t, int, int) {
+  // returns {timestamp (ns), words this channel, baseline, waveform}
+  long ch_time = sv[1]&0x7FFFFFFF;
+  int words = sv[0]&0x7FFFFF;
+  // More rollover logic here, because channels are independent and the
+  // processing is multithreaded. We leverage the fact that readout windows are
+  // short and polled frequently compared to the rollover timescale, so there
+  // will never be a large difference in timestamps in one data packet
+  if (ch_time > 15e8 && header_time < 5e8 && rollovers != 0) rollovers--;
+  else if (ch_time < 5e8 && header_time > 15e8) rollovers++;
+  return {((rollovers<<31)+ch_time)*fClockCycle, words, 0, sv.substr(2, words-2)};
 }

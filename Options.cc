@@ -12,7 +12,7 @@
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
 
-Options::Options(MongoLog *log, std::string options_name, std::string hostname,
+Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::string hostname,
           std::string suri, std::string dbname, std::string override_opts) : 
     fLog(log), fDBname(dbname), fHostname(hostname) {
   bson_value = NULL;
