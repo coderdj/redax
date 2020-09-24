@@ -129,8 +129,8 @@ void StraxFormatter::ProcessDatapacket(std::unique_ptr<data_packet> dp){
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_start);
       words = (*it)&0xFFFFFFF;
       std::u32string_view sv(dp->buff.data() + std::distance(dp->buff.begin(), it), words);
-      fLog->Entry(MongoLog::Local, "Bd %i %x/%x/%x/%x", dp->digi->bid(),
-          std::distance(dp->buff.begin(), it), words, sv.size(), dp->buff.size());
+      fLog->Entry(MongoLog::Local, "Bd %i %x/%x/%x", dp->digi->bid(),
+          std::distance(dp->buff.begin(), it), words, dp->buff.size());
       ProcessEvent(sv, dp, dpc);
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_end);
       fProcTimeEv += timespec_subtract(ev_end, ev_start);
@@ -138,8 +138,8 @@ void StraxFormatter::ProcessDatapacket(std::unique_ptr<data_packet> dp){
       it += words;
     } else {
       if (missed) {
-        fLog->Entry(MongoLog::Warning, "Missed an event from %i at idx %x/%x",
-            dp->digi->bid(), std::distance(dp->buff.begin(), it), dp->buff.size());
+        fLog->Entry(MongoLog::Warning, "Missed an event from %i at idx %x/%x (%x)",
+            dp->digi->bid(), std::distance(dp->buff.begin(), it), dp->buff.size(), *it);
         missed = false;
       }
       it++;

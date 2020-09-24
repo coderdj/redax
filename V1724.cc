@@ -241,7 +241,7 @@ int V1724::Read(std::unique_ptr<data_packet>& outptr){
 
     count++;
     blt_words+=nb/sizeof(char32_t);
-    xfer_buffers.emplace_back(std::make_pair(thisBLT, nb));
+    xfer_buffers.emplace_back(std::make_pair(thisBLT, nb/sizeof(char32_t)));
 
   }while(ret != cvBusError);
 
