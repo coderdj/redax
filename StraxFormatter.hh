@@ -22,7 +22,7 @@ class V1724;
 
 struct data_packet{
   data_packet() : clock_counter(0), header_time(0) {}
-  data_packet(std::u32string s, uint32_t cc, uint32_t ht) :
+  data_packet(std::u32string s, uint32_t ht, long cc) :
       buff(std::move(s)), clock_counter(cc), header_time(ht) {}
   data_packet(const data_packet& rhs)=delete;
   data_packet(data_packet&& rhs) : buff(std::move(rhs.buff)),
@@ -39,7 +39,7 @@ struct data_packet{
   }
 
   std::u32string buff;
-  uint32_t clock_counter;
+  long clock_counter;
   uint32_t header_time;
   std::shared_ptr<V1724> digi;
 };
