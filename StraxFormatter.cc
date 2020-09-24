@@ -128,6 +128,8 @@ void StraxFormatter::ProcessDatapacket(std::unique_ptr<data_packet> dp){
       missed = true; // it works out
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_start);
       words = (*it)&0xFFFFFFF;
+      fLog->Entry(MongoLog::Local, "Bd %i %x/%x/%x", dp->digi->bid(),
+          std::distance(dp->buff.begin(), it), words, dp->buff.size());
       std::u32string_view sv(dp->buff.data() + std::distance(dp->buff.begin(), it), words);
       ProcessEvent(sv, dp, dpc);
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_end);
