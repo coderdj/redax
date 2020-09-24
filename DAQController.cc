@@ -312,11 +312,11 @@ void DAQController::CloseThreads(){
   const std::lock_guard<std::mutex> lg(fMutex);
   for (auto& sf : fFormatters) sf->Close(board_fails);
   // give threads time to finish
-  std::this_thread::sleep_for(std::chrono::milliseconds(10));
-  for (auto& sf : fFormatters) sf.reset();
-  fFormatters.clear();
+  std::this_thread::sleep_for(std::chrono::seconds(1));
   for (auto& t : fProcessingThreads) if (t.joinable()) t.join();
   fProcessingThreads.clear();
+  for (auto& sf : fFormatters) sf.reset();
+  fFormatters.clear();
 
   if (std::accumulate(board_fails.begin(), board_fails.end(), 0,
 	[=](int tot, auto& iter) {return std::move(tot) + iter.second;})) {

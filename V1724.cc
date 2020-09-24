@@ -172,6 +172,8 @@ int V1724::GetClockCounter(uint32_t timestamp){
   if (timestamp < fLastClock) {
     // actually rolled over
     fRolloverCounter++;
+    fLog->Entry(MongoLog::Local, "Board %i rollover %i (%x/%x)",
+        fBID, fRolloverCounter, fLastClock, timestamp);
   } else {
     // not a rollover
   }
