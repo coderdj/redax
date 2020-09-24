@@ -161,7 +161,6 @@ int StraxFormatter::ProcessEvent(std::u32string_view buff,
 
   // returns {words this event, channel mask, board fail, header timestamp}
   auto [words, channel_mask, fail, event_time] = dp->digi->UnpackEventHeader(buff);
-  fLog->Entry(MongoLog::Local, "SF %i %x %x", dp->digi->bid(), event_time, dp->header_time);
 
   if(fail){ // board fail
     GenerateArtificialDeadtime(((dp->clock_counter<<31) + dp->header_time), dp->digi);
@@ -206,6 +205,8 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
   // Failing to discern which channel we're getting data from seems serious enough to throw
   if(global_ch==-1)
     throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
+  fLog->Entry(MongoLog::Local, "%i/%i (%i) %lx %x %x %i", dp->digi->bid(), ch,
+      global_ch, timestamp, dp->header_time, event_time, dp->clock_counter);
 
   int num_frags = std::ceil(1.*samples_in_pulse/samples_per_frag);
   frags += num_frags;

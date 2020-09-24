@@ -262,7 +262,6 @@ int V1724::Read(std::unique_ptr<data_packet>& outptr){
     }
     fBLTCounter[count]++;
     auto [ht, cc] = GetClockInfo(s);
-    fLog->Entry(MongoLog::Local, "Bd %i start %x %i", fBID, ht, cc);
     outptr = std::make_unique<data_packet>(std::move(s), ht, cc);
   }
   for (auto b : xfer_buffers) delete[] b.first;
