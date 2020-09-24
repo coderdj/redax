@@ -1,15 +1,15 @@
 #include "StraxFormatter.hh"
-#include <lz4frame.h>
 #include "DAQController.hh"
 #include "MongoLog.hh"
 #include "Options.hh"
+#include "V1724.hh"
+#include <lz4frame.h>
 #include <blosc.h>
 #include <thread>
 #include <cstring>
 #include <cstdarg>
 #include <numeric>
 #include <sstream>
-#include <list>
 #include <bitset>
 #include <iomanip>
 #include <ctime>
@@ -28,9 +28,10 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
   fChunkNameLength=6;
   fStraxHeaderSize=24;
   fBytesProcessed = 0;
-  fBufferSize = 0;
+  fInputBufferSize = 0;
+  fOutputBufferSize = 0;
   fProcTimeDP = fProcTimeEv = fProcTimeCh = fCompTime = 0.;
-  fOptions = options;
+  fOptions = opts;
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
   fFragmentBytes = fOptions->GetInt("strax_fragment_payload_bytes", 110*2);
@@ -59,33 +60,6 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
 }
 
 StraxFormatter::~StraxFormatter(){
-  fActive = false;
-  int counter_short = 0, counter_long = 0;
-  if (fBufferLength.load() > 0)
-    fLog->Entry(MongoLog::Local, "Thread %lx waiting to stop, has %i events left",
-        fThreadId, fBufferLength.load());
-  else
-    fLog->Entry(MongoLog::Local, "Thread %lx stopping", fThreadId);
-  int events_start = fBufferLength.load();
-  do{
-    events_start = fBufferLength.load();
-    while (fRunning && counter_short++ < 500)
-      std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    if (counter_short >= 500)
-      fLog->Entry(MongoLog::Message, "Thread %lx taking a while to stop, still has %i evts",
-          fThreadId, fBufferLength.load());
-    counter_short = 0;
-  } while (fRunning && fBufferLength.load() > 0 && events_start > fBufferLength.load() && counter_long++ < 10);
-  if (fRunning) {
-    fLog->Entry(MongoLog::Warning, "Force-quitting thread %lx: %i events lost",
-        fThreadId, fBufferLength.load());
-    fForceQuit = true;
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-  }
-  while (fRunning) {
-    fLog->Entry(MongoLog::Message, "Still waiting for thread %lx to stop", fThreadId);
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-  }
   std::stringstream ss;
   ss << std::hex << fThreadId;
   std::map<std::string, double> times {
@@ -105,7 +79,6 @@ StraxFormatter::~StraxFormatter(){
 
 void StraxFormatter::Close(std::map<int,int>& ret){
   fActive = false;
-  const std::lock_guard<std::mutex> lg(fFC_mutex);
   for (auto& iter : fFailCounter) ret[iter.first] += iter.second;
 }
 
@@ -119,7 +92,7 @@ void StraxFormatter::GetDataPerChan(std::map<int, int>& ret) {
   return;
 }
 
-void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, const std:::unique_ptr<V1724>& digi) {
+void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, const std::shared_ptr<V1724>& digi) {
   std::string fragment;
   fragment.reserve(fFragmentBytes + fStraxHeaderSize);
   timestamp *= digi->GetClockWidth();
@@ -135,7 +108,6 @@ void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, const std:::u
   fragment.append((char*)&fragment_i, sizeof(fragment_i));
   int16_t baseline = 0;
   fragment.append((char*)&baseline, sizeof(baseline));
-  fragment.append((char*)&bid, sizeof(bid));
   int8_t zero = 0;
   while ((int)fragment.size() < fFragmentBytes+fStraxHeaderSize)
     fragment.append((char*)&zero, sizeof(zero));
@@ -164,7 +136,7 @@ void StraxFormatter::ProcessDatapacket(std::unique_ptr<data_packet> dp){
     } else {
       if (missed) {
         fLog->Entry(MongoLog::Warning, "Missed an event from %i at idx %i",
-            dp->digi->bid, std::distance(dp->buff.begin(), it));
+            dp->digi->bid(), std::distance(dp->buff.begin(), it));
         missed = false;
       }
       it++;
@@ -178,6 +150,7 @@ void StraxFormatter::ProcessDatapacket(std::unique_ptr<data_packet> dp){
     const std::lock_guard<std::mutex> lk(fDPC_mutex);
     for (auto& p : dpc) fDataPerChan[p.first] += p.second;
   }
+  fInputBufferSize -= dp->buff.size()*sizeof(char32_t);
 }
 
 int StraxFormatter::ProcessEvent(std::u32string_view buff,
@@ -190,7 +163,7 @@ int StraxFormatter::ProcessEvent(std::u32string_view buff,
   auto [words, channel_mask, fail, event_time] = dp->digi->UnpackEventHeader(buff);
 
   if(fail){ // board fail
-    GenerateArtificialDeadtime(((clock_counter<<31) + header_time), dp->digi);
+    GenerateArtificialDeadtime(((dp->clock_counter<<31) + dp->header_time), dp->digi);
     dp->digi->CheckFail(true);
     fFailCounter[dp->digi->bid()]++;
     return event_header_words;
@@ -216,7 +189,7 @@ int StraxFormatter::ProcessEvent(std::u32string_view buff,
 }
 
 int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
-    int channel_mask, uint32_t event_time, int& frags,
+    int channel_mask, uint32_t event_time, int& frags, int channel,
     const std::unique_ptr<data_packet>& dp, std::map<int, int>& dpc) {
   // buff points to the first word of the channel's data
 
@@ -227,28 +200,28 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
 
   uint32_t samples_in_pulse = wf.size()*sizeof(uint16_t)/sizeof(char32_t);
   uint16_t sw = dp->digi->SampleWidth();
-  int samples_per_fragment = fFragmentBytes>>1;
+  int samples_per_frag= fFragmentBytes>>1;
   int16_t global_ch = fOptions->GetChannel(dp->digi->bid(), channel);
   // Failing to discern which channel we're getting data from seems serious enough to throw
   if(global_ch==-1)
     throw std::runtime_error("Failed to parse channel map. I'm gonna just kms now.");
 
-  int num_frags = std::ceil(1.*samples_in_pulse/samples_per_fragment);
+  int num_frags = std::ceil(1.*samples_in_pulse/samples_per_frag);
   frags += num_frags;
   for (uint16_t frag_i = 0; frag_i < num_frags; frag_i++) {
     std::string fragment;
     fragment.reserve(fFragmentBytes + fStraxHeaderSize);
 
     // How long is this fragment?
-    uint32_t samples_this_frag = samples_per_fragment;
+    uint32_t samples_this_frag = samples_per_frag;
     if (frag_i == num_frags-1)
-      samples_this_frag = samples_in_pulse - frag_i*samples_per_fragment;
+      samples_this_frag = samples_in_pulse - frag_i*samples_per_frag;
 
     int64_t time_this_frag = timestamp + samples_per_frag*sw*frag_i;
     fragment.append((char*)&time_this_frag, sizeof(time_this_frag));
     fragment.append((char*)&samples_this_frag, sizeof(samples_this_frag));
     fragment.append((char*)&sw, sizeof(sw));
-    fragment.append((char*)&cl, sizeof(cl));
+    fragment.append((char*)&global_ch, sizeof(global_ch));
     fragment.append((char*)&samples_in_pulse, sizeof(samples_in_pulse));
     fragment.append((char*)&frag_i, sizeof(frag_i));
     fragment.append((char*)&baseline_ch, sizeof(baseline_ch));
@@ -260,7 +233,7 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
     while((int)fragment.size()<fFragmentBytes+fStraxHeaderSize)
       fragment.append((char*)&zero_filler, sizeof(zero_filler));
 
-    AddFragmentToBuffer(std::move(fragment), event_time, clock_counter);
+    AddFragmentToBuffer(std::move(fragment), event_time, dp->clock_counter);
   } // loop over frag_i
   dpc[global_ch] += samples_in_pulse*sizeof(uint16_t);
   return channel_words;
@@ -289,7 +262,7 @@ void StraxFormatter::AddFragmentToBuffer(std::string fragment, uint32_t ts, int 
         fThreadId, chunk_id - max_chunk - 1);
   }
 
-  fFragmentSize += fragment.size();
+  fOutputBufferSize += fragment.size();
 
   if(!overlap){
     fChunks[chunk_id].emplace_back(std::move(fragment));
@@ -309,12 +282,11 @@ void StraxFormatter::ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>&
 
 void StraxFormatter::Process() {
   // this func runs in its own thread
-  fThreadID = std::this_thread::get_id();
+  fThreadId = std::this_thread::get_id();
   std::stringstream ss;
-  ss<<fHostname<<'_'<<fThreadID;
+  ss<<fHostname<<'_'<<fThreadId;
   fFullHostname = ss.str();
   fActive = fRunning = true;
-  fBufferLength = 0;
   std::unique_ptr<data_packet> dp;
   while (fActive == true) {
     std::unique_lock<std::mutex> lk(fBufferMutex);
@@ -347,7 +319,7 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
   struct timespec comp_start, comp_end;
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &comp_start);
 
-  std::vector<std::string>*> buffers = {&fChunks[chunk_i], &fOverlaps[chunk_i]};
+  std::vector<std::list<std::string>*> buffers = {&fChunks[chunk_i], &fOverlaps[chunk_i]};
   std::vector<size_t> uncompressed_size(3, 0);
   std::string uncompressed;
   std::vector<std::shared_ptr<std::string>> out_buffer(3);
@@ -361,10 +333,10 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
       uncompressed += *it;
     buffers[i]->clear();
     if(fCompressor == "blosc"){
-      max_compressed_size = uncompressed_size + BLOSC_MAX_OVERHEAD;
+      max_compressed_size = uncompressed_size[i] + BLOSC_MAX_OVERHEAD;
       out_buffer[i] = std::make_shared<std::string>(max_compressed_size, 0);
       wsize[i] = blosc_compress_ctx(5, 1, sizeof(char), uncompressed_size[i],
-          uncompressed[i].data(), out_buffer[i]->data(), max_compressed_size,"lz4", 0, 2);
+          uncompressed.data(), out_buffer[i]->data(), max_compressed_size,"lz4", 0, 2);
     }else{
       // Note: the current package repo version for Ubuntu 18.04 (Oct 2019) is 1.7.1, which is
       // so old it is not tracked on the lz4 github. The API for frame compression has changed
@@ -373,10 +345,11 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
       max_compressed_size = LZ4F_compressFrameBound(uncompressed_size[i], &kPrefs);
       out_buffer[i] = std::make_shared<std::string>(max_compressed_size, 0);
       wsize[i] = LZ4F_compressFrame(out_buffer[i]->data(), max_compressed_size,
-          uncompressed[i].data(), uncompressed_size[i], &kPrefs);
+          uncompressed.data(), uncompressed_size[i], &kPrefs);
     }
     uncompressed.clear();
     fBytesPerChunk[int(std::log2(uncompressed_size[i]))]++;
+    fOutputBufferSize -= uncompressed_size[i];
   }
   fChunks.erase(chunk_i);
   fOverlaps.erase(chunk_i);
@@ -393,7 +366,7 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
     if (!fs::exists(output_dir_temp))
       fs::create_directory(output_dir_temp);
     std::ofstream writefile(filename_temp, std::ios::binary);
-    if (uncompressed_size[i] > 0) writefile.write(out_buffer[i]>data(), wsize[i]);
+    if (uncompressed_size[i] > 0) writefile.write(out_buffer[i]->data(), wsize[i]);
     writefile.close();
     out_buffer[i].reset();
 
@@ -416,7 +389,7 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
 }
 
 void StraxFormatter::WriteOutChunks() {
-  if (fChunks.size() < fBufferNumChunks) return;
+  if ((int)fChunks.size() < fBufferNumChunks) return;
   auto [min_iter, max_iter] = std::minmax_element(fChunks.begin(), fChunks.end(),
       [&](auto& a, auto& b){return a.first < b.first;});
   int max_chunk = (*max_iter).first;
@@ -431,7 +404,6 @@ void StraxFormatter::End() {
   for (auto& p : fChunks)
     WriteOutChunk(p.first);
   fChunks.clear();
-  fFragmentSize = 0;
   auto end_dir = GetDirectoryPath("THE_END");
   if(!fs::exists(end_dir)){
     fLog->Entry(MongoLog::Local,"Creating END directory at %s", end_dir.c_str());

@@ -8,7 +8,7 @@
 #include <iostream>
 #include "MongoLog.hh"
 #include "Options.hh"
-#include "StraxInserter.hh"
+#include "StraxFormatter.hh"
 #include <CAENVMElib.h>
 #include <sstream>
 #include <list>
@@ -16,7 +16,7 @@
 #include <fstream>
 
 
-V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts){
+V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int link, int crate, int bid, unsigned address){
   fBoardHandle=fLink=fCrate=fBID=-1;
   fBaseAddress=0;
   fLog = log;
@@ -44,7 +44,7 @@ V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts){
     fLog->Entry(MongoLog::Warning, "Board %i failed to init, error %i handle %i link %i bdnum %i",
             bid, a, fBoardHandle, link, crate);
     fBoardHandle = -1;
-    throw std::runtime_error();
+    throw std::runtime_error("Board init failed");
   }
   fLog->Entry(MongoLog::Debug, "Board %i initialized with handle %i (link/crate)(%i/%i)",
 	      bid, fBoardHandle, link, crate);
@@ -61,11 +61,11 @@ V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts){
   fBLTSafety = opts->GetDouble("blt_safety_factor", 1.5);
   BLT_SIZE = opts->GetInt("blt_size", 512*1024);
   // there's a more elegant way to do this, but I'm not going to write it
-  fClockPeriod = std::chrono::nanoseconds((1l<<31)*DataFormatDefinition["ns_per_clk"]);
+  fClockPeriod = std::chrono::nanoseconds((1l<<31)*fClockCycle);
 
   if (Reset()) {
     fLog->Entry(MongoLog::Error, "Board %i unable to pre-load registers", fBID);
-    throw std::runtime_error();
+    throw std::runtime_error("Board reset failed");
   } else {
     fLog->Entry(MongoLog::Local, "Board %i reset", fBID);
   }
@@ -73,12 +73,12 @@ V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts){
   if (opts->GetInt("do_sn_check", 0) != 0) {
     if ((word = ReadRegister(fSNRegisterLSB)) == 0xFFFFFFFF) {
       fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN lsb", fBID);
-      throw std::runtime_error();
+      throw std::runtime_error("Board access failed");
     }
     my_bid |= word&0xFF;
     if ((word = ReadRegister(fSNRegisterMSB)) == 0xFFFFFFFF) {
       fLog->Entry(MongoLog::Error, "Board %i couldn't read its SN msb", fBID);
-      throw std::runtime_error();
+      throw std::runtime_error("Board access failed");
     }
     my_bid |= ((word&0xFF)<<8);
     if (my_bid != fBID) {

@@ -84,7 +84,7 @@ int main(int argc, char** argv){
   std::cout<<"I dub thee "<<hostname<<std::endl;
 
   // Logging
-  auto logger = std::make_shared<MongoLog>(log_retention, log_dir, mongo_uri, dbname, "log", hostname, true);
+  auto logger = std::make_shared<MongoLog>(log_retention, log_dir, mongo_uri, dbname, "log", hostname);
 
   // Options
   std::shared_ptr<Options> options;

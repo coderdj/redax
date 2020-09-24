@@ -5,7 +5,7 @@
 #include "V1730.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
-#include "StraxInserter.hh"
+#include "StraxFormatter.hh"
 #include "MongoLog.hh"
 #include <unistd.h>
 #include <algorithm>
@@ -22,20 +22,19 @@
 // 3-running
 // 4-error
 
-DAQController::DAQController(MongoLog *log, std::string hostname){
+DAQController::DAQController(std::shared_ptr<MongoLog>& log, std::string hostname){
   fLog=log;
-  fOptions = NULL;
+  fOptions = nullptr;
   fStatus = DAXHelpers::Idle;
   fReadLoop = false;
   fNProcessingThreads=8;
-  fBufferLength = 0;
   fDataRate=0.;
   fHostname = hostname;
 }
 
 DAQController::~DAQController(){
   if(fProcessingThreads.size()!=0)
-    CloseProcessingThreads();
+    CloseThreads();
 }
 
 std::string DAQController::run_mode(){
@@ -77,6 +76,7 @@ int DAQController::InitializeElectronics(std::shared_ptr<Options>& options){
     }catch(const std::exception& e) {
       fLog->Entry(MongoLog::Warning, "Failed to initialize digitizer %i: %s", d.board,
           e.what());
+      fDigitizers.clear();
       return -1;
     }
   }
@@ -91,7 +91,6 @@ int DAQController::InitializeElectronics(std::shared_ptr<Options>& options){
   if (fOptions->GetString("baseline_dac_mode") == "cached")
     fOptions->GetDAC(dac_values, BIDs);
   std::vector<std::thread*> init_threads;
-  fMaxEventsPerThread = fOptions->GetInt("max_events_per_thread", 1024);
   std::map<int,int> rets;
   // Parallel digitizer programming to speed baselining
   for( auto& link : fDigitizers ) {
@@ -121,9 +120,10 @@ int DAQController::InitializeElectronics(std::shared_ptr<Options>& options){
 	digi->AcquisitionStop();
     }
   }
+  fCounter = 0;
   if (OpenThreads()) {
     fLog->Entry(MongoLog::Warning, "Error opening threads");
-    fStatus = DAQXHelpers::Idle;
+    fStatus = DAXHelpers::Idle;
     return -1;
   }
   sleep(1);
@@ -200,7 +200,7 @@ void DAQController::End(){
       digi->End();
       digi.reset();
     }
-    link.clear();
+    link.second.clear();
   }
   fDigitizers.clear();
   fStatus = DAXHelpers::Idle;
@@ -257,7 +257,7 @@ void DAQController::ReadData(int link){
     if (local_buffer.size() > 0) {
       fDataRate += local_size;
       int selector = (fCounter++)%fNProcessingThreads;
-      fProcessingThreads[selector]->ReceiveDatapackets(local_buffer);
+      fFormatters[selector]->ReceiveDatapackets(local_buffer);
       local_size = 0;
     }
     readcycler++;
@@ -269,30 +269,27 @@ void DAQController::ReadData(int link){
 
 std::map<int, int> DAQController::GetDataPerChan(){
   // Return a map of data transferred per channel since last update
-  // Clears the private maps in the StraxInserters
-  const std::lock_guard<std::mutex> lg(fPTmutex);
-  std::map <int, int> retmap;
-  for (auto& p : fProcessors)
+  // Clears the private maps in the StraxFormatters
+  const std::lock_guard<std::mutex> lg(fMutex);
+  std::map<int, int> retmap;
+  for (auto& p : fFormatters)
     p->GetDataPerChan(retmap);
   return retmap;
 }
 
-long DAQController::GetStraxBufferSize() {
-  const std::lock_guard<std::mutex> lg(fPTmutex);
-  return std::accumulate(fProcessingThreads.begin(), fProcessingThreads.end(), 0,
-      [=](long tot, processingThread pt) {return tot + pt.inserter->GetBufferSize();});
-}
-
-int DAQController::GetBufferLength() {
-  const std::lock_guard<std::mutex> lg(fPTmutex);
-  return fBufferLength.load() + std::accumulate(fProcessingThreads.begin(),
-      fProcessingThreads.end(), 0,
-      [](int tot, auto pt){return tot + pt.inserter->GetBufferLength();});
+std::pair<long, long> DAQController::GetBufferSize() {
+  const std::lock_guard<std::mutex> lg(fMutex);
+  std::pair<long, long> ret{0l,0l};
+  for (const auto& p : fFormatters) {
+    auto x = p->GetBufferSize();
+    ret.first += x.first;
+    ret.second += x.second;
+  }
+  return ret;
 }
 
 int DAQController::OpenThreads(){
-  int ret = 0;
-  const std::lock_guard<std::mutex> lg(fPTmutex);
+  const std::lock_guard<std::mutex> lg(fMutex);
   fProcessingThreads.reserve(fNProcessingThreads);
   for(int i=0; i<fNProcessingThreads; i++){
     try {
@@ -312,7 +309,7 @@ int DAQController::OpenThreads(){
 
 void DAQController::CloseThreads(){
   std::map<int,int> board_fails;
-  const std::lock_guard<std::mutex> lg(fPTmutex);
+  const std::lock_guard<std::mutex> lg(fMutex);
   for (auto& sf : fFormatters) sf->Close(board_fails);
   // give threads time to finish
   std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -350,9 +347,9 @@ void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
     int bid = digi->bid(), success(0);
     if (BL_MODE == "fit") {
     } else if(BL_MODE == "cached") {
-      fMapMutex.lock();
+      fMutex.lock();
       auto board_dac_cal = cal_values.count(bid) ? cal_values[bid] : cal_values[-1];
-      fMapMutex.unlock();
+      fMutex.unlock();
       dac_values[bid] = std::vector<uint16_t>(digi->GetNumChannels());
       fLog->Entry(MongoLog::Local, "Board %i using cached baselines", bid);
       for (unsigned ch = 0; ch < digi->GetNumChannels(); ch++)
@@ -515,7 +512,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
 
       // readout
       for (auto d : digis) {
-        bytes_read[d->bid()] = d->Read(buffers[d->bid()]);
+        words_read[d->bid()] = d->Read(buffers[d->bid()]);
       }
 
       // decode
@@ -551,7 +548,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
               it += 4;
               continue;
             }
-            if (mask == 0) { // should be impossible?
+            if (channel_mask == 0) { // should be impossible?
               it += 4;
               continue;
             }
@@ -615,11 +612,11 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
         // ****************************
         for (auto d : digis) {
           bid = d->bid();
-          fMapMutex.lock();
+          fMutex.lock();
           cal_values[bid] = std::map<std::string, vector<double>>(
               {{"slope", vector<double>(d->GetNumChannels())},
                {"yint", vector<double>(d->GetNumChannels())}});
-          fMapMutex.unlock();
+          fMutex.unlock();
           for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
             B = C = D = E = F = 0;
             for (unsigned i = 0; i < DAC_cal_points.size(); i++) {

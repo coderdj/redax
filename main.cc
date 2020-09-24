@@ -35,13 +35,12 @@ void UpdateStatus(std::string suri, std::string dbname, std::shared_ptr<DAQContr
     try{
       // Put in status update document
       auto insert_doc = bsoncxx::builder::stream::document{};
+      auto buf = controller->GetBufferSize();
       insert_doc << "host" << hostname <<
         "time" << bsoncxx::types::b_date(system_clock::now())<<
 	"rate" << controller->GetDataSize()/1e6 <<
 	"status" << controller->status() <<
-	"buffer_length" << controller->GetBufferLength() << // TODO
-        "buffer_size" << controller->GetBufferSize()/1e6 <<
-        "strax_buffer" << controller->GetStraxBufferSize()/1e6 <<
+        "buffer_size" << (buf.first + buf.second)/1e6 <<
 	"run_mode" << controller->run_mode() <<
 	"channels" << bsoncxx::builder::stream::open_document <<
 	[&](bsoncxx::builder::stream::key_context<> doc){
@@ -133,7 +132,7 @@ int main(int argc, char** argv){
   // The DAQController object is responsible for passing commands to the
   // boards and tracking the status
   auto controller = std::make_shared<DAQController>(logger, hostname);
-  std::thread status_update(&UpdateStatus, suri, dbname, controller);
+  std::thread status_update(&UpdateStatus, suri, dbname, std::ref(controller));
   using namespace std::chrono;
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 

@@ -6,7 +6,7 @@
 class V1730 : public V1724 {
 
 public:
-  V1730(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&);
+  V1730(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, int, unsigned);
   virtual ~V1730();
 
   virtual std::tuple<int, int, bool, uint32_t> UnpackEventHeader(std::u32string_view);

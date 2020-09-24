@@ -4,9 +4,6 @@
 #include <cstdlib>
 #include <cstdint>
 #include <string>
-
-//for debugging
-//#include <sys/types.h>
 #include <map>
 #include <mutex>
 #include <experimental/filesystem>
@@ -14,10 +11,14 @@
 #include <atomic>
 #include <vector>
 #include <thread>
+#include <condition_variable>
+#include <list>
+#include <memory>
+#include <string_view>
 
 class Options;
 class MongoLog;
-class ThreadPool;
+class V1724;
 
 struct data_packet{
   data_packet() : clock_counter(0), header_time(0) {}
@@ -55,23 +56,21 @@ public:
   void Close(std::map<int,int>& ret);
 
   void Process();
-  long GetBufferSize() {return fFragmentSize.load();}
+  std::pair<int, int> GetBufferSize() {return {fInputBufferSize.load(), fOutputBufferSize.load()};}
   void GetDataPerChan(std::map<int, int>& ret);
-  void CheckError(int bid);
-  int GetBufferLength() {return fBufferLength.load();}
-  void ReceiveDatapackets(std::list<unique_ptr<data_packet>>&);
+  void ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>&);
 
 private:
   void ProcessDatapacket(std::unique_ptr<data_packet> dp);
   int ProcessEvent(std::u32string_view, const std::unique_ptr<data_packet>&,
       std::map<int, int>&);
-  int ProcessChannel(std::u32string_view, int, uint32_t, int&, unsigned,
+  int ProcessChannel(std::u32string_view, int, int, uint32_t, int&, int,
       const std::unique_ptr<data_packet>&, std::map<int, int>&);
   void WriteOutChunk(int);
   void WriteOutChunks();
   void End();
-  void GenerateArtificialDeadtime(int64_t, const std::unique_ptr<V1724>&);
-  void AddFragmentToBuffer(std::string&, uint32_t, int);
+  void GenerateArtificialDeadtime(int64_t, const std::shared_ptr<V1724>&);
+  void AddFragmentToBuffer(std::string, uint32_t, int);
 
   std::experimental::filesystem::path GetFilePath(const std::string&, bool=false);
   std::experimental::filesystem::path GetDirectoryPath(const std::string&, bool=false);
@@ -107,7 +106,7 @@ private:
   std::thread::id fThreadId;
   std::condition_variable fCV;
   std::mutex fBufferMutex;
-  std::list<data_packet*> fBuffer;
+  std::list<std::unique_ptr<data_packet>> fBuffer;
 };
 
 #endif

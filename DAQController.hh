@@ -10,7 +10,7 @@
 #include <mutex>
 #include <list>
 
-class StraxInserter;
+class StraxFormatter;
 class MongoLog;
 class Options;
 class V1724;
@@ -37,24 +37,21 @@ public:
 
   int GetDataSize(){int ds = fDataRate; fDataRate=0; return ds;}
   std::map<int, int> GetDataPerChan();
-  void CheckError(int bid) {fCheckFails[bid] = true;}
-  long GetStraxBufferSize();
-  int GetBufferSize() {return fBufferSize.load();}
-
-  void GetDataFormat(std::map<int, std::map<std::string, int>>&);
+  std::pair<long, long> GetBufferSize();
 
 private:
   void ReadData(int link);
-  int OpenProcessingThreads();
-  void CloseProcessingThreads();
+  int OpenThreads();
+  void CloseThreads();
   void InitLink(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
   int FitBaselines(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::vector<uint16_t>>&, int,
       std::map<int, std::map<std::string, std::vector<double>>>&);
 
-  std::vector<std::unique_ptr<StraxInserter>> fFormatters;
+  std::vector<std::unique_ptr<StraxFormatter>> fFormatters;
   std::vector<std::thread> fProcessingThreads;
+  std::vector<std::thread> fReadoutThreads;
   std::map<int, std::vector<std::shared_ptr<V1724>>> fDigitizers;
-  std::mutex fMapMutex;
+  std::mutex fMutex;
 
   std::atomic_bool fReadLoop;
   std::map<int, std::atomic_bool> fRunning;
@@ -63,13 +60,10 @@ private:
   std::string fHostname;
   std::shared_ptr<MongoLog> fLog;
   std::shared_ptr<Options> fOptions;
-  std::shared_ptr<ThreadPool> fTP;
 
   // For reporting to frontend
-  std::atomic_int fBufferSize;
-  std::atomic_int fBufferLength;
   std::atomic_int fDataRate;
-  std::map<int, std::atomic_bool> fCheckFails;
+  std::atomic_long fCounter;
 };
 
 #endif

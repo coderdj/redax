@@ -88,7 +88,7 @@ private:
   mongocxx::client fClient;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
-  MongoLog *fLog;
+  std::shared_ptr<MongoLog> fLog;
   mongocxx::collection fDAC_collection;
   std::string fDBname;
   std::string fHostname;

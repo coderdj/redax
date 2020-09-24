@@ -7,7 +7,7 @@ LDFLAGS = -lCAENVME -lstdc++fs -llz4 -lblosc $(shell pkg-config --libs libmongoc
 LDFLAGS_CC = ${LDFLAGS} -lexpect -ltcl8.6
 
 SOURCES_SLAVE = DAQController.cc main.cc Options.cc MongoLog.cc \
-    StraxInserter.cc V1724.cc V1724_MV.cc V1730.cc
+    StraxFormatter.cc V1724.cc V1724_MV.cc V1730.cc
 OBJECTS_SLAVE = $(SOURCES_SLAVE:%.cc=%.o)
 DEPS_SLAVE = $(OBJECTS_SLAVE:%.o=%.d)
 EXEC_SLAVE = main
