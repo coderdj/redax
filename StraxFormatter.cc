@@ -406,8 +406,9 @@ void StraxFormatter::WriteOutChunks() {
 }
 
 void StraxFormatter::End() {
-  for (auto& p : fChunks)
-    WriteOutChunk(p.first);
+  // this line is awkward, but iterators don't always like it when you're
+  // changing the container while looping over its contents
+  while (fChunks.size() > 0) WriteOutChunk(fChunks.begin()->first);
   fChunks.clear();
   auto end_dir = GetDirectoryPath("THE_END");
   if(!fs::exists(end_dir)){

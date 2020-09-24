@@ -313,8 +313,10 @@ void DAQController::CloseThreads(){
   for (auto& sf : fFormatters) sf->Close(board_fails);
   // give threads time to finish
   std::this_thread::sleep_for(std::chrono::seconds(1));
+  fLog->Entry(MongoLog::Local, "Joining processing threads");
   for (auto& t : fProcessingThreads) if (t.joinable()) t.join();
   fProcessingThreads.clear();
+  fLog->Entry(MongoLog::Local, "Destroying formatters");
   for (auto& sf : fFormatters) sf.reset();
   fFormatters.clear();
 
