@@ -13,6 +13,7 @@
 #include <atomic>
 #include <getopt.h>
 
+#include <mongocxx/collection.hpp>
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
@@ -33,21 +34,7 @@ void UpdateStatus(std::string suri, std::string dbname, std::shared_ptr<DAQContr
   using namespace std::chrono;
   while (b_run == true) {
     try{
-      // Put in status update document
-      auto insert_doc = bsoncxx::builder::stream::document{};
-      auto buf = controller->GetBufferSize();
-      insert_doc << "host" << hostname <<
-        "time" << bsoncxx::types::b_date(system_clock::now())<<
-	"rate" << controller->GetDataSize()/1e6 <<
-	"status" << controller->status() <<
-        "buffer_size" << (buf.first + buf.second)/1e6 <<
-	"run_mode" << controller->run_mode() <<
-	"channels" << bsoncxx::builder::stream::open_document <<
-	[&](bsoncxx::builder::stream::key_context<> doc){
-	for( auto const& pair : controller->GetDataPerChan() )
-	  doc << std::to_string(pair.first) << (pair.second>>10); // KB not MB
-	} << bsoncxx::builder::stream::close_document;
-	status.insert_one(insert_doc << bsoncxx::builder::stream::finalize);
+      status.insert_one(&status);
     }catch(const std::exception &e){
       std::cout<<"Can't connect to DB to update."<<std::endl;
       std::cout<<e.what()<<std::endl;
@@ -62,14 +49,15 @@ int PrintUsage() {
     << "--id <id number>: id number of this readout instance, required\n"
     << "--uri <mongo uri>: full MongoDB URI, required\n"
     << "--db <database name>: name of the database to use, default \"daq\"\n"
-    << "--logdir <directory>: where to write the logs\n"
+    << "--logdir <directory>: where to write the logs, default pwd\n"
+    << "--reader: this instance is a reader\n"
+    << "--cc: this instance is a crate controller\n"
     << "--help: print this message\n"
     << "\n";
   return 1;
 }
 
 int main(int argc, char** argv){
-
   // Need to create a mongocxx instance and it must exist for
   // the entirety of the program. So here seems good.
   mongocxx::instance instance{};
@@ -79,6 +67,7 @@ int main(int argc, char** argv){
 
   std::string current_run_id="none", log_dir = "";
   std::string dbname = "daq", suri = "", sid = "";
+  bool reader = false, cc = false;
   int log_retention = 7; // days
   int c, opt_index;
   struct option longopts[] = {
@@ -86,7 +75,9 @@ int main(int argc, char** argv){
     {"uri", required_argument, 0, 1},
     {"db", required_argument, 0, 2},
     {"logdir", required_argument, 0, 3},
-    {"help", no_argument, 0, 4}
+    {"reader", no_argument, 0, 4},
+    {"cc", no_argument, 0, 5},
+    {"help", no_argument, 0, 6}
   };
   while ((c = getopt_long(argc, argv, "", longopts, &opt_index)) != -1) {
     switch(c) {
@@ -99,18 +90,26 @@ int main(int argc, char** argv){
       case 3:
         log_dir = optarg; break;
       case 4:
+        reader = true; break;
+      case 5:
+        cc = true; break;
+      case 6:
       default:
         std::cout<<"Received unknown arg\n";
         return PrintUsage();
     }
   }
   if (suri == "" || sid == "") return PrintUsage();
+  if (reader == cc) {
+    std::cout<<"Specify --reader OR --cc\n";
+    return 1;
+  }
 
   // We will consider commands addressed to this PC's ID 
   char chostname[HOST_NAME_MAX];
   gethostname(chostname, HOST_NAME_MAX);
   hostname=chostname;
-  hostname+= "_reader_" + sid;
+  hostname+= (reader ? "_reader_" : "_controller_") + sid;
   std::cout<<"Reader starting with ID: "<<hostname<<std::endl;
 
   // MongoDB Connectivity for control database. Bonus for later:
@@ -133,22 +132,19 @@ int main(int argc, char** argv){
   // boards and tracking the status
   auto controller = std::make_shared<DAQController>(logger, hostname);
   std::thread status_update(&UpdateStatus, suri, dbname, std::ref(controller));
+
+  // Sort oldest to newest
+  auto order = bsoncxx::builder::stream::document{} <<
+    "_id" << 1 <<bsoncxx::builder::stream::finalize;
+  auto opts = mongocxx::options::find{};
+  opts.sort(order.view());
   using namespace std::chrono;
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
   while(b_run == true){
-
     // Try to poll for commands
     bsoncxx::stdx::optional<bsoncxx::document::value> querydoc;
-
     try{
-
-      // Sort oldest to newest
-      auto order = bsoncxx::builder::stream::document{} <<
-	"_id" << 1 <<bsoncxx::builder::stream::finalize;
-      auto opts = mongocxx::options::find{};
-      opts.sort(order.view());
-      
       mongocxx::cursor cursor = control.find(
 	 bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged." + hostname <<
 	 bsoncxx::builder::stream::open_document << "$exists" << 0 <<
@@ -161,6 +157,7 @@ int main(int argc, char** argv){
 	  doc["command"].get_utf8().value.to_string().c_str());
 	// Very first thing: acknowledge we've seen the command. If the command
 	// fails then we still acknowledge it because we tried
+        auto ack_time = std::system_clock::now();
 	control.update_one(
 	   bsoncxx::builder::stream::document{} << "_id" << (doc)["_id"].get_oid() <<
 	   bsoncxx::builder::stream::finalize,
@@ -190,6 +187,9 @@ int main(int argc, char** argv){
 	    if(controller->Start()!=0){
 	      continue;
 	    }
+            auto now = system_clock::now();
+            fLog->Entry(MongoLog::Local, "Ack to start took %i us",
+                duration_cast<microseconds>(now-ack_time).count());
 	  }
 	  else
 	    logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state");
@@ -198,22 +198,18 @@ int main(int argc, char** argv){
 	  if(controller->Stop()!=0)
 	    logger->Entry(MongoLog::Error,
 			  "DAQ failed to stop. Will continue clearing program memory.");
-
-	  controller->End();
+          auto now = system_clock::now();
+          fLog->Entry(MongoLog::Local, "Ack to stop took %i us",
+              duration_cast<microseconds>(now-ack_time).count());
 	} else if(command == "arm"){
 	  // Can only arm if we're in the idle, arming, or armed state
 	  if(controller->status() >= 0 || controller->status() <= 2){
-
-	    // Join readout threads if they still are out there
 	    controller->Stop();
-	    // Clear up any previously failed things
-	    if(controller->status() != 0)
-	      controller->End();
 
 	    // Get an override doc from the 'options_override' field if it exists
 	    std::string override_json = "";
 	    try{
-	      bsoncxx::document::view oopts = (doc)["options_override"].get_document().view();
+	      bsoncxx::document::view oopts = doc["options_override"].get_document().view();
 	      override_json = bsoncxx::to_json(oopts);
 	    }
 	    catch(const std::exception &e){
@@ -222,18 +218,17 @@ int main(int argc, char** argv){
 	    // Mongocxx types confusing so passing json strings around
 	    fOptions = std::make_shared<Options>(logger, (doc)["mode"].get_utf8().value.to_string(),
 				   hostname, suri, dbname, override_json);
-	    if(controller->InitializeElectronics(fOptions) != 0){
+	    if(controller->Arm(fOptions) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
-	      controller->End();
+	      controller->Stop();
 	    }else{
-              logger->SetRunId(fOptions->GetString("run_identifier","none"));
 	      logger->Entry(MongoLog::Debug, "Initialized electronics");
 	    }
 	  } // if status is ok
 	  else
 	    logger->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
 	} else if (command == "quit") b_run = false;
-      }
+      } // for doc in cursor
     }
     catch(const std::exception &e){
       std::cout<<e.what()<<std::endl;

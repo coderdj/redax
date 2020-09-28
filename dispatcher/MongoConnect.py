@@ -392,7 +392,7 @@ class MongoConnect():
                 "user": user,
                 "detector": detector,
                 "mode": mode,
-                "options_override": {"run_identifier": n_id},
+                "options_override": {"run_identifier": n_id, "number": number},
                 "number": number,
                 "createdAt": datetime.datetime.utcnow()
             }

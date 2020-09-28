@@ -15,6 +15,9 @@
 #include <numeric>
 #include <array>
 
+#include <bsoncxx/builder/stream/document.hpp>
+#include <mongocxx/collection.hpp>
+
 // Status:
 // 0-idle
 // 1-arming
@@ -37,22 +40,9 @@ DAQController::~DAQController(){
     CloseThreads();
 }
 
-std::string DAQController::run_mode(){
-  if(fOptions == NULL)
-    return "None";
-  try{
-    return fOptions->GetString("name", "None");
-  }
-  catch(const std::exception &e){
-    return "None";
-  }
-}
-
-int DAQController::InitializeElectronics(std::shared_ptr<Options>& options){
-
-  End();
-
+int DAQController::Arm(std::shared_ptr<Options>& options){
   fOptions = options;
+  fLog->SetRunId(fOptions->GetInt("number", -1));
   fNProcessingThreads = fOptions->GetNestedInt("processing_threads."+fHostname, 8);
   fLog->Entry(MongoLog::Local, "Beginning electronics initialization with %i threads",
 	      fNProcessingThreads);
@@ -184,15 +174,7 @@ int DAQController::Stop(){
       }
     }
   }
-  fLog->Entry(MongoLog::Debug, "Stopped digitizers");
-
-  fStatus = DAXHelpers::Idle;
-  return 0;
-}
-
-void DAQController::End(){
-  Stop();
-  fLog->Entry(MongoLog::Local, "Closing Processing Threads");
+  fLog->Entry(MongoLog::Debug, "Stopped digitizers, closing threads");
   CloseThreads();
   fLog->Entry(MongoLog::Local, "Closing Digitizers");
   for(auto& link : fDigitizers ){
@@ -205,7 +187,10 @@ void DAQController::End(){
   fDigitizers.clear();
   fStatus = DAXHelpers::Idle;
 
+  fLog->SetRunId(-1);
   std::cout<<"Finished end"<<std::endl;
+  fStatus = DAXHelpers::Idle;
+  return 0;
 }
 
 void DAQController::ReadData(int link){
@@ -267,27 +252,6 @@ void DAQController::ReadData(int link){
   fLog->Entry(MongoLog::Local, "RO thread %i returning", link);
 }
 
-std::map<int, int> DAQController::GetDataPerChan(){
-  // Return a map of data transferred per channel since last update
-  // Clears the private maps in the StraxFormatters
-  const std::lock_guard<std::mutex> lg(fMutex);
-  std::map<int, int> retmap;
-  for (auto& p : fFormatters)
-    p->GetDataPerChan(retmap);
-  return retmap;
-}
-
-std::pair<long, long> DAQController::GetBufferSize() {
-  const std::lock_guard<std::mutex> lg(fMutex);
-  std::pair<long, long> ret{0l,0l};
-  for (const auto& p : fFormatters) {
-    auto x = p->GetBufferSize();
-    ret.first += x.first;
-    ret.second += x.second;
-  }
-  return ret;
-}
-
 int DAQController::OpenThreads(){
   const std::lock_guard<std::mutex> lg(fMutex);
   fProcessingThreads.reserve(fNProcessingThreads);
@@ -328,6 +292,36 @@ void DAQController::CloseThreads(){
     fLog->Entry(MongoLog::Warning, msg.str());
   }
   for (auto& t : fReadoutThreads) if (t.joinable()) t.join();
+}
+
+void DAQController::StatusUpdate(mongocxx::collection* collection) {
+  auto insert_doc = bsoncxx::builder::stream::document{};
+  std::map<int, int> retmap;
+  std::pair<long, long> buf{0,0};
+  int rate = fDataRate;
+  fDataRate = 0;
+  {
+    const std::lock_guard<std::mutex> lg(fMutex);
+    for (auto& p : fFormatters) {
+      p->GetDataPerChan(retmap);
+      auto x = p->GetBufferSize();
+      buf.first += x.first;
+      buf.second += x.second;
+    }
+  }
+  insert_doc << "host" << fHostname <<
+    "time" << bsoncxx::types::b_date(std::chrono::system_clock::now())<<
+    "rate" << rate/1e6 <<
+    "status" << fStatus <<
+    "buffer_size" << (buf.first + buf.second)/1e6 <<
+    "run_mode" << (fOptions ? fOptions->GetString("name", "none") : "none") <<
+    "channels" << bsoncxx::builder::stream::open_document <<
+      [&](bsoncxx::builder::stream::key_context<> doc){
+      for( auto const& pair : retmap)
+        doc << std::to_string(pair.first) << short(pair.second>>10); // KB not MB
+      } << bsoncxx::builder::stream::close_document;
+  collection->insert_one(insert_doc << bsoncxx::builder::stream::finalize);
+  return;
 }
 
 void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,

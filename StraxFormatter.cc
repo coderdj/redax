@@ -129,8 +129,6 @@ void StraxFormatter::ProcessDatapacket(std::unique_ptr<data_packet> dp){
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_start);
       words = (*it)&0xFFFFFFF;
       std::u32string_view sv(dp->buff.data() + std::distance(dp->buff.begin(), it), words);
-      //fLog->Entry(MongoLog::Local, "Bd %i %x/%x/%x", dp->digi->bid(),
-      //    std::distance(dp->buff.begin(), it), words, dp->buff.size());
       ProcessEvent(sv, dp, dpc);
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_end);
       fProcTimeEv += timespec_subtract(ev_end, ev_start);
@@ -216,7 +214,7 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
     fragment.reserve(fFragmentBytes + fStraxHeaderSize);
 
     // How long is this fragment?
-    uint32_t samples_this_frag = samples_per_frag;
+    int32_t samples_this_frag = samples_per_frag;
     if (frag_i == num_frags-1)
       samples_this_frag = samples_in_pulse - frag_i*samples_per_frag;
 
@@ -233,7 +231,7 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
     fragment.append((char*)wf.data(), samples_this_frag*sizeof(uint16_t));
     wf.remove_prefix(samples_this_frag*sizeof(uint16_t)/sizeof(char32_t));
     uint16_t zero_filler = 0;
-    while((int)fragment.size()<fFragmentBytes+fStraxHeaderSize)
+    for (; samples_this_frag < samples_per_frag; samples_this_frag++)
       fragment.append((char*)&zero_filler, sizeof(zero_filler));
 
     AddFragmentToBuffer(std::move(fragment), event_time, dp->clock_counter);
@@ -406,6 +404,7 @@ void StraxFormatter::WriteOutChunks() {
 void StraxFormatter::End() {
   // this line is awkward, but iterators don't always like it when you're
   // changing the container while looping over its contents
+  if (fChunks.size() > 0) CreateEmpty(fChunks.begin()->first);
   while (fChunks.size() > 0) WriteOutChunk(fChunks.begin()->first);
   fChunks.clear();
   auto end_dir = GetDirectoryPath("THE_END");
@@ -417,7 +416,7 @@ void StraxFormatter::End() {
     catch(...){};
   }
   std::ofstream outfile(GetFilePath("THE_END"), std::ios::out);
-  outfile<<"...my only friend";
+  outfile<<"...my only friend\n";
   outfile.close();
   return;
 }

@@ -14,6 +14,7 @@ class StraxFormatter;
 class MongoLog;
 class Options;
 class V1724;
+class mongocxx::collection;
 
 class DAQController{
   /*
@@ -23,21 +24,18 @@ class DAQController{
 
 public:
   DAQController(std::shared_ptr<MongoLog>&, std::string hostname="DEFAULT");
-  ~DAQController();
+  virtual ~DAQController();
 
-  int InitializeElectronics(std::shared_ptr<Options>&);
+  virtual int Arm(std::shared_ptr<Options>&);
+  virtual int Start();
+  virtual int Stop();
+  virtual void StatusUpdate(mongocxx::collection*);
 
-  int status(){return fStatus;}
-  int GetBufferLength();
-  std::string run_mode();
-
-  int Start();
-  int Stop();
-  void End();
-
-  int GetDataSize(){int ds = fDataRate; fDataRate=0; return ds;}
-  std::map<int, int> GetDataPerChan();
-  std::pair<long, long> GetBufferSize();
+protected:
+  std::string fHostname;
+  std::shared_ptr<MongoLog> fLog;
+  std::shared_ptr<Options> fOptions;
+  int fStatus;
 
 private:
   void ReadData(int link);
@@ -55,11 +53,7 @@ private:
 
   std::atomic_bool fReadLoop;
   std::map<int, std::atomic_bool> fRunning;
-  int fStatus;
   int fNProcessingThreads;
-  std::string fHostname;
-  std::shared_ptr<MongoLog> fLog;
-  std::shared_ptr<Options> fOptions;
 
   // For reporting to frontend
   std::atomic_int fDataRate;

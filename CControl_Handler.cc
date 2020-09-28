@@ -1,18 +1,9 @@
 #include "CControl_Handler.hh"
-#include "DAXHelpers.hh"
-#include "Options.hh"
-#include "MongoLog.hh"
 #include "V2718.hh"
 #include "DDC10.hh"
 #include "V1495.hh"
-#include <vector>
-#include <bsoncxx/builder/stream/document.hpp>
-#include <chrono>
 
-CControl_Handler::CControl_Handler(std::shared_ptr<MongoLog>& log, std::string procname){
-  fOptions = nullptr;
-  fLog = log;
-  fProcname = procname;
+CControl_Handler::CControl_Handler(std::shared_ptr<MongoLog>& log, std::string procname) : DAQController(log, procname){
   fCurrentRun = fBID = fBoardHandle-1;
   fV2718 = nullptr;
   fV1495 = nullptr;
@@ -25,15 +16,20 @@ CControl_Handler::~CControl_Handler(){
 }
 
 // Initialising various devices namely; V2718 crate controller, V1495, DDC10...
-int CControl_Handler::DeviceArm(int run, std::shared_ptr<Options>& opts){
+int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
 
   fStatus = DAXHelpers::Arming;
 
   // Just in case clear out any remaining objects from previous runs
   DeviceStop();
 
-  fCurrentRun = run;
   fOptions = opts;
+  try{
+    fCurrentRun = std::stoi(opts->GetInt("run_identifier", "none"));
+  }catch(std::exception& e) {
+    fLog->Entry(MongoLog::Warning, "No run number specified in config?? %s", e.what());
+    return -1;
+  }
 
   // Pull options for V2718
   CrateOptions copts;
@@ -47,27 +43,25 @@ int CControl_Handler::DeviceArm(int run, std::shared_ptr<Options>& opts){
   // Getting the link and crate for V2718
   std::vector<BoardType> bv = fOptions->GetBoards("V2718");
   if(bv.size() != 1){
-    fLog->Entry(MongoLog::Message, "Require one V2718 to be defined or we can't start the run");
+    fLog->Entry(MongoLog::Message, "Require one V2718 to be defined");
     fStatus = DAXHelpers::Idle;
     return -1;
   }
   BoardType cc_def = bv[0];
-  fV2718 = std::make_unique<V2718>(fLog);
-  if (fV2718->CrateInit(copts, cc_def.link, cc_def.crate)!=0){
-    fLog->Entry(MongoLog::Error, "Failed to initialize V2718 crate controller");
+  try{
+    fV2718 = std::make_unique<V2718>(fLog, copts, cc_def.link, cc_def.crate);
+  }catch(std::exception& e){
+    fLog->Entry(MongoLog::Error, "Failed to initialize V2718 crate controller: %s", e.what());
     fStatus = DAXHelpers::Idle;
     return -1;
-  }else{
-     fBoardHandle = fV2718->GetHandle();
-     fLog->Entry(MongoLog::Local, "V2718 Initialised");
   }
+  fBoardHandle = fV2718->GetHandle();
+  fLog->Entry(MongoLog::Local, "V2718 Initialized");
 
   // Getting options for DDC10 HEV module
-  HEVOptions hopts;
-
   std::vector<BoardType> dv = fOptions->GetBoards("DDC10");
-  // Init DDC10 only when included in config - only for TPC
   if (dv.size() == 1){
+    HEVOptions hopts;
      if(fOptions->GetHEVOpt(hopts) == 0){
         fDDC10 = std::make_unique<DDC10>();
 	if(fDDC10->Initialize(hopts) != 0){
@@ -81,11 +75,8 @@ int CControl_Handler::DeviceArm(int run, std::shared_ptr<Options>& opts){
 	fLog->Entry(MongoLog::Error, "Failed to pull DDC10 options from file");
      }
   } else {
-    //fLog->Entry(MongoLog::Debug, "No HEV");
   }
 
-
-  // Getting options for the V1495 board
   std::vector<BoardType> mv = fOptions->GetBoards("V1495");
   if (mv.size() == 1){
     BoardType mv_def = mv[0];
@@ -102,16 +93,13 @@ int CControl_Handler::DeviceArm(int run, std::shared_ptr<Options>& opts){
 		}
     }
   }else{
-    //fLog->Entry(MongoLog::Debug, "No V1495");
   }
-  //fLog->Entry(MongoLog::Local, "Arm sequence finished");
   fStatus = DAXHelpers::Armed;
   return 0;
 
-} // end devicearm
+}
 
-// Send the start signal from crate controller
-int CControl_Handler::DeviceStart(){
+int CControl_Handler::Start(){
   if(fStatus != DAXHelpers::Armed){
     fLog->Entry(MongoLog::Warning, "V2718 attempt to start without arming. Maybe unclean shutdown");
     return 0;
@@ -123,15 +111,11 @@ int CControl_Handler::DeviceStart(){
   }
 
   fStatus = DAXHelpers::Running;
-  //fLog->Entry(MongoLog::Local, "Start sequence completed");
   return 0;
 }
 
 // Stopping the previously started devices; V2718, V1495, DDC10...
-int CControl_Handler::DeviceStop(){
-  //fLog->Entry(MongoLog::Local, "Beginning stop sequence");
-
-  // If V2718 here then send stop signal
+int CControl_Handler::Stop(){
   if(fV2718){
     if(fV2718->SendStopSignal() != 0){
       fLog->Entry(MongoLog::Warning, "Failed to stop V2718");
@@ -147,13 +131,10 @@ int CControl_Handler::DeviceStop(){
 }
 
 // Reporting back on the status of V2718, V1495, DDC10 etc...
-bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
-  using namespace std::chrono;
- 
-  // Updating the status doc
+void CControl_Handler::StatusUpdate(mongocxx::collection* collection){
   bsoncxx::builder::stream::document builder{};
   builder << "host" << hostname << "status" << fStatus <<
-    "time" << bsoncxx::types::b_date(system_clock::now());
+    "time" << bsoncxx::types::b_date(std::chrono::system_clock::now());
   auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
 
   if(fV2718){
@@ -169,7 +150,8 @@ bsoncxx::document::value CControl_Handler::GetStatusDoc(std::string hostname){
 	     << bsoncxx::builder::stream::close_document;
   }
   auto after_array = in_array << bsoncxx::builder::stream::close_array;
-  return after_array << bsoncxx::builder::stream::finalize;
+  collection->insert_one(after_array << bsoncxx::builder::stream::finalize);
+  return;
   /*
   // DDC10 parameters might change for future updates of the XENONnT HEV
   if(fDDC10){
