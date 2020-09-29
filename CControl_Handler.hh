@@ -4,8 +4,10 @@
 #include "DAQController.hh"
 
 class V2718;
-class DDC10;
 class V1495;
+#ifdef HASDDC10
+class DDC10;
+#endif
 
 class CControl_Handler : public DAQController{
 public:
@@ -20,8 +22,10 @@ public:
 private:
 
   std::unique_ptr<V2718> fV2718;
-  std::unique_ptr<DDC10> fDDC10;
   std::unique_ptr<V1495> fV1495;
+#ifdef HASDDC10
+  std::unique_ptr<DDC10> fDDC10;
+#endif
 
   int fStatus;
   int fCurrentRun;

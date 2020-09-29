@@ -1,7 +1,9 @@
 #include "CControl_Handler.hh"
 #include "DAXHelpers.hh"
 #include "V2718.hh"
+#ifdef HASDDC10
 #include "DDC10.hh"
+#endif
 #include "V1495.hh"
 #include <bsoncxx/builder/stream/document.hpp>
 
@@ -9,7 +11,9 @@ CControl_Handler::CControl_Handler(std::shared_ptr<MongoLog>& log, std::string p
   fCurrentRun = fBID = fBoardHandle-1;
   fV2718 = nullptr;
   fV1495 = nullptr;
+#ifdef HASDDC10
   fDDC10 = nullptr;
+#endif
   fStatus = DAXHelpers::Idle;
 }
 
@@ -60,6 +64,7 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
   fBoardHandle = fV2718->GetHandle();
   fLog->Entry(MongoLog::Local, "V2718 Initialized");
 
+#ifdef HASDDC10
   // Getting options for DDC10 HEV module
   std::vector<BoardType> dv = fOptions->GetBoards("DDC10");
   if (dv.size() == 1){
@@ -78,6 +83,7 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
      }
   } else {
   }
+#endif // HASDDC10
 
   std::vector<BoardType> mv = fOptions->GetBoards("V1495");
   if (mv.size() == 1){
@@ -124,9 +130,11 @@ int CControl_Handler::Stop(){
     }
     fV2718.reset();
   }
+  fV1495.reset();
+#ifdef HASDDC10
   // Don't need to stop the DDC10 but just clean up a bit
   fDDC10.reset();
-  fV1495.reset();
+#endif
 
   fStatus = DAXHelpers::Idle;
   return 0;
