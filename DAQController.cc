@@ -41,7 +41,6 @@ DAQController::~DAQController(){
 
 int DAQController::Arm(std::shared_ptr<Options>& options){
   fOptions = options;
-  fLog->SetRunId(fOptions->GetInt("number", -1));
   fNProcessingThreads = fOptions->GetNestedInt("processing_threads."+fHostname, 8);
   fLog->Entry(MongoLog::Local, "Beginning electronics initialization with %i threads",
 	      fNProcessingThreads);

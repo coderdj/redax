@@ -3,6 +3,7 @@
 #include <iomanip>
 #include <csignal>
 #include "DAQController.hh"
+#include "CControl_Handler.hh"
 #include <thread>
 #include <unistd.h>
 #include "MongoLog.hh"
@@ -27,7 +28,7 @@ void SignalHandler(int signum) {
     return;
 }
 
-void UpdateStatus(std::string suri, std::string dbname, std::shared_ptr<DAQController>& controller) {
+void UpdateStatus(std::string suri, std::string dbname, std::unique_ptr<DAQController>& controller) {
   mongocxx::uri uri(suri);
   mongocxx::client c(uri);
   mongocxx::collection status = c[dbname]["status"];
@@ -130,7 +131,11 @@ int main(int argc, char** argv){
   
   // The DAQController object is responsible for passing commands to the
   // boards and tracking the status
-  auto controller = std::make_shared<DAQController>(logger, hostname);
+  std::unique_ptr<DAQController> controller;
+  if (cc)
+    controller = std::make_unique<CControl_Handler>(logger, hostname);
+  else
+    controller = std::make_unique<DAQController>(logger, hostname);
   std::thread status_update(&UpdateStatus, suri, dbname, std::ref(controller));
 
   // Sort oldest to newest
@@ -192,7 +197,7 @@ int main(int argc, char** argv){
                 duration_cast<microseconds>(now-ack_time).count());
 	  }
 	  else
-	    logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state");
+	    logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state (%i)", controller->status());
 	}else if(command == "stop"){
 	  // "stop" is also a general reset command and can be called any time
 	  if(controller->Stop()!=0)
@@ -218,6 +223,7 @@ int main(int argc, char** argv){
 	    // Mongocxx types confusing so passing json strings around
 	    fOptions = std::make_shared<Options>(logger, (doc)["mode"].get_utf8().value.to_string(),
 				   hostname, suri, dbname, override_json);
+            logger->SetRunId(fOptions->GetInt("number", -1));
 	    if(controller->Arm(fOptions) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->Stop();

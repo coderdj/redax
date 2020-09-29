@@ -27,7 +27,6 @@ private:
   std::unique_ptr<DDC10> fDDC10;
 #endif
 
-  int fStatus;
   int fCurrentRun;
   int fBID;
   int fBoardHandle;
