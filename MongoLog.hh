@@ -68,7 +68,7 @@ public:
   const static int Local   = -1; // Write to local (file) log only
 
   int Entry(int priority,std::string message, ...);
-  void SetRunId(const std::string& runid) {fRunId = runid;}
+  void SetRunId(const int runid) {fRunId = runid;}
 
 private:
   void Flusher();
@@ -90,7 +90,7 @@ private:
   std::thread fFlushThread;
   std::atomic_bool fFlush;
   int fFlushPeriod;
-  std::string fRunId;
+  int fRunId;
 };
 
 #endif

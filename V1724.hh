@@ -71,7 +71,7 @@ protected:
   int BLT_SIZE;
   std::map<int, long> fBLTCounter;
 
-  virtual int Init(int, int);
+  virtual int Init(int, int, std::shared_ptr<Options>&);
   bool MonitorRegister(uint32_t reg, uint32_t mask, int ntries, int sleep, uint32_t val=1);
   virtual std::tuple<uint32_t, long> GetClockInfo(std::u32string_view);
   virtual int GetClockCounter(uint32_t);

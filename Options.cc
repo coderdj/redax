@@ -311,6 +311,20 @@ int Options::GetHEVOpt(HEVOptions &ret){
   return 0;
 }
 
+int Options::GetFaxOptions(fax_options_t& opts) {
+  try {
+    auto doc = bson_options["fax_options"];
+    opts.rate = doc["rate"].get_double().value;
+    opts.tpc_size = doc["tpc_size"].get_int32().value;
+    opts.drift_speed = doc["drift_speed"].get_double().value;
+    opts.e_absorbtion_length = doc["e_absorbtion_length"].get_double().value;
+  } catch (std::exception& e) {
+    fLog->Entry(MongoLog::Warning, "Error getting fax options: %s", e.what());
+    return -1;
+  }
+  return 0;
+}
+
 int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs,
                     std::vector<int>& bids) {
   board_dacs.clear();

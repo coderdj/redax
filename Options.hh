@@ -55,6 +55,13 @@ struct HEVOptions{
 
 };
 
+struct fax_options_t {
+  int tpc_size;
+  double rate;
+  double drift_speed;
+  double e_absorbtion_length;
+};
+
 class MongoLog;
 
 class Options{
@@ -77,6 +84,7 @@ public:
   int16_t GetChannel(int, int);
   int GetNestedInt(std::string, int);
   std::vector<uint16_t> GetThresholds(int);
+  int GetFaxOptions(fax_options_t&);
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
   void SaveBenchmarks(std::map<std::string, std::map<int, long>>&, long, std::string,

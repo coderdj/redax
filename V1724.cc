@@ -40,7 +40,7 @@ V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int
   // there's a more elegant way to do this, but I'm not going to write it
   fClockPeriod = std::chrono::nanoseconds((1l<<31)*fClockCycle);
 
-  if (Init(link, crate)) {
+  if (Init(link, crate, opts)) {
     throw std::runtime_error("Board init failed");
   }
 }
@@ -54,16 +54,16 @@ V1724::~V1724(){
   fLog->Entry(MongoLog::Local, msg.str());
 }
 
-int V1724::Init(int link, int crate) {
+int V1724::Init(int link, int crate, std::shared_ptr<Options>& opts) {
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
     fLog->Entry(MongoLog::Warning, "Board %i failed to init, error %i handle %i link %i bdnum %i",
-            bid, a, fBoardHandle, link, crate);
+            fBID, a, fBoardHandle, link, crate);
     fBoardHandle = -1;
     return -1;
   }
   fLog->Entry(MongoLog::Debug, "Board %i initialized with handle %i (link/crate)(%i/%i)",
-	      bid, fBoardHandle, link, crate);
+	      fBID, fBoardHandle, link, crate);
 
   uint32_t word(0);
   int my_bid(0);
@@ -91,6 +91,7 @@ int V1724::Init(int link, int crate) {
         link, crate, fBID, my_bid);
     }
   }
+  return 0;
 }
 
 int V1724::SINStart(){

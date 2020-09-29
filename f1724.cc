@@ -1,5 +1,6 @@
 #include "f1724.hh"
 #include "MongoLog.hh"
+#include "StraxFormatter.hh"
 #include <chrono>
 #include <cmath>
 
@@ -18,7 +19,7 @@ std::atomic_bool f1724::sRun, f1724::sReady;
 fax_options_t f1724::sFaxOptions;
 int f1724::sNumPMTs;
 vector<f1724*> f1724::sRegistry;
-vector<pair<double, double>> f1724::sPMTxy;
+vector<f1724::pmt_pos_t> f1724::sPMTxy;
 std::condition_variable f1724::sCV;
 std::shared_ptr<MongoLog> f1724::sLog;
 
@@ -48,7 +49,7 @@ f1724::pmt_pos_t f1724::PMTiToXY(int i) {
   return ret;
 }
 
-f1724::f1724(std::shared_ptr<Options>& opts, std::shared_ptr<MongoLog>& log, int, int, int bid, unsigned) : V1724(opts, log, 0, 0, bid, 0){
+f1724::f1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int, int, int bid, unsigned) : V1724(log, opts, 0, 0, bid, 0){
   //fLog->Entry(MongoLog::Warning, "Initializing fax digitizer");
   fSPEtemplate = {0.0, 0.0, 0.0, 2.81e-2, 7.4, 6.07e1, 3.26e1, 1.33e1, 7.60, 5.71,
     7.75, 4.46, 3.68, 3.31, 2.97, 2.74, 2.66, 2.48, 2.27, 2.15, 2.03, 1.93, 1.70,
@@ -62,8 +63,8 @@ f1724::~f1724() {
   End();
 }
 
-int f1724::Init(int, int) {
-  if (fOptions->GetFaxOptions(fFaxOptions)) {
+int f1724::Init(int, int, std::shared_ptr<Options>& opts) {
+  if (opts->GetFaxOptions(fFaxOptions)) {
     return -1;
   }
   fGen = std::mt19937_64(fRD());
@@ -81,8 +82,9 @@ int f1724::Init(int, int) {
   return 0;
 }
 
-void f1724::End() {
+int f1724::End() {
   AcquisitionStop(true);
+  return 0;
 }
 
 int f1724::WriteRegister(unsigned int reg, unsigned int val) {
@@ -270,7 +272,7 @@ vector<int> f1724::GenerateEventSize(double, double, double z) {
   return {0, s1, s2};
 }
 
-vector<hit_t> f1724::MakeHitpattern(int s_i, int photons, double x, double y, double z) {
+vector<f1724::hit_t> f1724::MakeHitpattern(int s_i, int photons, double x, double y, double z) {
   double signal_width = s_i == 1 ? 40 : 1000.+200.*std::sqrt(std::abs(z));
   vector<hit_t> ret(photons);
   vector<double> hit_prob(sNumPMTs, 0.);
@@ -305,7 +307,7 @@ vector<hit_t> f1724::MakeHitpattern(int s_i, int photons, double x, double y, do
   return ret;
 }
 
-void f1724::SendToWorkers(const vector<hit_t>& hits) {
+void f1724::SendToWorkers(const vector<f1724::hit_t>& hits, long ts) {
   vector<vector<hit_t>> hits_per_board(sRegistry.size());
   int n_boards = sRegistry.size();
   for (auto& hit : hits) {
@@ -313,23 +315,24 @@ void f1724::SendToWorkers(const vector<hit_t>& hits) {
   }
   for (unsigned i = 0; i < sRegistry.size(); i++)
     if (hits_per_board[i].size() > 0)
-      sRegistry[i]->ReceiveFromGenerator(std::move(hits_per_board[i]));
+      sRegistry[i]->ReceiveFromGenerator(std::move(hits_per_board[i]), ts);
   return;
 }
 
-void f1724::ReceiveFromGenerator(vector<hit_t> hits) {
+void f1724::ReceiveFromGenerator(vector<hit_t> hits, long ts) {
   {
     std::lock_guard<std::mutex> lk(fMutex);
     fProtoPulse = std::move(hits);
+    fTimestamp = ts;
   }
   fCV.notify_one();
 }
 
-void f1724::MakeWaveform(std::vector<hit_t>& hits) {
+void f1724::MakeWaveform(std::vector<hit_t>& hits, long timestamp) {
   int mask = 0;
   double last_hit_time = 0, first_hit_time = 1e9;
   for (auto& hit : hits) {
-    mask |= (1<<hit.ch_i);
+    mask |= (1<<hit.pmt_i);
     last_hit_time = std::max(last_hit_time, hit.time);
     first_hit_time = std::min(first_hit_time, hit.time);
   }
@@ -346,16 +349,17 @@ void f1724::MakeWaveform(std::vector<hit_t>& hits) {
   wf_length += wf_length % 2 ? 1 : 2; // ensure an even number of samples with room
   auto wf = GenerateNoise(wf_length, mask);
   std::normal_distribution<> hit_scale{1., 0.15};
-  int offset = 0, sample_width = GetSampleWidth();
+  int offset = 0;
   double scale;
   for (auto& hit : hits) {
-    offset = hit.time/sample_width;
+    offset = hit.time/fSampleWidth;
     scale = hit_scale(fGen);
     for (unsigned i = 0; i < fSPEtemplate.size(); i++) {
-      wf[pmt_to_ch[hit.ch_i]][offset+i] -= fSPEtemplate[i]*scale;
+      wf[pmt_to_ch[hit.pmt_i]][offset+i] -= fSPEtemplate[i]*scale;
     }
   }
-  return ConvertToDigiFormat(wf, mask, timestamp);
+  ConvertToDigiFormat(wf, mask, timestamp);
+  return;
 }
 
 void f1724::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask, long ts) {
@@ -412,9 +416,9 @@ vector<vector<double>> f1724::GenerateNoise(int length, int mask) {
 void f1724::Run() {
   while (sRun == true) {
     std::unique_lock<std::mutex> lk(fMutex);
-    fCV.wait(lk, []{return fProtoPulse.size() > 0 || sRun == false;});
+    fCV.wait(lk, [&]{return fProtoPulse.size() > 0 || sRun == false;});
     if (fProtoPulse.size() > 0 && sRun == true) {
-      MakeWaveform(fProtoPulse);
+      MakeWaveform(fProtoPulse, fTimestamp.load());
       fProtoPulse.clear();
     } else {
     }
@@ -442,7 +446,7 @@ void f1724::GlobalRun() {
     for (const auto s_i : {1,2}) {
       hits = MakeHitpattern(s_i, photons[s_i], x, y, z);
       // split hitpattern and issue to digis
-      SendToWorkers(hits);
+      SendToWorkers(hits, sClock);
       t_max = 0;
       for (auto& hit : hits) {
         t_max = std::max(t_max, hit.time);

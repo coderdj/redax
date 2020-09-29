@@ -9,12 +9,12 @@
 #include <cstdint>
 #include <mutex>
 #include <list>
+#include <mongocxx/collection.hpp>
 
 class StraxFormatter;
 class MongoLog;
 class Options;
 class V1724;
-class mongocxx::collection;
 
 class DAQController{
   /*
@@ -30,6 +30,7 @@ public:
   virtual int Start();
   virtual int Stop();
   virtual void StatusUpdate(mongocxx::collection*);
+  int status() {return fStatus;}
 
 protected:
   std::string fHostname;

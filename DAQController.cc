@@ -16,7 +16,6 @@
 #include <array>
 
 #include <bsoncxx/builder/stream/document.hpp>
-#include <mongocxx/collection.hpp>
 
 // Status:
 // 0-idle

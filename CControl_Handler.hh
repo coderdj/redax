@@ -12,7 +12,7 @@ public:
   CControl_Handler(std::shared_ptr<MongoLog>&, std::string);
   virtual ~CControl_Handler();
 
-  virtual void GetStatusDoc(mongocxx::collection*);
+  virtual void StatusUpdate(mongocxx::collection*);
   virtual int Arm(std::shared_ptr<Options>&);
   virtual int Start();
   virtual int Stop();

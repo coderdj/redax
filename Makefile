@@ -3,8 +3,8 @@ CC	= g++
 CXX	= g++
 CFLAGS	= -Wall -Wextra -pedantic -pedantic-errors -g -DLINUX -std=c++17 -pthread $(shell pkg-config --cflags libmongocxx)
 CPPFLAGS := $(CFLAGS)
-LDFLAGS = -lCAENVME -lstdc++fs -llz4 -lblosc $(shell pkg-config --libs libmongocxx) $(shell pkg-config --libs libbsoncxx)
-LDFLAGS_CC = ${LDFLAGS} -lexpect -ltcl8.6
+LDFLAGS = -lCAENVME -lstdc++fs -llz4 -lblosc $(shell pkg-config --libs libmongocxx) $(shell pkg-config --libs libbsoncxx) -lexpect -ltcl8.6
+#LDFLAGS_CC = ${LDFLAGS} -lexpect -ltcl8.6
 
 SOURCES_SLAVE = $(wildcard *.cc)
 OBJECTS_SLAVE = $(SOURCES_SLAVE:%.cc=%.o)
@@ -30,7 +30,6 @@ $(EXEC_SLAVE) : $(OBJECTS_SLAVE)
 clean:
 	rm -f *.o *.d
 	rm -f $(EXEC_SLAVE)
-	rm -f $(EXEC_CC)
 
 include $(DEPS_SLAVE)
 

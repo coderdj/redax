@@ -5,13 +5,16 @@
 #include "Options.hh"
 #include <random>
 #include <tuple>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
 
 class f1724 : public V1724 {
 public:
-  f1724(std::shared_ptr<Options>&, std::shared_ptr<MongoLog>&, int, int, int, unsigned);
+  f1724(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, int, unsigned);
   virtual ~f1724();
 
-  virtual int Read(std::shared_ptr<data_packet>&);
+  virtual int Read(std::unique_ptr<data_packet>&);
   virtual int WriteRegister(unsigned, unsigned);
   virtual unsigned ReadRegister(unsigned);
   virtual int End();
@@ -44,7 +47,7 @@ protected:
   static std::tuple<double, double, double> GenerateEventLocation();
   static std::vector<int> GenerateEventSize(double, double, double);
   static std::vector<hit_t> MakeHitpattern(int, int, double, double, double);
-  static void SendToWorkers(const std::vector<hit_t>&);
+  static void SendToWorkers(const std::vector<hit_t>&, long);
   static pmt_pos_t PMTiToXY(int);
 
   static std::thread sGeneratorThread;
@@ -63,13 +66,13 @@ protected:
   static std::condition_variable sCV;
   static std::shared_ptr<MongoLog> sLog;
 
-  virtual int Init(int, int);
+  virtual int Init(int, int, std::shared_ptr<Options>&);
   void Run();
   virtual int GetClockCounter(uint32_t);
-  void MakeWaveform(std::vector<hit_t>&);
+  void MakeWaveform(std::vector<hit_t>&, long);
   void ConvertToDigiFormat(const std::vector<std::vector<double>>&, int, long);
   std::vector<std::vector<double>> GenerateNoise(int, int=0xFF);
-  void ReceiveFromGenerator(std::vector<hit_t>);
+  void ReceiveFromGenerator(std::vector<hit_t>, long);
 
   std::u32string fBuffer;
   std::mutex fBufferMutex;
@@ -86,7 +89,7 @@ protected:
   std::atomic_int fEventCounter;
   std::vector<hit_t> fProtoPulse;
   std::condition_variable fCV;
-  std::mutex fWFMutex;
+  std::mutex fMutex;
   std::thread fGeneratorThread;
 
   bool fSeenUnder5, fSeenOver15;

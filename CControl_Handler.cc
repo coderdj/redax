@@ -1,7 +1,9 @@
 #include "CControl_Handler.hh"
+#include "DAXHelpers.hh"
 #include "V2718.hh"
 #include "DDC10.hh"
 #include "V1495.hh"
+#include <bsoncxx/builder/stream/document.hpp>
 
 CControl_Handler::CControl_Handler(std::shared_ptr<MongoLog>& log, std::string procname) : DAQController(log, procname){
   fCurrentRun = fBID = fBoardHandle-1;
@@ -12,7 +14,7 @@ CControl_Handler::CControl_Handler(std::shared_ptr<MongoLog>& log, std::string p
 }
 
 CControl_Handler::~CControl_Handler(){
-  DeviceStop();
+  Stop();
 }
 
 // Initialising various devices namely; V2718 crate controller, V1495, DDC10...
@@ -21,11 +23,11 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
   fStatus = DAXHelpers::Arming;
 
   // Just in case clear out any remaining objects from previous runs
-  DeviceStop();
+  Stop();
 
   fOptions = opts;
   try{
-    fCurrentRun = std::stoi(opts->GetInt("run_identifier", "none"));
+    fCurrentRun = opts->GetInt("run_identifier", -1);
   }catch(std::exception& e) {
     fLog->Entry(MongoLog::Warning, "No run number specified in config?? %s", e.what());
     return -1;
@@ -133,7 +135,7 @@ int CControl_Handler::Stop(){
 // Reporting back on the status of V2718, V1495, DDC10 etc...
 void CControl_Handler::StatusUpdate(mongocxx::collection* collection){
   bsoncxx::builder::stream::document builder{};
-  builder << "host" << hostname << "status" << fStatus <<
+  builder << "host" << fHostname << "status" << fStatus <<
     "time" << bsoncxx::types::b_date(std::chrono::system_clock::now());
   auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
 

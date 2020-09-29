@@ -34,7 +34,7 @@ void UpdateStatus(std::string suri, std::string dbname, std::shared_ptr<DAQContr
   using namespace std::chrono;
   while (b_run == true) {
     try{
-      status.insert_one(&status);
+      controller->StatusUpdate(&status);
     }catch(const std::exception &e){
       std::cout<<"Can't connect to DB to update."<<std::endl;
       std::cout<<e.what()<<std::endl;
@@ -157,13 +157,13 @@ int main(int argc, char** argv){
 	  doc["command"].get_utf8().value.to_string().c_str());
 	// Very first thing: acknowledge we've seen the command. If the command
 	// fails then we still acknowledge it because we tried
-        auto ack_time = std::system_clock::now();
+        auto ack_time = system_clock::now();
 	control.update_one(
 	   bsoncxx::builder::stream::document{} << "_id" << (doc)["_id"].get_oid() <<
 	   bsoncxx::builder::stream::finalize,
 	   bsoncxx::builder::stream::document{} << "$set" <<
 	   bsoncxx::builder::stream::open_document << "acknowledged." + hostname <<
-           (long)duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count() <<
+           (long)duration_cast<milliseconds>(ack_time.time_since_epoch()).count() <<
 	   bsoncxx::builder::stream::close_document <<
 	   bsoncxx::builder::stream::finalize
 	   );
@@ -188,7 +188,7 @@ int main(int argc, char** argv){
 	      continue;
 	    }
             auto now = system_clock::now();
-            fLog->Entry(MongoLog::Local, "Ack to start took %i us",
+            logger->Entry(MongoLog::Local, "Ack to start took %i us",
                 duration_cast<microseconds>(now-ack_time).count());
 	  }
 	  else
@@ -199,7 +199,7 @@ int main(int argc, char** argv){
 	    logger->Entry(MongoLog::Error,
 			  "DAQ failed to stop. Will continue clearing program memory.");
           auto now = system_clock::now();
-          fLog->Entry(MongoLog::Local, "Ack to stop took %i us",
+          logger->Entry(MongoLog::Local, "Ack to stop took %i us",
               duration_cast<microseconds>(now-ack_time).count());
 	} else if(command == "arm"){
 	  // Can only arm if we're in the idle, arming, or armed state

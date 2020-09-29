@@ -16,7 +16,7 @@ MongoLog::MongoLog(int DeleteAfterDays, std::string log_dir, std::string connect
   std::cout<<"Configured WITH local file logging to " << log_dir << std::endl;
   fFlush = true;
   fFlushThread = std::thread(&MongoLog::Flusher, this);
-  fRunId = "none";
+  fRunId = -1;
 
   try{
     mongocxx::uri uri{connection_uri};
