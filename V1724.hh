@@ -7,6 +7,7 @@
 #include <chrono>
 #include <memory>
 #include <atomic>
+#include <tuple>
 
 class MongoLog;
 class Options;
@@ -70,11 +71,12 @@ protected:
   int BLT_SIZE;
   std::map<int, long> fBLTCounter;
 
+  virtual int Init(int, int);
   bool MonitorRegister(uint32_t reg, uint32_t mask, int ntries, int sleep, uint32_t val=1);
   virtual std::tuple<uint32_t, long> GetClockInfo(std::u32string_view);
-  int GetClockCounter(uint32_t);
+  virtual int GetClockCounter(uint32_t);
   int fBoardHandle;
-  int fLink, fCrate, fBID;
+  int fBID;
   unsigned int fBaseAddress;
 
   // Stuff for clock reset tracking
