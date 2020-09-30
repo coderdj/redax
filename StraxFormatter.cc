@@ -305,6 +305,8 @@ void StraxFormatter::Process() {
   if (fBytesProcessed > 0)
     End();
   fRunning = false;
+  if (fBuffer.size() > 0)
+    fLog->Entry(MongoLog::Warning, "%i DPs unprocessed", fBuffer.size());
 }
 
 // Can tune here as needed, these are defaults from the LZ4 examples

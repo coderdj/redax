@@ -167,8 +167,8 @@ int DAQController::Stop(){
       // Ensure digitizer is stopped
       if(digi->EnsureStopped(1000, 1000) != true){
 	fLog->Entry(MongoLog::Warning,
-		    "Timed out waiting for acquisition to stop after SW stop sent");
-          return -1;
+		    "Timed out waiting for %i to stop after SW stop sent", digi->bid());
+          //return -1;
       }
     }
   }
