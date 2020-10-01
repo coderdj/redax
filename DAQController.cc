@@ -3,6 +3,7 @@
 #include "V1724.hh"
 #include "V1724_MV.hh"
 #include "V1730.hh"
+#include "f1724.hh"
 #include "DAXHelpers.hh"
 #include "Options.hh"
 #include "StraxFormatter.hh"
@@ -57,6 +58,8 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
         digi = std::make_shared<V1724_MV>(fLog, fOptions, d.link, d.crate, d.board, d.vme_address);
       else if(d.type == "V1730")
         digi = std::make_shared<V1730>(fLog, fOptions, d.link, d.crate, d.board, d.vme_address);
+      else if(d.type == "f1724")
+        digi = std::make_shared<f1724>(fLog, fOptions, d.link, d.crate, d.board, 0);
       else
         digi = std::make_shared<V1724>(fLog, fOptions, d.link, d.crate, d.board, d.vme_address);
       fDigitizers[d.link].emplace_back(digi);

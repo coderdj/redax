@@ -5,6 +5,7 @@
 * [Installation](installation.md) 
 * [Options reference](daq_options.md) 
 * [Example operation](how_to_run.md)
+* [Waveform simulator](fax.md)
 
 # Configuration of Backend Databases
 
@@ -24,26 +25,26 @@ fields can be present as well. This is especially pertinent to run documents.
 
 ### db.status
 
-The status collection should be configured as a capped collection (see the 'helpers' directory for a script to set up the necessary capped collections). Each readout client report's it's status to this DB every few seconds. The dispatcher 
-queries the newest document from each node (considering also the time stamp of the document) to determine the aggregate 
-DAQ state.
+The status collection should be configured as either a capped collection or with a TTL index on the "time" field (see the 'helpers' directory for a script to set up the necessary capped collections).
+Each readout client reports its status to this DB every second.
+The dispatcher queries the newest document from each node (considering also the time stamp of the document) to determine the aggregate DAQ state.
 
 The form of the document is the following:
 ```python
 {
     "host":   "xedaq00_reader_0", # DAQ name of client
+    "time": <date object>, # the time when the document was made
     "status": 0,         # status enum
-    "rate":  23,         # data rate in MB since last update
-    "buffer_length" : 4,  # current buffer utilization in MB
+    "rate":  13.37,         # data rate in MB since last update
+    "buffer_size" : 4.3,  # current buffer utilization in MB
     "run_mode" : "background_stable", # current run mode
-    "current_run_id" : "006363",    # current run number
     "channels" : {0 : 67,       # Rate per channel on this host in kB since last update
                   19 : 16,
                   ...
     },
 }
 ```
-The status enum has the following values:
+Note that documents from a Crate Controller instance will also have a "run_number" field. The status enum has the following values:
 
 |Value	|State |
 | ----- | ----- |
@@ -73,8 +74,8 @@ The document format is similar to status:
     "readers" : 2,                                   // number of readers connected
     "time" : ISODate("2018-09-20T13:35:05.642Z"),    // time document inserted
     "buff" : 0,                                      // total buffered data from all readers float
-    "mode" : null                                    // run mode string (null because Idle here)                                               
-}    
+    "mode" : null                                    // run mode string (null because Idle here)
+}
 ```
 
 ### db.detector_control
@@ -97,23 +98,21 @@ Because some of these fields require slightly more explanation a table has been 
         "comment" : "",
         "link_mv" : "false",
         "link_nv" : "false",
-        "diagnosis": "goal",
-        "human_readable_status": "Idle"
+        "remote" : "false"
 }  
 ```
 
 |Field	|Description |
 | ----- | ----- |
 |detector	|Either 'tpc', 'muon_veto', or 'neutron_veto'. Or whatever funny thing you've got in your lab. |
-|active	|The user can set whether this detector is 'active' or not. If it's not active then we don't care about it's status. In fact we can't care since some readers will be reused when running in combined modes and may not longer belong to their original detectors.|
-|stop_after	|How many minutes (or seconds? check code) until the run automatically restarts. This is a global DAQ state setting, not the setting for a single run. So if you want to run for an hour you set this to 60 minutes, put the detector active, and the dispatcher should handle giving you the 1 hour runs. |
-|finish_run_on_stop |How to deal with a run in progress if you set active to 'false'. If 'finish_run_on_stop' is true, we wait for the run to finish due to stop_after (but no new one is started). If false, we stop the run. Has no effect if active is 'true'. |    
+|active	|The user can set whether this detector is 'active' or not. If it's not active then we don't care about its status. In fact we can't care since some readers will be reused when running in combined modes and may not longer belong to their original detectors.|
+|stop_after	|How many minutes until the run automatically restarts. This is a global DAQ state setting, not the setting for a single run. So if you want to run for an hour you set this to 60 minutes, put the detector active, and the dispatcher should handle giving you the 1 hour runs. |
+|finish_run_on_stop |How to deal with a run in progress if you set active to 'false'. If 'finish_run_on_stop' is true, we wait for the run to finish due to stop_after (but no new one is started). If false, we stop the run. Has no effect if active is 'true'. |
 |mode	|The options mode we're running the DAQ in. Should correspond to the 'name' field of one of the documents in the options collection. |
 |user	|Who gets credit/blame for starting these runs? This is the user who last changed this command doc and it will be recorded in the run documents of all runs recorded while this command is active. |
 |Comment	|You can automatically connect a comment to all runs started with this setting by setting this field. The comment is put in the run doc for all runs started while the command is active. |
 |link_mv, link_nv	|These are used by the frontend for detector=tpc only. They simply indicate if the neutron or muon veto are included as part of 'tpc' for this run (for running in combined mode). To the backend this makes no difference. A reader is a reader. To the frontend it can limit the options modes given to the user or help in setting visual cues in the web interface so the operator can figure out what's going on. |
-|diagnosis	|The dispatcher's take on what's going on. It's 'goal' if the program thinks everything is OK. It's 'error' if there's an error. It's 'processing' if the dispatcher issued a command and is waiting for this to be implemented. In case the command takes too long the dispatcher can set this field to 'timeout'. |
-|human_readable_status	|Just translates the status enum to something people can read. Useful if displaying on a web page or someone calling the API who doesn't want to learn the codes. |
+|remote    |If this detector is controllable via the API. Set to "true" to disable control from the website and enable control via the API. |
 
 ### db.control
 The control database is used to propagate commands from the dispatcher to the reader and crate controller nodes. It is used purely internally by the dispatcher. Users wanting to set the DAQ state should set the detector control doc instead (preferably using the web interface). The exception to this is if you're running a small setup with a custom dispatcher and want to issue commands to your readout nodes manually. 
@@ -125,21 +124,22 @@ The control database is used to propagate commands from the dispatcher to the re
      "mode" : "two_links",
      "user" : "web",
      "host" : ["fdaq00_reader_0"],
-     "acknowledged" : [
-         "fdaq00_reader_0"
-     ],
-     "command" : "arm" 
-}    
+     "acknowledged" : {
+         "fdaq00_reader_0" : 1601469970934
+     },
+     "command" : "arm",
+     "createdAt": <date object>
+}
 ```
 
 |Field	|Description |
 | ----- | ----- |
-|options_override	|Override specific options in the options ini document. Mostly used to set custom output paths so that we're writing to the right place for each run. |
+|options_override	|Override specific options in the options ini document. Mostly used to set the run identifier |
 |mode	|Options file to use for this run. Corresponds to the 'name' field of the options doc. |
 |user	|Who started the run? Corresponds to the last person to change the detector_status doc during normal operation. Exceptional stop commands can be automatically issued by various subsystems as well in case of errors.
 |host	|List of all hosts to which this command is directed. Readers and crate controllers will only process commands addressed to them. |
-|acknowledged	|Before attempting to process a command all reader and crate controller processes will first acknowledge the command as received. This does not indicate that processing the command was successful! It just indicates the thing tried. The dispatcher has to watch for the appropriate state change of the slave nodes in order to determine if the command achieved its goal. |
-|command	|This is the actual command. 'arm' gets the DAQ ready to start. 'start' starts readout by sending the S-in signal. 'send_stop_signal' puts the s-in to zero. 'stop' resets readout processes. |
+|acknowledged	|Before attempting to process a command all reader and crate controller processes will first acknowledge the command as received. This does not indicate that processing the command was successful! It just indicates the thing tried. The dispatcher has to watch for the appropriate state change of the slave nodes in order to determine if the command achieved its goal. This is a dictionary, with values set to the timestamp (in ms) of when the acknowledgement happened. |
+|command	|This is the actual command. 'arm' gets the DAQ ready to start. 'start' and 'stop' do what they say on the tin. 'stop' can also be used as a general reset command for a given instance. |
 
 ### db.options
 
@@ -155,7 +155,8 @@ Basic log documents have the following simple format:
 {
 	"message" : "Received arm command from user web for mode test",
 	"priority" : 1,
-	"user" : "fdaq00_reader_0"
+	"user" : "fdaq00_reader_0",
+        "runid": 42
 }
 ```
 Where the 'user' is an identifier for which process sent the message, or in case of messages sent by a user it can 
@@ -164,7 +165,7 @@ gives the standard priorities:
 
 |Priority	|Value	|Use |
 | ----- | ----- | ------ |
-|0	|DEBUG	|Debug output for developers. Can either be silenced in production or added with a TTL expiry index (see next section). |
+|0	|DEBUG	|Low-level information. This is only written to disk, it will never show up in the database.|
 |1	|MESSAGE	|Normal log output that is important to propagate during normal operation, but does not indicate any exceptional state. |
 |2	|WARNING	|Inform the user of an exceptional situation. However this flag is reserved for minor issues that the system will handle on its own and should require no user input. |
 |3	|ERROR	|An exceptional situation with major operational impact that requires intervention from the user. |
@@ -193,23 +194,21 @@ Here are the fields set by the DAQ. There are additional fields set at various l
     "start": ISODate("2018-09-20T13:35:05.642Z"),       # time that the run was started
     "end": ISODate("2018-09-20T13:55:05.642Z"),         # time that the run was ended. d.n.e. if run not ended
     "detectors":  ["tpc", "muon_veto", "neutron_veto"], # subdetectors in run
-    "reader": {
-       "ini": {DOCUMENT}                                # the entire options doc used for readout
-    },
+    "daq_config": {DOCUMENT},                           # the entire options doc used for readout
     "source": {
        "type": "none"                                   # the source type used. (i.e. LED, Rn220). 
     },
-    "strax": {DOCUMENT},                                # override settings for strax (see strax docs)
     "data": [                                           # all locations where data for this run might be found
         {
             "type":    "live",                          # raw/processed/reduced/etc. live means pre-trigger.
             "host":    "daq",                           # usually host of the machine but 'daq' just means pre-trigger
-            "path":    "/mnt/cephfs/pre_trigger/run_10000"
+            "location":    "/live_data/xenonnt/10000"
             "status":  "transferring"                   # transferring/transferred/error
          }
-    ]
+    ],
+    "status": "eb_ready_to_upload"                      # A high-level indication of the status of this run
 }
-    
+
 ```
 
 ### db.users, db.shift_rules, db.shifts, etc

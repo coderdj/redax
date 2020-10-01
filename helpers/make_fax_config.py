@@ -43,7 +43,7 @@ def main():
     for l in range(n_links):
         for b in range(boards_per_link[l]):
             boards.append({
-                "type": "V1724_fax",
+                "type": "f1724",
                 "host": "reader4_reader_0",
                 "link": l,
                 "crate": b,
@@ -82,7 +82,7 @@ def main():
             "user": "darryl",
             "description": "fax subconfig",
             "detector": "include",
-            "processing_threads": {"reader4_reader_0": "auto"},
+            "processing_threads": {"reader4_reader_0": 4},
             "baseline_dac_mode": "fixed",
             "run_start": 1,
             "detectors": {"reader4_reader_0": "fax"},
@@ -99,7 +99,6 @@ def main():
             "strax_buffer_num_chunks": 2,
             "strax_chunk_phase_limit": 1,
             "strax_output_path": "/live_data/test",
-            "output_files": {"reader4_reader_0": 4}
             }
     doc = {
             "name": args.name,

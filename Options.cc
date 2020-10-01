@@ -188,7 +188,7 @@ std::vector<BoardType> Options::GetBoards(std::string type){
 
   std::vector <std::string> types;
   if(type == "V17XX")
-    types = {"V1724", "V1730", "V1724_MV"};
+    types = {"V1724", "V1730", "V1724_MV", "f1724"};
   else
     types.push_back(type);
   

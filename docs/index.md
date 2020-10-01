@@ -5,6 +5,7 @@
 * [Installation](installation.md) 
 * [Options reference](daq_options.md) 
 * [Example operation](how_to_run.md)
+* [Waveform simulator](fax.md)
 
 # redax Docs
 D. Coderre, D. Masson, 24. January 2020
@@ -37,6 +38,7 @@ configuration of the final system. Use these links to navigate to the sub-pages.
   3. [Installing software and helper programs](installation.md)
   4. [DAQ Configuration options](daq_options.md)
   5. [Examples of running the readout](how_to_run.md)
+  6. [The hardware-free DAQ](fax.md)
   
 A brief overview of the complete system follows. Please refer to Figure 1.
 
