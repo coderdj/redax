@@ -6,12 +6,8 @@
 #include <lz4frame.h>
 #include <blosc.h>
 #include <thread>
-#include <cstring>
-#include <cstdarg>
-#include <numeric>
 #include <sstream>
 #include <bitset>
-#include <iomanip>
 #include <ctime>
 #include <cmath>
 
@@ -38,7 +34,13 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
   fCompressor = fOptions->GetString("compressor", "lz4");
   fFullChunkLength = fChunkLength+fChunkOverlap;
   fHostname = fOptions->Hostname();
-  std::string run_name = fOptions->GetString("run_identifier", "run");
+  std::string run_name;
+  int run_num = fOptions->GetInt("number", -1);
+  if (run_num == -1) run_name = "run";
+  else {
+    run_name = std::stoi(run_num);
+    if (run_name.size() < 6) run_name.insert(0, 6 - run_name.size(), "0");
+  }
 
   fEmptyVerified = 0;
   fLog = log;
@@ -323,11 +325,11 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &comp_start);
 
   std::vector<std::list<std::string>*> buffers = {&fChunks[chunk_i], &fOverlaps[chunk_i]};
-  std::vector<size_t> uncompressed_size(3, 0);
+  std::vector<long> uncompressed_size(3, 0);
   std::string uncompressed;
   std::vector<std::shared_ptr<std::string>> out_buffer(3);
   std::vector<int> wsize(3);
-  size_t max_compressed_size = 0;
+  long max_compressed_size = 0;
 
   for (int i = 0; i < 2; i++) {
     uncompressed_size[i] = buffers[i]->size()*(fFragmentBytes + fStraxHeaderSize);

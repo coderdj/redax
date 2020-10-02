@@ -1,5 +1,4 @@
 #include "DAQController.hh"
-#include <functional>
 #include "V1724.hh"
 #include "V1724_MV.hh"
 #include "V1730.hh"
@@ -8,13 +7,11 @@
 #include "Options.hh"
 #include "StraxFormatter.hh"
 #include "MongoLog.hh"
-#include <unistd.h>
 #include <algorithm>
 #include <bitset>
 #include <chrono>
 #include <cmath>
 #include <numeric>
-#include <array>
 
 #include <bsoncxx/builder/stream/document.hpp>
 
@@ -42,6 +39,7 @@ DAQController::~DAQController(){
 
 int DAQController::Arm(std::shared_ptr<Options>& options){
   fOptions = options;
+  fLog->SetRunId(fOptions->GetInt("number", -1));
   fNProcessingThreads = fOptions->GetNestedInt("processing_threads."+fHostname, 8);
   fLog->Entry(MongoLog::Local, "Beginning electronics initialization with %i threads",
 	      fNProcessingThreads);

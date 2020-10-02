@@ -1,6 +1,4 @@
 #include <iostream>
-#include <string>
-#include <iomanip>
 #include <csignal>
 #include "DAQController.hh"
 #include "CControl_Handler.hh"
@@ -8,7 +6,6 @@
 #include <unistd.h>
 #include "MongoLog.hh"
 #include "Options.hh"
-#include <limits.h>
 #include <chrono>
 #include <thread>
 #include <atomic>
@@ -223,7 +220,6 @@ int main(int argc, char** argv){
 	    // Mongocxx types confusing so passing json strings around
 	    fOptions = std::make_shared<Options>(logger, (doc)["mode"].get_utf8().value.to_string(),
 				   hostname, suri, dbname, override_json);
-            logger->SetRunId(fOptions->GetInt("number", -1));
 	    if(controller->Arm(fOptions) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->Stop();
