@@ -104,6 +104,7 @@ int main(int argc, char** argv){
   }
 
   // We will consider commands addressed to this PC's ID 
+  const int HOST_NAME_MAX = 64; // should be #defined in unistd.h but isn't???
   char chostname[HOST_NAME_MAX];
   gethostname(chostname, HOST_NAME_MAX);
   hostname=chostname;

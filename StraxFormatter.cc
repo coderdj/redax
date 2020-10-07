@@ -38,8 +38,8 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
   int run_num = fOptions->GetInt("number", -1);
   if (run_num == -1) run_name = "run";
   else {
-    run_name = std::stoi(run_num);
-    if (run_name.size() < 6) run_name.insert(0, 6 - run_name.size(), "0");
+    run_name = std::to_string(run_num);
+    if (run_name.size() < 6) run_name.insert(0, 6 - run_name.size(), 48); // 48 == '0'
   }
 
   fEmptyVerified = 0;
