@@ -74,7 +74,6 @@ def main():
 
         # Time to report back
         MongoConnector.UpdateAggregateStatus()
-
     MongoConnector.Quit()
     return
 
