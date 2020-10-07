@@ -53,6 +53,12 @@ def main():
     while(sh.event.is_set() == False):
         sh.event.wait(sleep_period)
 
+        # Print an update
+        for detector in latest_status.keys():
+            logger.debug("Detector %s should be %sACTIVE and is %s"%(
+                    detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
+                    latest_status[detector]['status'].name))
+
         # Get most recent check-in from all connected hosts
         if MongoConnector.GetUpdate():
             continue
@@ -68,11 +74,6 @@ def main():
         # Time to report back
         MongoConnector.UpdateAggregateStatus()
 
-        # Print an update
-        for detector in latest_status.keys():
-            logger.debug("Detector %s should be %sACTIVE and is %s"%(
-                    detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
-                    latest_status[detector]['status'].name))
     MongoConnector.Quit()
     return
 
