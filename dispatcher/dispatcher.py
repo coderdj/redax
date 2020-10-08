@@ -53,12 +53,6 @@ def main():
     while(sh.event.is_set() == False):
         sh.event.wait(sleep_period)
 
-        # Print an update
-        for detector in latest_status.keys():
-            logger.debug("Detector %s should be %sACTIVE and is %s"%(
-                    detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
-                    latest_status[detector]['status'].name))
-
         # Get most recent check-in from all connected hosts
         if MongoConnector.GetUpdate():
             continue
@@ -68,6 +62,13 @@ def main():
         goal_state = MongoConnector.GetWantedState()
         if goal_state is None:
             continue
+
+        # Print an update
+        for detector in latest_status.keys():
+            logger.debug("Detector %s should be %sACTIVE and is %s"%(
+                    detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
+                    latest_status[detector]['status'].name))
+
         # Decision time. Are we actually in our goal state? If not what should we do?
         DAQControl.SolveProblem(latest_status, goal_state)
 
