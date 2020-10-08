@@ -112,8 +112,7 @@ void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, const std::sh
   int16_t baseline = 0;
   fragment.append((char*)&baseline, sizeof(baseline));
   int16_t zero = 0;
-  
-  while ((int)fragment.size() < fFragmentBytes+fStraxHeaderSize)
+  for (; length > 0; length--)
     fragment.append((char*)&zero, sizeof(zero));
   AddFragmentToBuffer(std::move(fragment), 0, 0);
 }
@@ -132,6 +131,7 @@ void StraxFormatter::ProcessDatapacket(std::unique_ptr<data_packet> dp){
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_start);
       words = (*it)&0xFFFFFFF;
       std::u32string_view sv(dp->buff.data() + std::distance(dp->buff.begin(), it), words);
+      // std::u32string_view sv(it, it+words); //c++20 :(
       ProcessEvent(sv, dp, dpc);
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ev_end);
       fProcTimeEv += timespec_subtract(ev_end, ev_start);
@@ -183,8 +183,6 @@ int StraxFormatter::ProcessEvent(std::u32string_view buff,
       ret = ProcessChannel(buff, words, channel_mask, event_time, frags, ch, dp, dpc);
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ch_end);
       fProcTimeCh += timespec_subtract(ch_end, ch_start);
-      if (ret == -1)
-        break;
       buff.remove_prefix(ret);
     }
   }
@@ -202,7 +200,7 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
   auto [timestamp, channel_words, baseline_ch, wf] = dp->digi->UnpackChannelHeader(
       buff, dp->clock_counter, dp->header_time, event_time, words_in_event, n_channels);
 
-  uint32_t samples_in_pulse = wf.size()*2; // 2 16-bit samples per 32-bit word
+  uint32_t samples_in_pulse = wf.size()*sizeof(char32_t)/sizeof(uint16_t);
   uint16_t sw = dp->digi->SampleWidth();
   int samples_per_frag= fFragmentBytes>>1;
   int16_t global_ch = fOptions->GetChannel(dp->digi->bid(), channel);
@@ -266,7 +264,7 @@ void StraxFormatter::AddFragmentToBuffer(std::string fragment, uint32_t ts, int 
         fThreadId, chunk_id - max_chunk - 1, channel);
   }
 
-  fOutputBufferSize += fragment.size();
+  fOutputBufferSize += fFragmentBytes + fStraxHeaderSize;
 
   if(!overlap){
     fChunks[chunk_id].emplace_back(std::move(fragment));
@@ -363,8 +361,7 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
   out_buffer[2] = out_buffer[1];
   wsize[2] = wsize[1];
   uncompressed_size[2] = uncompressed_size[1];
-  std::vector<std::string> names {{GetStringFormat(chunk_i),
-    GetStringFormat(chunk_i)+"_post", GetStringFormat(chunk_i+1)+"_pre"}};
+  auto names = GetChunkNames(chunk_i);
   for (int i = 0; i < 3; i++) {
     // write to *_TEMP
     auto output_dir_temp = GetDirectoryPath(names[i], true);
@@ -409,8 +406,12 @@ void StraxFormatter::WriteOutChunks() {
 void StraxFormatter::End() {
   // this line is awkward, but iterators don't always like it when you're
   // changing the container while looping over its contents
-  if (fChunks.size() > 0) CreateEmpty(fChunks.begin()->first);
-  while (fChunks.size() > 0) WriteOutChunk(fChunks.begin()->first);
+  int max_chunk = -1;
+  while (fChunks.size() > 0) {
+    max_chunk = fChunks.begin()->first;
+    WriteOutChunk(max_chunk);
+  }
+  if (max_chunk != -1) CreateEmpty(max_chunk);
   fChunks.clear();
   auto end_dir = GetDirectoryPath("THE_END");
   if(!fs::exists(end_dir)){
@@ -447,9 +448,7 @@ fs::path StraxFormatter::GetFilePath(const std::string& id, bool temp){
 
 void StraxFormatter::CreateEmpty(int back_from){
   for(; fEmptyVerified<back_from; fEmptyVerified++){
-    std::vector<std::string> names {{GetStringFormat(fEmptyVerified),
-      GetStringFormat(fEmptyVerified)+"_post", GetStringFormat(fEmptyVerified+1)+"_pre"}};
-    for (auto& n : names) {
+    for (auto& n : GetChunkNames(fEmptyVerified)) {
       if(!fs::exists(GetFilePath(n))){
         if(!fs::exists(GetDirectoryPath(n)))
           fs::create_directory(GetDirectoryPath(n));
@@ -458,5 +457,11 @@ void StraxFormatter::CreateEmpty(int back_from){
       }
     } // name
   } // chunks
+}
+
+std::vector<std::string> StraxFormatter::GetChunkNames(int chunk) {
+  std::vector<std::string> ret{{GetStringFormat(chunk), GetStringFormat(chunk)+"_post",
+    GetStringFormat(chunk+1)+"_pre"}};
+  return ret;
 }
 

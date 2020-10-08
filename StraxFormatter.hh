@@ -71,6 +71,7 @@ private:
   void End();
   void GenerateArtificialDeadtime(int64_t, const std::shared_ptr<V1724>&);
   void AddFragmentToBuffer(std::string, uint32_t, int);
+  std::vector<std::string> GetChunkNames(int);
 
   std::experimental::filesystem::path GetFilePath(const std::string&, bool=false);
   std::experimental::filesystem::path GetDirectoryPath(const std::string&, bool=false);
