@@ -39,7 +39,7 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
   if (run_num == -1) run_name = "run";
   else {
     run_name = std::to_string(run_num);
-    if (run_name.size() < 6) run_name.insert(0, 6 - run_name.size(), 48); // 48 == '0'
+    if (run_name.size() < 6) run_name.insert(0, 6 - run_name.size(), int('0'));
   }
 
   fEmptyVerified = 0;
@@ -102,7 +102,7 @@ void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, const std::sh
   fragment.append((char*)&timestamp, sizeof(timestamp));
   int32_t length = fFragmentBytes>>1;
   fragment.append((char*)&length, sizeof(length));
-  int16_t sw = 10;
+  int16_t sw = digi->SampleWidth();
   fragment.append((char*)&sw, sizeof(sw));
   int16_t channel = 790; // TODO add MV and NV support
   fragment.append((char*)&channel, sizeof(channel));
@@ -111,7 +111,8 @@ void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, const std::sh
   fragment.append((char*)&fragment_i, sizeof(fragment_i));
   int16_t baseline = 0;
   fragment.append((char*)&baseline, sizeof(baseline));
-  int8_t zero = 0;
+  int16_t zero = 0;
+  
   while ((int)fragment.size() < fFragmentBytes+fStraxHeaderSize)
     fragment.append((char*)&zero, sizeof(zero));
   AddFragmentToBuffer(std::move(fragment), 0, 0);
@@ -201,7 +202,7 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
   auto [timestamp, channel_words, baseline_ch, wf] = dp->digi->UnpackChannelHeader(
       buff, dp->clock_counter, dp->header_time, event_time, words_in_event, n_channels);
 
-  uint32_t samples_in_pulse = wf.size()*sizeof(uint16_t)/sizeof(char32_t);
+  uint32_t samples_in_pulse = wf.size()*2; // 2 16-bit samples per 32-bit word
   uint16_t sw = dp->digi->SampleWidth();
   int samples_per_frag= fFragmentBytes>>1;
   int16_t global_ch = fOptions->GetChannel(dp->digi->bid(), channel);
@@ -255,14 +256,14 @@ void StraxFormatter::AddFragmentToBuffer(std::string fragment, uint32_t ts, int 
     max_chunk = (*max_iter).first;
   }
 
+  const short* channel = (const short*)(fragment.data()+14);
   if (min_chunk - chunk_id > fWarnIfChunkOlderThan) {
-    const short* channel = (const short*)(fragment.data()+14);
     fLog->Entry(MongoLog::Warning,
         "Thread %lx got data from ch %i that's in chunk %i instead of %i/%i (ts %lx), it might get lost (ts %lx ro %i)",
         fThreadId, *channel, chunk_id, min_chunk, max_chunk, timestamp, ts, rollovers);
   } else if (chunk_id - max_chunk > 1) {
-    fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s)",
-        fThreadId, chunk_id - max_chunk - 1);
+    fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s) (ch%i)",
+        fThreadId, chunk_id - max_chunk - 1, channel);
   }
 
   fOutputBufferSize += fragment.size();
