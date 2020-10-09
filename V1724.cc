@@ -39,6 +39,7 @@ V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int
   BLT_SIZE = opts->GetInt("blt_size", 512*1024);
   // there's a more elegant way to do this, but I'm not going to write it
   fClockPeriod = std::chrono::nanoseconds((1l<<31)*fClockCycle);
+  fArtificialDeadtimeChannel = 790;
 
   if (Init(link, crate, opts)) {
     throw std::runtime_error("Board init failed");

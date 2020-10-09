@@ -58,7 +58,7 @@ public:
   void Process();
   std::pair<int, int> GetBufferSize() {return {fInputBufferSize.load(), fOutputBufferSize.load()};}
   void GetDataPerChan(std::map<int, int>& ret);
-  void ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>&);
+  void ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>&, int);
 
 private:
   void ProcessDatapacket(std::unique_ptr<data_packet> dp);
@@ -83,6 +83,7 @@ private:
   int64_t fChunkOverlap; // ns
   int fFragmentBytes;
   int fStraxHeaderSize; // bytes
+  int fFullFragmentSize;
   int fBufferNumChunks;
   int fWarnIfChunkOlderThan;
   unsigned fChunkNameLength;
