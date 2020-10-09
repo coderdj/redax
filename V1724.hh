@@ -27,6 +27,7 @@ class V1724{
   int bid() {return fBID;}
   uint16_t SampleWidth() {return fSampleWidth;}
   int GetClockWidth() {return fClockCycle;}
+  int16_t GetADChannel() {return fArtificialDeadtimeChannel;}
 
   virtual int LoadDAC(std::vector<uint16_t>&);
   void ClampDACValues(std::vector<uint16_t>&, std::map<std::string, std::vector<double>>&);
@@ -90,6 +91,7 @@ protected:
 
   float fBLTSafety, fBufferSafety;
   int fSampleWidth, fClockCycle;
+  int16_t fArtificialDeadtimeChannel;
 };
 
 

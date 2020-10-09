@@ -7,6 +7,7 @@ V1730::V1730(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& options, 
   fNChannels = 16;
   fSampleWidth = 2;
   fClockCycle = 2;
+  fArtificialDeadtimeChannel = 792;
 }
 
 V1730::~V1730(){}

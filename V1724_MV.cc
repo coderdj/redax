@@ -6,6 +6,7 @@ V1724_MV::V1724_MV(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opt
 V1724(log, opts, link, crate, bid, address) {
   // MV boards seem to have reg 0x1n80 for channel n threshold
   fChTrigRegister = 0x1080;
+  fArtificialDeadtimeChannel = 791;
 }
 
 V1724_MV::~V1724_MV(){}

@@ -241,7 +241,7 @@ void DAQController::ReadData(int link){
     if (local_buffer.size() > 0) {
       fDataRate += local_size;
       int selector = (fCounter++)%fNProcessingThreads;
-      fFormatters[selector]->ReceiveDatapackets(local_buffer);
+      fFormatters[selector]->ReceiveDatapackets(local_buffer, local_size);
       local_size = 0;
     }
     readcycler++;
