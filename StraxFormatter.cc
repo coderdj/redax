@@ -263,7 +263,7 @@ void StraxFormatter::AddFragmentToBuffer(std::string fragment, uint32_t ts, int 
         fThreadId, *channel, chunk_id, min_chunk, max_chunk, timestamp, ts, rollovers);
   } else if (chunk_id - max_chunk > 1) {
     fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s) (ch%i)",
-        fThreadId, chunk_id - max_chunk - 1, channel);
+        fThreadId, chunk_id - max_chunk - 1, *channel);
   }
 
   fOutputBufferSize += fFullFragmentSize;
