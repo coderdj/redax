@@ -331,10 +331,12 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
   long max_compressed_size = 0;
 
   for (int i = 0; i < 2; i++) {
+    if (buffers[i]->size() == 0) continue;
     uncompressed_size[i] = buffers[i]->size()*(fFragmentBytes + fStraxHeaderSize);
     uncompressed.reserve(uncompressed_size[i]);
     for (auto it = buffers[i]->begin(); it != buffers[i]->end(); it++)
-      uncompressed += *it;
+      uncompressed += *it; // std::accumulate would be nice but 3x slower without -O2
+    // (also only works on c++20 because std::move, but still)
     buffers[i]->clear();
     if(fCompressor == "blosc"){
       max_compressed_size = uncompressed_size[i] + BLOSC_MAX_OVERHEAD;
@@ -377,8 +379,8 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
     auto filename = GetFilePath(names[i]);
     // shenanigans or skulduggery?
     if(fs::exists(filename)) {
-      fLog->Entry(MongoLog::Warning, "Chunk %s from thread %lx already exists? %li vs %li bytes",
-          names[i].c_str(), fThreadId, fs::file_size(filename), wsize[i]);
+      fLog->Entry(MongoLog::Warning, "Chunk %s from thread %lx already exists? %li vs %li bytes (%lx)",
+          names[i].c_str(), fThreadId, fs::file_size(filename), wsize[i], uncompressed_size[i]);
     }
 
     // Move this chunk from *_TEMP to the same path without TEMP
@@ -392,12 +394,18 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
 }
 
 void StraxFormatter::WriteOutChunks() {
-  if ((int)fChunks.size() < fBufferNumChunks) return;
-  auto [min_iter, max_iter] = std::minmax_element(fChunks.begin(), fChunks.end(),
-      [&](auto& a, auto& b){return a.first < b.first;});
-  int max_chunk = (*max_iter).first;
-  int min_chunk = (*min_iter).first;
-  for (; min_chunk <= max_chunk - fBufferNumChunks; min_chunk++)
+  int min_chunk(999999), max_chunk(0), tot_frags(0), n_frags(0);
+  double average_chunk(0);
+  for (auto it = fChunks.begin(); it != fChunks.end(); it++) {
+    min_chunk = std::min(min_chunk, it->first);
+    max_chunk = std::max(max_chunk, it->first);
+    n_frags = it->second.size() + fOverlaps[it->first].size();
+    tot_frags += n_frags;
+    average_chunk += it->first * n_frags;
+  }
+  if (tot_frags == 0) return;
+  average_chunk /= tot_frags;
+  for (; min_chunk < average_chunk - fBufferNumChunks; min_chunk++)
     WriteOutChunk(min_chunk);
   CreateEmpty(min_chunk);
   return;
@@ -408,7 +416,7 @@ void StraxFormatter::End() {
   // changing the container while looping over its contents
   int max_chunk = -1;
   while (fChunks.size() > 0) {
-    max_chunk = fChunks.begin()->first;
+    max_chunk = std::max(max_chunk, fChunks.begin()->first);
     WriteOutChunk(max_chunk);
   }
   if (max_chunk != -1) CreateEmpty(max_chunk);

@@ -271,11 +271,13 @@ int DAQController::OpenThreads(){
 }
 
 void DAQController::CloseThreads(){
+  fLog->Entry(MongoLog::Local, "Ending RO threads");
+  for (auto& t : fReadoutThreads) if (t.joinable()) t.join();
   std::map<int,int> board_fails;
   const std::lock_guard<std::mutex> lg(fMutex);
   for (auto& sf : fFormatters) sf->Close(board_fails);
-  // give threads time to finish
-  std::this_thread::sleep_for(std::chrono::seconds(1));
+  if (fFormatters.size() > 0) // give threads time to finish
+    std::this_thread::sleep_for(std::chrono::seconds(1));
   fLog->Entry(MongoLog::Local, "Joining processing threads");
   for (auto& t : fProcessingThreads) if (t.joinable()) t.join();
   fProcessingThreads.clear();
@@ -290,7 +292,6 @@ void DAQController::CloseThreads(){
     for (auto& iter : board_fails) msg << iter.first << ":" << iter.second << " | ";
     fLog->Entry(MongoLog::Warning, msg.str());
   }
-  for (auto& t : fReadoutThreads) if (t.joinable()) t.join();
 }
 
 void DAQController::StatusUpdate(mongocxx::collection* collection) {
