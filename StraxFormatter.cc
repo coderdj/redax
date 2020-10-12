@@ -31,7 +31,7 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
   fFragmentBytes = fOptions->GetInt("strax_fragment_payload_bytes", 110*2);
-  FullFragmentSize = fFragmentBytes + fStraxHeaderSize;
+  fFullFragmentSize = fFragmentBytes + fStraxHeaderSize;
   fCompressor = fOptions->GetString("compressor", "lz4");
   fFullChunkLength = fChunkLength+fChunkOverlap;
   fHostname = fOptions->Hostname();
@@ -212,7 +212,7 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
   frags += num_frags;
   int32_t samples_this_frag = 0;
   int64_t time_this_frag = 0;
-  const uint16_t filler = 0;
+  const uint16_t zero_filler = 0;
   for (uint16_t frag_i = 0; frag_i < num_frags; frag_i++) {
     std::string fragment;
     fragment.reserve(fFullFragmentSize);
