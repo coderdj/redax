@@ -31,6 +31,7 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
   fChunkLength = long(fOptions->GetDouble("strax_chunk_length", 5)*1e9); // default 5s
   fChunkOverlap = long(fOptions->GetDouble("strax_chunk_overlap", 0.5)*1e9); // default 0.5s
   fFragmentBytes = fOptions->GetInt("strax_fragment_payload_bytes", 110*2);
+  FullFragmentSize = fFragmentBytes + fStraxHeaderSize;
   fCompressor = fOptions->GetString("compressor", "lz4");
   fFullChunkLength = fChunkLength+fChunkOverlap;
   fHostname = fOptions->Hostname();
@@ -39,6 +40,7 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
   if (run_num == -1) run_name = "run";
   else {
     run_name = std::to_string(run_num);
+    // chunk names are 6 digits long
     if (run_name.size() < 6) run_name.insert(0, 6 - run_name.size(), int('0'));
   }
 
@@ -97,24 +99,21 @@ void StraxFormatter::GetDataPerChan(std::map<int, int>& ret) {
 
 void StraxFormatter::GenerateArtificialDeadtime(int64_t timestamp, const std::shared_ptr<V1724>& digi) {
   std::string fragment;
-  fragment.reserve(fFragmentBytes + fStraxHeaderSize);
-  timestamp *= digi->GetClockWidth();
-  fragment.append((char*)&timestamp, sizeof(timestamp));
+  fragment.reserve(fFullFragmentSize);
+  timestamp *= digi->GetClockWidth(); // TODO nv
   int32_t length = fFragmentBytes>>1;
+  int16_t sw = digi->SampleWidth(), channel = digi->GetADChannel(), zero = 0;
+  fragment.append((char*)&timestamp, sizeof(timestamp));
   fragment.append((char*)&length, sizeof(length));
-  int16_t sw = digi->SampleWidth();
   fragment.append((char*)&sw, sizeof(sw));
-  int16_t channel = 790; // TODO add MV and NV support
   fragment.append((char*)&channel, sizeof(channel));
   fragment.append((char*)&length, sizeof(length));
-  int16_t fragment_i = 0;
-  fragment.append((char*)&fragment_i, sizeof(fragment_i));
-  int16_t baseline = 0;
-  fragment.append((char*)&baseline, sizeof(baseline));
-  int16_t zero = 0;
+  fragment.append((char*)&zero, sizeof(zero)); // fragment_i
+  fragment.append((char*)&zero, sizeof(zero)); // baseline
   for (; length > 0; length--)
-    fragment.append((char*)&zero, sizeof(zero));
+    fragment.append((char*)&zero, sizeof(zero)); // wf
   AddFragmentToBuffer(std::move(fragment), 0, 0);
+  return;
 }
 
 void StraxFormatter::ProcessDatapacket(std::unique_ptr<data_packet> dp){
@@ -176,8 +175,9 @@ int StraxFormatter::ProcessEvent(std::u32string_view buff,
   buff.remove_prefix(event_header_words);
   int ret;
   int frags(0);
+  unsigned n_chan = dp->digi->GetNumChannels();
 
-  for(unsigned ch=0; ch<max_channels; ch++){
+  for(unsigned ch=0; ch<n_chan; ch++){
     if (channel_mask & (1<<ch)) {
       clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ch_start);
       ret = ProcessChannel(buff, words, channel_mask, event_time, frags, ch, dp, dpc);
@@ -210,16 +210,19 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
 
   int num_frags = std::ceil(1.*samples_in_pulse/samples_per_frag);
   frags += num_frags;
+  int32_t samples_this_frag = 0;
+  int64_t time_this_frag = 0;
+  const uint16_t filler = 0;
   for (uint16_t frag_i = 0; frag_i < num_frags; frag_i++) {
     std::string fragment;
-    fragment.reserve(fFragmentBytes + fStraxHeaderSize);
+    fragment.reserve(fFullFragmentSize);
 
     // How long is this fragment?
-    int32_t samples_this_frag = samples_per_frag;
+    samples_this_frag = samples_per_frag;
     if (frag_i == num_frags-1)
       samples_this_frag = samples_in_pulse - frag_i*samples_per_frag;
 
-    int64_t time_this_frag = timestamp + samples_per_frag*sw*frag_i;
+    time_this_frag = timestamp + samples_per_frag*sw*frag_i;
     fragment.append((char*)&time_this_frag, sizeof(time_this_frag));
     fragment.append((char*)&samples_this_frag, sizeof(samples_this_frag));
     fragment.append((char*)&sw, sizeof(sw));
@@ -231,7 +234,6 @@ int StraxFormatter::ProcessChannel(std::u32string_view buff, int words_in_event,
     // Copy the raw buffer
     fragment.append((char*)wf.data(), samples_this_frag*sizeof(uint16_t));
     wf.remove_prefix(samples_this_frag*sizeof(uint16_t)/sizeof(char32_t));
-    uint16_t zero_filler = 0;
     for (; samples_this_frag < samples_per_frag; samples_this_frag++)
       fragment.append((char*)&zero_filler, sizeof(zero_filler));
 
@@ -261,10 +263,10 @@ void StraxFormatter::AddFragmentToBuffer(std::string fragment, uint32_t ts, int 
         fThreadId, *channel, chunk_id, min_chunk, max_chunk, timestamp, ts, rollovers);
   } else if (chunk_id - max_chunk > 1) {
     fLog->Entry(MongoLog::Message, "Thread %lx skipped %i chunk(s) (ch%i)",
-        fThreadId, chunk_id - max_chunk - 1, channel);
+        fThreadId, chunk_id - max_chunk - 1, *channel);
   }
 
-  fOutputBufferSize += fFragmentBytes + fStraxHeaderSize;
+  fOutputBufferSize += fFullFragmentSize;
 
   if(!overlap){
     fChunks[chunk_id].emplace_back(std::move(fragment));
@@ -273,11 +275,12 @@ void StraxFormatter::AddFragmentToBuffer(std::string fragment, uint32_t ts, int 
   }
 }
 
-void StraxFormatter::ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>& in) {
+void StraxFormatter::ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>& in, int bytes) {
   {
     const std::lock_guard<std::mutex> lk(fBufferMutex);
     fBufferCounter[in.size()]++;
     fBuffer.splice(fBuffer.end(), in);
+    fInputBufferSize += bytes;
   }
   fCV.notify_one();
 }
@@ -332,7 +335,7 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
 
   for (int i = 0; i < 2; i++) {
     if (buffers[i]->size() == 0) continue;
-    uncompressed_size[i] = buffers[i]->size()*(fFragmentBytes + fStraxHeaderSize);
+    uncompressed_size[i] = buffers[i]->size()*fFullFragmentSize;
     uncompressed.reserve(uncompressed_size[i]);
     for (auto it = buffers[i]->begin(); it != buffers[i]->end(); it++)
       uncompressed += *it; // std::accumulate would be nice but 3x slower without -O2

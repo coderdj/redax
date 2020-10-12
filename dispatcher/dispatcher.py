@@ -62,17 +62,18 @@ def main():
         goal_state = MongoConnector.GetWantedState()
         if goal_state is None:
             continue
-        # Decision time. Are we actually in our goal state? If not what should we do?
-        DAQControl.SolveProblem(latest_status, goal_state)
-
-        # Time to report back
-        MongoConnector.UpdateAggregateStatus()
 
         # Print an update
         for detector in latest_status.keys():
             logger.debug("Detector %s should be %sACTIVE and is %s"%(
                     detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
                     latest_status[detector]['status'].name))
+
+        # Decision time. Are we actually in our goal state? If not what should we do?
+        DAQControl.SolveProblem(latest_status, goal_state)
+
+        # Time to report back
+        MongoConnector.UpdateAggregateStatus()
     MongoConnector.Quit()
     return
 
