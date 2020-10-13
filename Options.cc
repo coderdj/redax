@@ -396,25 +396,21 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
   return;
 }
 
-void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counters, long bytes,
-    std::string sid, std::map<std::string, double>& times) {
+void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counters,
+    long bytes, std::string sid, std::map<std::string, double>& times) {
   using namespace bsoncxx::builder::stream;
-  int level = GetInt("benchmark_level", 2);
+  int level = GetInt("benchmark_level", 1);
   if (level == 0) return;
-  int run_id = -1;
-  try{
-    run_id = std::stoi(GetString("run_identifier", "latest"));
-  } catch (...) {
-  }
+  int run_id = GetInt("number", -1);
   std::map<std::string, std::map<int, long>> _counters;
-  if (level == 2) {
+  if (level == 1) {
     for (const auto& p : counters)
       for (const auto& pp : p.second)
         if (pp.first != 0)
-          _counters[p.first][int(std::floor(std::log2(pp.first)))] += pp.second;
+          _counters[p.first][int(std::log2(pp.first))] += pp.second;
         else
           _counters[p.first][-1] += pp.second;
-  } else if (level == 3) {
+  } else if (level == 2) {
     _counters = counters;
   }
 

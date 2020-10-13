@@ -91,7 +91,7 @@ private:
   std::string fOutputPath, fHostname, fFullHostname;
   std::shared_ptr<Options> fOptions;
   std::shared_ptr<MongoLog> fLog;
-  std::atomic_bool fActive, fRunning;
+  std::atomic_bool fActive;
   std::string fCompressor;
   std::map<int, std::list<std::string>> fChunks, fOverlaps;
   std::map<int, int> fFailCounter;

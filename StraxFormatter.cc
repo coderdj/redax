@@ -291,9 +291,9 @@ void StraxFormatter::Process() {
   std::stringstream ss;
   ss<<fHostname<<'_'<<fThreadId;
   fFullHostname = ss.str();
-  fActive = fRunning = true;
+  fActive = true;
   std::unique_ptr<data_packet> dp;
-  while (fActive == true) {
+  while (fActive == true || fBuffer.size() > 0) {
     std::unique_lock<std::mutex> lk(fBufferMutex);
     fCV.wait(lk, [&]{return fBuffer.size() > 0 || fActive == false;});
     if (fBuffer.size() > 0) {
@@ -308,9 +308,6 @@ void StraxFormatter::Process() {
   }
   if (fBytesProcessed > 0)
     End();
-  fRunning = false;
-  if (fBuffer.size() > 0)
-    fLog->Entry(MongoLog::Warning, "%i DPs unprocessed", fBuffer.size());
 }
 
 // Can tune here as needed, these are defaults from the LZ4 examples
@@ -326,7 +323,7 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
   struct timespec comp_start, comp_end;
   clock_gettime(CLOCK_THREAD_CPUTIME_ID, &comp_start);
 
-  std::vector<std::list<std::string>*> buffers = {&fChunks[chunk_i], &fOverlaps[chunk_i]};
+  std::vector<std::list<std::string>*> buffers{{&fChunks[chunk_i], &fOverlaps[chunk_i]}};
   std::vector<long> uncompressed_size(3, 0);
   std::string uncompressed;
   std::vector<std::shared_ptr<std::string>> out_buffer(3);
