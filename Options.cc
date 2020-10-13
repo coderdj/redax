@@ -423,7 +423,7 @@ void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counter
   update_doc << "bytes" << bytes;
   for (auto& p : times)
     update_doc << p.first << p.second;
-  if (level >= 2) {
+  if (level >= 1) {
     for (auto& p : _counters) {
       update_doc << p.first << open_document;
       for (auto& pp : p.second)
