@@ -24,9 +24,8 @@ std::condition_variable f1724::sCV;
 std::shared_ptr<MongoLog> f1724::sLog;
 
 f1724::pmt_pos_t f1724::PMTiToXY(int i) {
-  pmt_pos_t ret;
+  pmt_pos_t ret{0.,0.,0};
   if (i == 0) {
-    ret.x = ret.y = 0;
     return ret;
   }
   if (i < 7) {

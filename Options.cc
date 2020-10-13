@@ -179,7 +179,6 @@ std::string Options::GetString(std::string path, std::string default_value){
     fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
     return default_value;
   }
-  return "";
 }
 
 std::vector<BoardType> Options::GetBoards(std::string type){

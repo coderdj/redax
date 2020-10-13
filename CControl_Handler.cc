@@ -8,7 +8,7 @@
 #include <bsoncxx/builder/stream/document.hpp>
 
 CControl_Handler::CControl_Handler(std::shared_ptr<MongoLog>& log, std::string procname) : DAQController(log, procname){
-  fCurrentRun = fBID = fBoardHandle-1;
+  fCurrentRun = fBID = fBoardHandle = -1;
   fV2718 = nullptr;
   fV1495 = nullptr;
 #ifdef HASDDC10
