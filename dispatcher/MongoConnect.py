@@ -280,7 +280,7 @@ class MongoConnect():
                     'detector': '$_id',
                     '_id': 0,
                     'state': {'$arrayToObject': {'$zip': {'inputs': ['$keys', '$values']}}},
-                    'user': {'$arrayElemAt': ['$users', {'$indexOfArray': ['$times', {'$max', '$times'}]}]}
+                    'user': {'$arrayElemAt': ['$users', {'$indexOfArray': ['$times', {'$max': '$times'}]}]}
                     }}
                 ]):
                 doc.update(doc['state'])
