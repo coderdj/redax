@@ -173,10 +173,10 @@ The V2718 crate controller has a few options to configure. Note that they must b
 | Field | Description |
 | ------ | ----------- |
 | pulser_freq | Float. The frequency to pulse the trigger/LED pulser in Hz. Supports from <1 Hz up to some MHz. Keep in mind this may not be implemented exactly since the CAEN API doesn't support every possible frequency exactly, but the software will attempt to match the desired frequency as closely as possible. |
-| neutron_veto | Should the S-IN signal be propogated to the neutron veto? 1-yes, 0-no |
-| muon_veto | Should the S-IN signal be propogated to the muon veto? 1-yes, 0-no |
-| led_trigger | Should the LED pulse be propagated to the LED driver? 1-yes, 0-no |
-| s_in | Should the run be started with S-IN? 1-yes, 0-no |
+| neutron_veto | Should the S-IN signal be propogated to the neutron veto (connector 4)? 1-yes, 0-no |
+| muon_veto | Should the S-IN signal be propogated to the muon veto (connector 1)? 1-yes, 0-no |
+| led_trigger | Should the LED pulse be propagated to the LED driver (connector 2)? 1-yes, 0-no |
+| s_in | Should the run be started with S-IN (connector 0)? 1-yes, 0-no |
 
 The top-level field 'run_start' (next section) is also required to define run start via S-IN.
 
@@ -233,12 +233,12 @@ There are various configuration options for the strax output that must be set.
 | strax_chunk_length | Float. Length of each strax chunk in seconds. There's some balance required here. It should be short enough that strax can process reasonably online, as it waits for each chunk to finish then loads it at once (the size should be digestable). But it shouldn't be so short that it needlessly micro-segments the data. Order of 5-15 seconds seems reasonable at the time of writing. Default 5. |
 |strax_fragment_payload_bytes | Int. How long are the fragments? In general this should be long enough that it definitely covers the vast majority of your SPE pulses. Our SPE pulses are ~100 samples, so the default value of 220 bytes (2 bytes per sample) provides a small amount of overhead. Undefined behavior if the value is odd, possibly undefined if it isn't a multiple of 4. |
 |strax_output_path | String. Where should we write data? This must be a locally mounted data store. Redax will handle sub-directories so just provide the top-level directory where all the live data should go (e.g. `/data/live`). |
-|strax_buffer_num_chunks | Int. How many full chunks should get buffered? Setting this at 1 or lower may cause data loss, and greater than 2 just means you need more memory in your readout machine. For instance, if 5 and 6 are buffered, as soon as something in chunk 7 shows up, chunk 5 is dumped to disk. |
+|strax_buffer_num_chunks | Int. How many full chunks should get buffered? Setting this at 1 or lower may cause data loss, and greater than 2 usually means you need more memory in your readout machine. For instance, if 5 and 6 are buffered, as soon as something in chunk 7 shows up, chunk 5 is dumped to disk. |
 |strax_chunk_phase_limit | Int. Sometimes pulses will show up at the processing stage late (or somehow behind the rest of them). If a pulse is this many chunks behind (or out of phase with) the chunks currently being buffered, log a warning to the database. |
 
 ## Channel Map
 
-Redax needs to provide the channel values to strax. Therefore the channel map (mapping module/channel in the digitizers to PMT position) must be provided at the readout stage. 
+Redax needs to provide the channel values to strax. Therefore the channel map (mapping module/channel in the digitizers to PMT position) must be provided at the readout stage.
 
 This is in a quite simple format: 
 
@@ -295,4 +295,5 @@ Redax accepts a variety of options that control various low-level operations. Th
 | blt_size | Int. How many bytes to read from the digitizer during each BLT readout. Default 0x80000. |
 | blt_safety_factor | Float. Sometimes the digitizer returns more bytes during a BLT readout than you ask for (it depends on the number and size of events in the digitizer's memory). This value is how much extra memory to allocate so you don't overrun the readout buffer. Default 1.5. |
 | do_sn_check | 0/1. Whether or not to have each board check its serial number during initialization. Default 0. |
+| us_between_reads | Int. How many microseconds to sleep between polling digitizers for data. This has a major performance impact that will matter when under extremely high loads (ie, the bleeding edge of what your server(s) are capable of), but otherwise shouldn't matter much. Default 10. |
 
