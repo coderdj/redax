@@ -205,6 +205,7 @@ void DAQController::ReadData(int link){
   int words = 0;
   int local_size(0);
   fRunning[link] = true;
+  std::chrono::microseconds sleep_time(fOptions->GetInt("us_between_reads", 10));
   while(fReadLoop){
     for(auto& digi : fDigitizers[link]) {
 
@@ -245,7 +246,7 @@ void DAQController::ReadData(int link){
       local_size = 0;
     }
     readcycler++;
-    usleep(1);
+    std::this_thread::sleep_for(sleep_time);
   } // while run
   fRunning[link] = false;
   fLog->Entry(MongoLog::Local, "RO thread %i returning", link);
