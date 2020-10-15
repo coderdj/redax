@@ -274,11 +274,13 @@ void DAQController::CloseThreads(){
   const std::lock_guard<std::mutex> lg(fMutex);
   fLog->Entry(MongoLog::Local, "Ending RO threads");
   for (auto& t : fReadoutThreads) if (t.joinable()) t.join();
-  std::map<int,int> board_fails;
-  for (auto& sf : fFormatters) sf->Close(board_fails);
-  if (fFormatters.size() > 0) // give threads time to finish
-    std::this_thread::sleep_for(std::chrono::seconds(1));
   fLog->Entry(MongoLog::Local, "Joining processing threads");
+  std::map<int,int> board_fails;
+  for (auto& sf : fFormatters) {
+    while (sf->GetBufferSize().first > 0)
+      std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    sf->Close(board_fails);
+  }
   for (auto& t : fProcessingThreads) if (t.joinable()) t.join();
   fProcessingThreads.clear();
   fLog->Entry(MongoLog::Local, "Destroying formatters");
