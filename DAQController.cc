@@ -382,6 +382,7 @@ void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
     success += digi->LoadDAC(dac_values[bid]);
     // Load all the other fancy stuff
     success += digi->SetThresholds(fOptions->GetThresholds(bid));
+    digi->ResetClocks();
 
     fLog->Entry(MongoLog::Local, "Board %i programmed", digi->bid());
     if(success!=0){

@@ -365,13 +365,14 @@ void StraxFormatter::WriteOutChunk(int chunk_i){
   uncompressed_size[2] = uncompressed_size[1];
   auto names = GetChunkNames(chunk_i);
   for (int i = 0; i < 3; i++) {
+    if (uncompressed_size[i] == 0) continue;
     // write to *_TEMP
     auto output_dir_temp = GetDirectoryPath(names[i], true);
     auto filename_temp = GetFilePath(names[i], true);
     if (!fs::exists(output_dir_temp))
       fs::create_directory(output_dir_temp);
     std::ofstream writefile(filename_temp, std::ios::binary);
-    if (uncompressed_size[i] > 0) writefile.write(out_buffer[i]->data(), wsize[i]);
+    writefile.write(out_buffer[i]->data(), wsize[i]);
     writefile.close();
     out_buffer[i].reset();
 

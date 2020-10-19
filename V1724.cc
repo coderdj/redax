@@ -18,6 +18,7 @@ V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int
   fAqStatusRegister = 0x8104;
   fSwTrigRegister = 0x8108;
   fResetRegister = 0xEF24;
+  fClearRegister = 0xEF28;
   fChStatusRegister = 0x1088;
   fChDACRegister = 0x1098;
   fNChannels = 8;
@@ -101,6 +102,8 @@ int V1724::SINStart(){
 }
 int V1724::SoftwareStart(){
   fLastClockTime = std::chrono::high_resolution_clock::now();
+  fRolloverCounter = 0;
+  fLastClock = 0;
   return WriteRegister(fAqCtrlRegister, 0x104);
 }
 int V1724::AcquisitionStop(bool){
@@ -121,7 +124,11 @@ bool V1724::EnsureStopped(int ntries, int tsleep){
 uint32_t V1724::GetAcquisitionStatus(){
   return ReadRegister(fAqStatusRegister);
 }
-
+int V1724::ResetClocks() {
+  fClockCounter = 0;
+  fLastClock = 0;
+  return WriteRegister(fClearRegister, 0x1);
+}
 int V1724::CheckErrors(){
   auto pll = ReadRegister(fBoardFailStatRegister);
   auto ros = ReadRegister(fReadoutStatusRegister);
@@ -147,6 +154,7 @@ std::tuple<uint32_t, long> V1724::GetClockInfo(std::u32string_view sv) {
       return {ht, GetClockCounter(ht)};
     }
   } while (++it < sv.end());
+  fLog->Entry(MongoLog::Info, "No clock info for %i?", fBID);
   return {0xFFFFFFFF, -1};
 }
 

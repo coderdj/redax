@@ -87,12 +87,11 @@ int MongoLog::RotateLogFile() {
     }
     last_week.tm_mday += days_per_month[last_week.tm_mon]; // off by one error???
   }
-  std::experimental::filesystem::path p = LogFileName(&last_week);
+  std::experimental::filesystem::path p = fOutputDir/LogFileName(&last_week);
   if (std::experimental::filesystem::exists(p)) {
     fOutfile << FormatTime(&today) << " [INIT]: Deleting " << p << '\n';
     std::experimental::filesystem::remove(p);
-  }
-  else {
+  } else {
     fOutfile << FormatTime(&today) << " [INIT]: No older logfile to delete :(\n";
   }
   return 0;
