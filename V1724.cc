@@ -125,7 +125,7 @@ uint32_t V1724::GetAcquisitionStatus(){
   return ReadRegister(fAqStatusRegister);
 }
 int V1724::ResetClocks() {
-  fClockCounter = 0;
+  fRolloverCounter = 0;
   fLastClock = 0;
   return WriteRegister(fClearRegister, 0x1);
 }
@@ -154,7 +154,7 @@ std::tuple<uint32_t, long> V1724::GetClockInfo(std::u32string_view sv) {
       return {ht, GetClockCounter(ht)};
     }
   } while (++it < sv.end());
-  fLog->Entry(MongoLog::Info, "No clock info for %i?", fBID);
+  fLog->Entry(MongoLog::Message, "No clock info for %i?", fBID);
   return {0xFFFFFFFF, -1};
 }
 
