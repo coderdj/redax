@@ -224,7 +224,7 @@ int main(int argc, char** argv){
 	    fOptions = std::make_shared<Options>(fLog, mode,
 				   hostname, suri, dbname, override_json);
             int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
-            if (dt > 2000){
+            if (dt > 6000){
               fLog->Entry(MongoLog::Warning,
                   "Took too long to pull the config docs, try again");
               continue;
