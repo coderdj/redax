@@ -219,8 +219,15 @@ int main(int argc, char** argv){
 	      logger->Entry(MongoLog::Debug, "No override options provided, continue without.");
 	    }
 	    // Mongocxx types confusing so passing json strings around
-	    fOptions = std::make_shared<Options>(logger, (doc)["mode"].get_utf8().value.to_string(),
+            std::string mode = doc["mode"].get_utf8().value.to_string();
+            fLog->Entry(MongoLog::Local, "Getting options doc for mode %s", mode.c_str());
+	    fOptions = std::make_shared<Options>(logger, mode,
 				   hostname, suri, dbname, override_json);
+            if (duration_cast<milliseconds>(system_clock::now()-ack_time).count() > 9000){
+              fLog->Entry(MongoLog::Warning,
+                  "Took too long to pull the config docs, try again");
+              continue;
+            }
 	    if(controller->Arm(fOptions) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->Stop();
@@ -238,7 +245,7 @@ int main(int argc, char** argv){
       std::cout<<"Can't connect to DB so will continue what I'm doing"<<std::endl;
     }
 
-    std::this_thread::sleep_for(seconds(1));
+    std::this_thread::sleep_for(milliseconds(100));
   }
   status_update.join();
   controller.reset();
