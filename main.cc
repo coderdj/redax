@@ -223,10 +223,13 @@ int main(int argc, char** argv){
             logger->Entry(MongoLog::Local, "Getting options doc for mode %s", mode.c_str());
 	    fOptions = std::make_shared<Options>(logger, mode,
 				   hostname, suri, dbname, override_json);
-            if (duration_cast<milliseconds>(system_clock::now()-ack_time).count() > 9000){
+            int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
+            if (dt > 2000){
               logger->Entry(MongoLog::Warning,
                   "Took too long to pull the config docs, try again");
               continue;
+            } else {
+              fLog->Entry(MongoLog::Local, "Took %i ms to load config", dt);
             }
 	    if(controller->Arm(fOptions) != 0){
 	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
