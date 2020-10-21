@@ -220,11 +220,11 @@ int main(int argc, char** argv){
 	    }
 	    // Mongocxx types confusing so passing json strings around
             std::string mode = doc["mode"].get_utf8().value.to_string();
-            fLog->Entry(MongoLog::Local, "Getting options doc for mode %s", mode.c_str());
+            logger->Entry(MongoLog::Local, "Getting options doc for mode %s", mode.c_str());
 	    fOptions = std::make_shared<Options>(logger, mode,
 				   hostname, suri, dbname, override_json);
             if (duration_cast<milliseconds>(system_clock::now()-ack_time).count() > 9000){
-              fLog->Entry(MongoLog::Warning,
+              logger->Entry(MongoLog::Warning,
                   "Took too long to pull the config docs, try again");
               continue;
             }
