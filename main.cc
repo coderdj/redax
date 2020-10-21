@@ -122,7 +122,7 @@ int main(int argc, char** argv){
   mongocxx::collection dac_collection = db["dac_calibration"];
 
   // Logging
-  auto logger = std::make_shared<MongoLog>(log_retention, log_dir, suri, dbname, "log", hostname);
+  auto fLog = std::make_shared<MongoLog>(log_retention, log_dir, suri, dbname, "log", hostname);
 
   //Options
   std::shared_ptr<Options> fOptions;
@@ -131,9 +131,9 @@ int main(int argc, char** argv){
   // boards and tracking the status
   std::unique_ptr<DAQController> controller;
   if (cc)
-    controller = std::make_unique<CControl_Handler>(logger, hostname);
+    controller = std::make_unique<CControl_Handler>(fLog, hostname);
   else
-    controller = std::make_unique<DAQController>(logger, hostname);
+    controller = std::make_unique<DAQController>(fLog, hostname);
   std::thread status_update(&UpdateStatus, suri, dbname, std::ref(controller));
 
   // Sort oldest to newest
@@ -156,7 +156,7 @@ int main(int argc, char** argv){
 	 );
 
       for(auto doc : cursor) {
-	logger->Entry(MongoLog::Debug, "Found a doc with command %s",
+	fLog->Entry(MongoLog::Debug, "Found a doc with command %s",
 	  doc["command"].get_utf8().value.to_string().c_str());
 	// Very first thing: acknowledge we've seen the command. If the command
 	// fails then we still acknowledge it because we tried
@@ -180,7 +180,7 @@ int main(int argc, char** argv){
 	}
 	catch (const std::exception &e){
 	  //LOG
-	  logger->Entry(MongoLog::Warning, "Received malformed command %s",
+	  fLog->Entry(MongoLog::Warning, "Received malformed command %s",
 			bsoncxx::to_json(doc).c_str());
 	}
 
@@ -191,18 +191,18 @@ int main(int argc, char** argv){
 	      continue;
 	    }
             auto now = system_clock::now();
-            logger->Entry(MongoLog::Local, "Ack to start took %i us",
+            fLog->Entry(MongoLog::Local, "Ack to start took %i us",
                 duration_cast<microseconds>(now-ack_time).count());
 	  }
 	  else
-	    logger->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state (%i)", controller->status());
+	    fLog->Entry(MongoLog::Debug, "Cannot start DAQ since not in ARMED state (%i)", controller->status());
 	}else if(command == "stop"){
 	  // "stop" is also a general reset command and can be called any time
 	  if(controller->Stop()!=0)
-	    logger->Entry(MongoLog::Error,
+	    fLog->Entry(MongoLog::Error,
 			  "DAQ failed to stop. Will continue clearing program memory.");
           auto now = system_clock::now();
-          logger->Entry(MongoLog::Local, "Ack to stop took %i us",
+          fLog->Entry(MongoLog::Local, "Ack to stop took %i us",
               duration_cast<microseconds>(now-ack_time).count());
 	} else if(command == "arm"){
 	  // Can only arm if we're in the idle, arming, or armed state
@@ -216,30 +216,30 @@ int main(int argc, char** argv){
 	      override_json = bsoncxx::to_json(oopts);
 	    }
 	    catch(const std::exception &e){
-	      logger->Entry(MongoLog::Debug, "No override options provided, continue without.");
+	      fLog->Entry(MongoLog::Debug, "No override options provided, continue without.");
 	    }
 	    // Mongocxx types confusing so passing json strings around
             std::string mode = doc["mode"].get_utf8().value.to_string();
-            logger->Entry(MongoLog::Local, "Getting options doc for mode %s", mode.c_str());
-	    fOptions = std::make_shared<Options>(logger, mode,
+            fLog->Entry(MongoLog::Local, "Getting options doc for mode %s", mode.c_str());
+	    fOptions = std::make_shared<Options>(fLog, mode,
 				   hostname, suri, dbname, override_json);
             int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
             if (dt > 2000){
-              logger->Entry(MongoLog::Warning,
+              fLog->Entry(MongoLog::Warning,
                   "Took too long to pull the config docs, try again");
               continue;
             } else {
               fLog->Entry(MongoLog::Local, "Took %i ms to load config", dt);
             }
 	    if(controller->Arm(fOptions) != 0){
-	      logger->Entry(MongoLog::Error, "Failed to initialize electronics");
+	      fLog->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->Stop();
 	    }else{
-	      logger->Entry(MongoLog::Debug, "Initialized electronics");
+	      fLog->Entry(MongoLog::Debug, "Initialized electronics");
 	    }
 	  } // if status is ok
 	  else
-	    logger->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
+	    fLog->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
 	} else if (command == "quit") b_run = false;
       } // for doc in cursor
     }
@@ -253,7 +253,7 @@ int main(int argc, char** argv){
   status_update.join();
   controller.reset();
   fOptions.reset();
-  logger.reset();
+  fLog.reset();
   exit(0);
 }
 
