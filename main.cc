@@ -224,13 +224,14 @@ int main(int argc, char** argv){
 	    fOptions = std::make_shared<Options>(fLog, mode,
 				   hostname, suri, dbname, override_json);
             int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
-            if (dt > 3000){
-              fLog->Entry(MongoLog::Warning,
-                  "Took too long to pull the config docs, try again");
-              continue;
-            } else {
+            if (dt < 15000) std::this_thread::sleep_for(milliseconds(15000-dt));
+            //if (dt > 3000){
+            //  fLog->Entry(MongoLog::Warning,
+            //      "Took too long to pull the config docs, try again");
+            //  continue;
+            //} else {
               fLog->Entry(MongoLog::Local, "Took %i ms to load config", dt);
-            }
+            //}
 	    if(controller->Arm(fOptions) != 0){
 	      fLog->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->Stop();
