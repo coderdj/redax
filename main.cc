@@ -43,13 +43,15 @@ void UpdateStatus(std::string suri, std::string dbname, std::unique_ptr<DAQContr
 }
 
 int PrintUsage() {
-  std::cout<<"Welcome to REDAX readout\nAccepted command-line arguments:"
+  std::cout<<"Welcome to REDAX readout\nAccepted command-line arguments:\n"
     << "--id <id number>: id number of this readout instance, required\n"
     << "--uri <mongo uri>: full MongoDB URI, required\n"
     << "--db <database name>: name of the database to use, default \"daq\"\n"
     << "--logdir <directory>: where to write the logs, default pwd\n"
     << "--reader: this instance is a reader\n"
     << "--cc: this instance is a crate controller\n"
+    << "--arm-delay <delay>: ms to wait between the ARM command and the arming sequence, default 15000\n"
+    << "--log-retention <value>: how many days to keep logfiles, default 7\n"
     << "--help: print this message\n"
     << "\n";
   return 1;
@@ -67,15 +69,17 @@ int main(int argc, char** argv){
   std::string dbname = "daq", suri = "", sid = "";
   bool reader = false, cc = false;
   int log_retention = 7; // days
-  int c, opt_index;
+  int c(0), opt_index, delay(15000);
   struct option longopts[] = {
-    {"id", required_argument, 0, 0},
-    {"uri", required_argument, 0, 1},
-    {"db", required_argument, 0, 2},
-    {"logdir", required_argument, 0, 3},
-    {"reader", no_argument, 0, 4},
-    {"cc", no_argument, 0, 5},
-    {"help", no_argument, 0, 6}
+    {"id", required_argument, 0, c++},
+    {"uri", required_argument, 0, c++},
+    {"db", required_argument, 0, c++},
+    {"logdir", required_argument, 0, c++},
+    {"reader", no_argument, 0, c++},
+    {"cc", no_argument, 0, c++},
+    {"arm-delay", required_argument, 0, c++},
+    {"log-retention", required_argument, 0, c++},
+    {"help", no_argument, 0, c++}
   };
   while ((c = getopt_long(argc, argv, "", longopts, &opt_index)) != -1) {
     switch(c) {
@@ -92,6 +96,10 @@ int main(int argc, char** argv){
       case 5:
         cc = true; break;
       case 6:
+        delay = std::stoi(optarg); break;
+      case 7:
+        log_retention = std::stoi(optarg); break;
+      case 8:
       default:
         std::cout<<"Received unknown arg\n";
         return PrintUsage();
@@ -99,7 +107,7 @@ int main(int argc, char** argv){
   }
   if (suri == "" || sid == "") return PrintUsage();
   if (reader == cc) {
-    std::cout<<"Specify --reader OR --cc\n";
+    std::cout<<"Specify --reader XOR --cc\n";
     return 1;
   }
 
@@ -224,14 +232,8 @@ int main(int argc, char** argv){
 	    fOptions = std::make_shared<Options>(fLog, mode,
 				   hostname, suri, dbname, override_json);
             int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
-            if (dt < 15000) std::this_thread::sleep_for(milliseconds(15000-dt));
-            //if (dt > 3000){
-            //  fLog->Entry(MongoLog::Warning,
-            //      "Took too long to pull the config docs, try again");
-            //  continue;
-            //} else {
-              fLog->Entry(MongoLog::Local, "Took %i ms to load config", dt);
-            //}
+            fLog->Entry(MongoLog::Local, "Took %i ms to load config", dt);
+            if (dt < delay) std::this_thread::sleep_for(milliseconds(delay-dt));
 	    if(controller->Arm(fOptions) != 0){
 	      fLog->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->Stop();
