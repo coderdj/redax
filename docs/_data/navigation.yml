@@ -13,5 +13,7 @@ docs:
         url: /docs/daq_options.md
       - title: "Simple use case"
         url: /docs/how_to_run.md
+      - title: "Extending redax"
+        url: /docs/new_digi.md
       - title: "Waveform simulator"
         url: /docs/fax.md

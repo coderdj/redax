@@ -5,12 +5,13 @@
 * [Installation](installation.md) 
 * [Options reference](daq_options.md) 
 * [Example operation](how_to_run.md)
+* [Extending redax](new_digi.md)
 * [Waveform simulator](fax.md)
 
 # Adding support for new digitizer models/firmwares
 
 All the CAEN digitizers have a similar (but not identical) data format, and for the most part also have different clocks for the digitization and timestamping.
-Redax can be trivially extended to support other CAEN digitizers, and probably also non-CAEN digitizers (but this will be less trivial), but subclassing the V1724 base class and changing a few small things.
+Redax can be trivially extended to support other CAEN digitizers, and probably also non-CAEN digitizers (but this will be less trivial), by subclassing the V1724 base class and changing a few small things.
 Here we'll look at exactly how this is done, and what steps need to be taken for an arbitrary digitizer.
 All the default assumptions are for the V1724 with DPP DAW firmware.
 
@@ -34,7 +35,7 @@ std::tuple<int, int, bool, uint32_t> V1724::UnpackEventHeader(std::u32string_vie
 ```
 Where do these magic numbers come from? Let's see what's in the CAEN documentation (pages 10 and 11 of the DPP DAW firmware, document UM5954):
 
-<img source="figures/caen_v1724_headers.png" width="600">
+<img src="figures/caen_v1724_headers.png" width="600">
 <br>
 <strong>Figure 1: V1724 DPP DAW header, Fig 2.2 from the CAEN docs</strong>
 <br>
@@ -115,7 +116,7 @@ Also, we see that there's a baseline, and a total of three control words.
 
 ## Case study: V1274 with default firmware
 
-<img source="figures/caen_v1724_default.png" width="600">
+<img src="figures/caen_v1724_default.png" width="600">
 <br>
 <strong>Figure 3: V1724 headers with default firmware</strong>
 <br>
