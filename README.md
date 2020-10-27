@@ -6,35 +6,31 @@ See documentation here: [link](https://coderdj.github.io/redax)
 
 * mongodb cxx driver
 * CAENVMElib v2.5+
-* libblosc-dev (on ubuntu)
+* libblosc-dev
 * liblz4-dev
 * C++17-compatible compiler. Tested on gcc 7.3.0
 * Driver for your CAEN PCI card
 * A DAQ hardware setup (docs coming on xenon wiki)
 * A MongoDB deployment you can write to
-* tcl8.6-dev, and tcl-expect-dev
+* tcl8.6-dev, and tcl-expect-dev (optional, for DDC10 support)
 
 ## Install
 
-To build the reader:
+To build:
 
 make
 
-To build the crate controller controller:
-
-make ccontrol
-
 ## Starting the Reader Process
-
-./main {ID} mongo_uri [database_name]
-
+```
+./redax --id <id> --uri <mongo_uri> [--reader | --cc ] [--db <database_name>] [--logdir <logging directory>] [--log-retention <days>] [--arm-delay <ms>] [--help]
+```
 The first argument is a unique ID that will identify your reader. This is important since your physical hardware setup needs to be associated with the software programs that will read the things out. So you probably want to map out ahead of time which reader processes will read out which optical links.
 
-Note: while this can run multiple times on a given host (one readout instance per link), it also works fine with all links in one instance.
+Three arguments are required. First is the ID of this instance, second is the full MongoDB URI, and third is one of 'reader' or 'cc', depending on if you want this instance to be a reader or a crate controller. Note: while this can run multiple times on a given host (one readout instance per link), it also works fine with all links in one instance (slightly better, even, because of overhead).
 
 The ID number will create a unique process identifier for this instance of redax which appears as so: HOSTNAME_reader_ID. So if you run on host daq00 with ID 1 your process ID will be daq00_reader_1. This is the ID you use to address commands to this host.
 
-Optionally, you can also specify the name of the database the program should look in for the various collections.
+Optionally, you can also specify the name of the database the program should look in for the various collections, where you want the log files written, how long to keep the log files around, and how long to wait between receiving an ARM command and actually beginning the arming sequence.
 
 ## Starting the Dispatcher (optional)
 
@@ -50,9 +46,9 @@ The config option points to an ini file for the dispatcher. See the subdirectory
 You need to provide connectivity to a mongodb database using the URI.
 This database should have the following collections.
 
-**control:** is where commands go. Configure this as a capped collection, size approx 1MB (really not much needed). If you have no dispatcher you'll write directly to this collection, otherwise the dispatcher handles it.
+**control:** is where commands go. Configure this as a capped or TTL collection, size approx 1MB (really not much needed). If you have no dispatcher you'll write directly to this collection, otherwise the dispatcher handles it.
 
-**status:** should be configured as a capped collection. Each readout
+**status:** should be configured as a capped or TTL collection. Each readout
 node will write its status here every second or so.
 
 **log:** The DAQ will log here.
@@ -68,26 +64,10 @@ If you run with the dispatcher you additionally need a collection called **detec
 
 Install all prerequisites, a mongodb database, and the redax software as described above. If you have XENON wiki access there are some build notes on the DAQ page [here](https://xe1t-wiki.lngs.infn.it/doku.php?id=xenon:xenonnt:dsg:daq#reader wiki), however if you don't have access don't worry too much since everything is straight off google searches.
 
+Consult the documentation as linked above.
+
 If you want to configure your status collection as capped (as well as the 'aggregate_status', which stored dispatcher state history and 'system_monitor' for use with the optional monitor script) you can run helpers/initialize_databases.py.
 
 Hook your digitizer up via optical link to your PC. Hopefully you're using our self-triggering firmware, if not you'll have to deal with configuring an external trigger for your digitizer yourself. This example will use just one digitizer.
 
-Start the reader process with ./main 0 {MONGO_URI} [database_name], with mongo uri pointing to your mongo DB.
-
-Use the script helpers/set_run_mode.py to put some settings into the 'options' collection of your database. You'll need to modify the script to put in your database connectivity parameters. The given register settings should work fine if you're using our self-trigger firmware. Otherwise adjust accordingly. Also be sure to change the optical link address at `boards[0].link` in case you're not plugged into link 0. Note the value in the 'name' field of the document you are inserting. One more thing, you probably want to look at data so set strax_output_path to some place you can write and read from. Your data will go there.
-
-You probably want to see what your DAQ is doing. Open a terminal window and use the script helpers/monitor_status.py. Change the mongo connectivity to your database. This will poll the DAQ status and print. Right now it should be 'IDLE' because your DAQ isn't doing anything. Great. Leave it running.
-
-Now you should be able to ARM the daq with helpers/runcommand.py. Use it like so:
-`python runcommand.py arm {host}_reader_0 test`
-This assumes you did not change the name of your options file from 'test' and host is the hostname of the machine. In case you did then replace 'test' with whatever you change it to. If the command is successful you should see the DAQ status change to ARMED in your status window. If this did not work you can check the 'log' collection for what is hopefully an enlightening error message. (note that you're basically manually do all the calls a website would do, which is why this seems like a lot of annoying little calls to the DB)
-
-To start the DAQ use the runcommand.py script again, but only if the DAQ is in ARMED state, otherwise it will ignore the command. So:
-`python runcommand.py start {host}_reader_0`
-And bingo, you should be running now. The status window will print the current rate and should say RUNNING.
-
-To stop the DAQ again:
-`python runcommand.py stop {host}_reader_0`
-
-Maybe you want to look at the data to make sure it's not rubbish. One option is to just run strax on it (beyond scope of this guide). But in case you just want a quick check use helpers/strax_waveform_inspector.py. You'll have to change the path within the script to point to your readout location. Note that this needs to point to a sub-file (as in the example script) so make sure you point it to an actual data file and not one of the directories. It should display a waveform (x-server required of course). If you don't have a display running use the strax_data_inspector to print some stuff out instead.
-
+Start the reader process as above.

@@ -5,6 +5,7 @@
 * [Installation](installation.md) 
 * [Options reference](daq_options.md) 
 * [Example operation](how_to_run.md)
+* [Extending redax](new_digi.md)
 * [Waveform simulator](fax.md)
 
 # redax Docs
@@ -12,34 +13,31 @@ D. Coderre, D. Masson, 24. January 2020
 
 ## Brief
 
-Redax is a DAQ readout code based on CAEN electronics. It is designed to be used with V1724 and V1730 digitizers
-connected via their front optical ports to A3818 PCIe cards, but it can also be used for other similar
-setups, for example with different digitizer models or configuration strategies (some modification 
-could be required in some cases). Output is into the [strax](https://github.com/axfoundation/strax) 
-input format. This documentation should get you up and running with redax. At the 
-time of writing the software is still in development so if there are any issues with this 
-documentation please file an issue on GitHub.
+Redax is a DAQ readout code based on CAEN electronics.
+It is designed to be used with V1724 and V1730 digitizers connected via their front optical ports to A3818 PCIe cards, but it can also be used for other similar setups, for example with different digitizer models or configuration strategies (some modification could be required in some cases).
+Output is into the [strax](https://github.com/axfoundation/strax) input format.
+This documentation should get you up and running with redax. At the time of writing the software is still in development so if there are any issues with this documentation please file an issue on GitHub.
 
 ## Use Case
 
-Redax is meant to be a full-scale DAQ solution facilitating readout of many channels in parallel. It is 
-designed to be the production system for the XENONnT experiment. There is no 'standalone' or 'lite mode' 
-included, so using this in a small-scale test setup could be overkill, since the system requires somewhat 
-considerable infrastructure in order to function. However use in a long term, permanent lab setup, even 
-if the number of channels is low, should be quite easy.
+Redax is meant to be a full-scale DAQ solution facilitating readout of many channels in parallel.
+It is designed to be the production system for the XENONnT experiment.
+There is no 'standalone' or 'lite mode' included, so using this in a small-scale test setup could be overkill, since the system requires somewhat considerable infrastructure in order to function.
+However use in a long term, permanent lab setup, even if the number of channels is low, should be quite easy.
 
 ## Overview
 
-This document provides setup steps in order, beginning with installation of prerequisites and ending in 
-configuration of the final system. Use these links to navigate to the sub-pages.
+This document provides setup steps in order, beginning with installation of prerequisites and ending in configuration of the final system.
+Use these links to navigate to the sub-pages.
 
   1. [Installation of prerequisites](prerequisites.md)
   2. [Configuration of backend databases](databases.md)
   3. [Installing software and helper programs](installation.md)
   4. [DAQ Configuration options](daq_options.md)
   5. [Examples of running the readout](how_to_run.md)
-  6. [The hardware-free DAQ](fax.md)
-  
+  6. [Adding support for new digitizer models](new_digi.md)
+  7. [The hardware-free DAQ](fax.md)
+
 A brief overview of the complete system follows. Please refer to Figure 1.
 
 <img src="figures/daq_software_overview.png" width="600">

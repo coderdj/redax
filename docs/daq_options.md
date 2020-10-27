@@ -5,13 +5,14 @@
 * [Installation](installation.md) 
 * [Options reference](daq_options.md) 
 * [Example operation](how_to_run.md)
+* [Extending redax](new_digi.md)
 * [Waveform simulator](fax.md)
 
 # DAQ Options Reference
 
-DAQ options are stored in MongoDB documents in the daq.options collection. Colloqially a single set of options may be 
-referred to as a 'run mode'. Example run modes would be "background_stable" or "rn220_heveto". This is the mode a shifter 
-will choose when starting the DAQ.
+DAQ options are stored in MongoDB documents in the daq.options collection.
+Colloqially a single set of options may be referred to as a 'run mode'.
+Example run modes would be "background_stable" or "rn220_heveto". This is the mode a shifter will choose when starting the DAQ.
 
 This section provides all settings and their function.
 
@@ -24,19 +25,19 @@ The following fields are required for organizational purposes:
 | name | The name of this mode. Must be unique. The web interface will ensure that this is unique but if you're not using nodiaq you have to ensure this yourself. |
 | user | The user who created the mode. |
 | description | A human readable description of the mode (like a sentence) to be displayed on the frontend |
-| detector | Which detector does this mode apply to. For XENONnT we use 'tpc', 'muon_veto', 'neutron_veto', or for modes that are meant to be included by top-level modes, 'include'|
+| detector | Which detector does this mode apply to. For XENONnT we use 'tpc', 'muon_veto', 'neutron_veto', or for modes that are meant to be included by top-level modes, 'include'. This could even be a list for configs intended for linked mode. |
 
 Note that only 'name' is actually used by redax. The other options are used by the web frontend and only included here for completion.
 
 ## The 'includes' field
 
-Sometimes we re-use configuration between many run modes. For example, the electronics are defined once and, provided the 
-physical cabling doesn't change, this definition is valid for all run modes for the entire experiment. So it doesn't make 
-sense to copy-paste this definition into each and every mode document. This is where 'includes' come in.
+Sometimes we re-use configuration between many run modes.
+For example, the electronics are defined once and, provided the physical cabling doesn't change, this definition is valid for all run modes for the entire experiment.
+So it doesn't make sense to copy-paste this definition into each and every mode document.
+This is where 'includes' come in.
 
-Include documents are given detector 'include', which is simply to ensure they don't appear in the mode list for a shifter 
-trying to start a run for that detector, since they are by definition incomplete. They can then be included by appending the 
-name of the include document to the 'includes' field of the parent doc. 
+Include documents are given detector 'include', which is simply to ensure they don't appear in the mode list for a shifter trying to start a run for that detector, since they are by definition incomplete.
+They can then be included by appending the name of the include document to the 'includes' field of the parent doc. 
 
 For example the document 'background_stable' might look like:
 ```python
@@ -53,10 +54,10 @@ For example the document 'background_stable' might look like:
 }
 ```
 
-This will then include within this run mode all options found in each options document named in the 'include' array. In case 
-of repeated options, the highest level document should override the others. However *it is highly recommended to not override 
-options declared in included documents!* This may lead to undefined behavior, especially in case of complex, nested 
-sub-objects where only certain fields get overridden.
+This will then include within this run mode all options found in each options document named in the 'include' array.
+In case of repeated options, the highest level document should override the others.
+However *it is highly recommended to not override options declared in included documents!*
+This may lead to undefined behavior, especially in case of complex, nested sub-objects where only certain fields get overridden.
 
 ## Electronics Definitions
 
@@ -118,7 +119,7 @@ setup given in the [previous chapter](installation.md). Each subdocument contain
 |link |Defines the optical link index this board is connected to. This is simple in case of one optical link, though like plugging in USB-A there's always a 50-50 chance to guesss it backwards. It becomes a bit more complicated when you include multiple A3818s on one server. There's a good diagram in CAEN's A3818 documentation. |
 |host |This is the DAQ name of the process that should control the board. Multiple processes cannot share one optical link (but one process can control one optical link). |
 |type |Either V1724, V1724_MV, or V1730 for digitizers, V2718 for crate controllers, or V1495 for the FGPA. If more board types are supported they will be added. |
-Note that the "crate" and "link" fields for the V1495 don't have meaning and can take any value.
+Note that the "crate" and "link" fields for the V1495 don't have meaning and can take any value, but its host should match that of the V2718.
 
 ## Register Definitions
 
