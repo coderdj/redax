@@ -55,18 +55,26 @@ struct HEVOptions{
 
 };
 
+struct fax_options_t {
+  int tpc_size;
+  double rate;
+  double drift_speed;
+  double e_absorbtion_length;
+};
+
 class MongoLog;
 
 class Options{
 
 public:
-  Options(MongoLog*, std::string, std::string, std::string, std::string, std::string);
+  Options(std::shared_ptr<MongoLog>&, std::string, std::string, std::string, std::string, std::string);
   ~Options();
 
   int GetInt(std::string, int=-1);
   long int GetLongInt(std::string, long int=-1);
   double GetDouble(std::string, double=-1);
   std::string GetString(std::string, std::string="");
+  std::string Hostname() {return fHostname;}
 
   std::vector<BoardType> GetBoards(std::string);
   std::vector<RegisterType> GetRegisters(int, bool=false);
@@ -76,6 +84,7 @@ public:
   int16_t GetChannel(int, int);
   int GetNestedInt(std::string, int);
   std::vector<uint16_t> GetThresholds(int);
+  int GetFaxOptions(fax_options_t&);
 
   void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
   void SaveBenchmarks(std::map<std::string, std::map<int, long>>&, long, std::string,
@@ -87,7 +96,7 @@ private:
   mongocxx::client fClient;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
-  MongoLog *fLog;
+  std::shared_ptr<MongoLog> fLog;
   mongocxx::collection fDAC_collection;
   std::string fDBname;
   std::string fHostname;

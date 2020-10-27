@@ -2,18 +2,9 @@
 #include "MongoLog.hh"
 #include <CAENVMElib.h>
 
-V2718::V2718(MongoLog *log){
+V2718::V2718(std::shared_ptr<MongoLog>& log, CrateOptions c_opts, int link, int crate){
   fLog = log;
-  fBoardHandle=fLink=fCrate=-1;
-  fCopts.s_in = fCopts.neutron_veto = fCopts.muon_veto = -1;
-  fCopts.led_trigger = fCopts.pulser_freq = -1;
-}
-
-
-V2718::~V2718(){
-}
-
-int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
+  fBoardHandle=-1;
 
   fCrate = crate;
   fLink = link;
@@ -23,10 +14,12 @@ int V2718::CrateInit(CrateOptions c_opts, int link, int crate){
   int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
   if(a != cvSuccess){
     fLog->Entry(MongoLog::Error, "Failed to init V2718 with CAEN error: %i", a);
-    return -1;
+    throw std::runtime_error("Could not init CC");
   }
   SendStopSignal(false);
-  return 0;
+}
+
+V2718::~V2718(){
 }
 
 int V2718::SendStartSignal(){
@@ -97,7 +90,6 @@ int V2718::SendStartSignal(){
   }
   return 0;
 }
-
 
 int V2718::SendStopSignal(bool end){
 

@@ -12,7 +12,7 @@
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/exception/exception.hpp>
 
-Options::Options(MongoLog *log, std::string options_name, std::string hostname,
+Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::string hostname,
           std::string suri, std::string dbname, std::string override_opts) : 
     fLog(log), fDBname(dbname), fHostname(hostname) {
   bson_value = NULL;
@@ -179,7 +179,6 @@ std::string Options::GetString(std::string path, std::string default_value){
     fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
     return default_value;
   }
-  return "";
 }
 
 std::vector<BoardType> Options::GetBoards(std::string type){
@@ -188,7 +187,7 @@ std::vector<BoardType> Options::GetBoards(std::string type){
 
   std::vector <std::string> types;
   if(type == "V17XX")
-    types = {"V1724", "V1730", "V1724_MV"};
+    types = {"V1724", "V1730", "V1724_MV", "f1724"};
   else
     types.push_back(type);
   
@@ -311,6 +310,20 @@ int Options::GetHEVOpt(HEVOptions &ret){
   return 0;
 }
 
+int Options::GetFaxOptions(fax_options_t& opts) {
+  try {
+    auto doc = bson_options["fax_options"];
+    opts.rate = doc["rate"].get_double().value;
+    opts.tpc_size = doc["tpc_size"].get_int32().value;
+    opts.drift_speed = doc["drift_speed"].get_double().value;
+    opts.e_absorbtion_length = doc["e_absorbtion_length"].get_double().value;
+  } catch (std::exception& e) {
+    fLog->Entry(MongoLog::Warning, "Error getting fax options: %s", e.what());
+    return -1;
+  }
+  return 0;
+}
+
 int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs,
                     std::vector<int>& bids) {
   board_dacs.clear();
@@ -382,25 +395,21 @@ void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>
   return;
 }
 
-void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counters, long bytes,
-    std::string sid, std::map<std::string, double>& times) {
+void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counters,
+    long bytes, std::string sid, std::map<std::string, double>& times) {
   using namespace bsoncxx::builder::stream;
-  int level = GetInt("benchmark_level", 2);
+  int level = GetInt("benchmark_level", 1);
   if (level == 0) return;
-  int run_id = -1;
-  try{
-    run_id = std::stoi(GetString("run_identifier", "latest"));
-  } catch (...) {
-  }
+  int run_id = GetInt("number", -1);
   std::map<std::string, std::map<int, long>> _counters;
-  if (level == 2) {
+  if (level == 1) {
     for (const auto& p : counters)
       for (const auto& pp : p.second)
         if (pp.first != 0)
-          _counters[p.first][int(std::floor(std::log2(pp.first)))] += pp.second;
+          _counters[p.first][int(std::log2(pp.first))] += pp.second;
         else
           _counters[p.first][-1] += pp.second;
-  } else if (level == 3) {
+  } else if (level == 2) {
     _counters = counters;
   }
 
@@ -413,7 +422,7 @@ void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counter
   update_doc << "bytes" << bytes;
   for (auto& p : times)
     update_doc << p.first << p.second;
-  if (level >= 2) {
+  if (level >= 1) {
     for (auto& p : _counters) {
       update_doc << p.first << open_document;
       for (auto& pp : p.second)

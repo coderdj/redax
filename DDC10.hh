@@ -3,8 +3,6 @@
 
 #include "Options.hh"
 
-using namespace std;
-
 class DDC10{
 
 public:

@@ -5,9 +5,10 @@
 #include <mongocxx/database.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 
-MongoLog::MongoLog(int DeleteAfterDays, std::string log_dir){
+MongoLog::MongoLog(int DeleteAfterDays, std::string log_dir, std::string connection_uri,
+    std::string db, std::string collection, std::string host){
   fLogLevel = 0;
-  fHostname = "_host_not_set";
+  fHostname = host;
   fDeleteAfterDays = DeleteAfterDays;
   fFlushPeriod = 5; // seconds
   fOutputDir = log_dir;
@@ -15,7 +16,21 @@ MongoLog::MongoLog(int DeleteAfterDays, std::string log_dir){
   std::cout<<"Configured WITH local file logging to " << log_dir << std::endl;
   fFlush = true;
   fFlushThread = std::thread(&MongoLog::Flusher, this);
-  fRunId = "none";
+  fRunId = -1;
+
+  try{
+    mongocxx::uri uri{connection_uri};
+    fMongoClient = mongocxx::client(uri);
+    fMongoCollection = fMongoClient[db][collection];
+  }
+  catch(const std::exception &e){
+    std::cout<<"Couldn't initialize the log. So gonna fail then."<<std::endl;
+    throw std::runtime_error("Couldn't initialize the log");
+  }
+
+  RotateLogFile();
+
+  fLogLevel = 1;
 }
 
 MongoLog::~MongoLog(){
@@ -72,40 +87,13 @@ int MongoLog::RotateLogFile() {
     }
     last_week.tm_mday += days_per_month[last_week.tm_mon]; // off by one error???
   }
-  std::experimental::filesystem::path p = LogFileName(&last_week);
+  std::experimental::filesystem::path p = fOutputDir/LogFileName(&last_week);
   if (std::experimental::filesystem::exists(p)) {
     fOutfile << FormatTime(&today) << " [INIT]: Deleting " << p << '\n';
     std::experimental::filesystem::remove(p);
-  }
-  else {
+  } else {
     fOutfile << FormatTime(&today) << " [INIT]: No older logfile to delete :(\n";
   }
-  return 0;
-}
-
-int  MongoLog::Initialize(std::string connection_string,
-			  std::string db, std::string collection,
-			  std::string host,
-			  bool debug){
-  try{
-    mongocxx::uri uri{connection_string};
-    fMongoClient = mongocxx::client(uri);
-    fMongoCollection = fMongoClient[db][collection];
-  }
-  catch(const std::exception &e){
-    std::cout<<"Couldn't initialize the log. So gonna fail then."<<std::endl;
-    return -1;
-  }
-
-  fHostname = host;
-  RotateLogFile();
-
-  if(debug)
-    fLogLevel = 1;
-  else
-    fLogLevel = 0;
-  RotateLogFile();
-
   return 0;
 }
 

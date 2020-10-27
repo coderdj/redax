@@ -24,15 +24,15 @@ using namespace std;
 class V1495{
 
 public:
-      V1495(MongoLog *log, Options *options, int bid, int handle, unsigned int address);
-      virtual ~V1495();	
+      V1495(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, unsigned);
+      virtual ~V1495();
       int WriteReg(unsigned int reg, unsigned int value);
 
 private:
       int fBoardHandle, fBID;
       unsigned int fBaseAddress;
-      Options *fOptions;
-      MongoLog *fLog;
+      std::shared_ptr<Options> fOptions;
+      std::shared_ptr<MongoLog> fLog;
 
 };
 #endif

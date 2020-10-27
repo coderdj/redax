@@ -257,9 +257,34 @@ class MongoConnect():
 
 
     def GetWantedState(self):
-        # Pull the wanted state per detector from the DB and return a dict
+        # Aggregate the wanted state per detector from the DB and return a dict
         try:
-            for doc in self.collections['incoming_commands'].find():
+            for doc in self.collections['incoming_commands'].aggregate([
+                {'$sort': {'_id': -1}},
+                {'$group': {
+                    '_id': {'$concat': ['$detector', '.', '$field']},
+                    'value': {'$first': '$value'},
+                    'user': {'$first': '$user'},
+                    'time': {'$first': '$time'},
+                    'detector': {'$first': '$detector'},
+                    'key': {'$first': '$field'}
+                    }},
+                {'$group': {
+                    '_id': '$detector',
+                    'keys': {'$push': '$key'},
+                    'values': {'$push': '$value'},
+                    'users': {'$push': '$user'},
+                    'times': {'$push': '$time'}
+                    }},
+                {'$project': {
+                    'detector': '$_id',
+                    '_id': 0,
+                    'state': {'$arrayToObject': {'$zip': {'inputs': ['$keys', '$values']}}},
+                    'user': {'$arrayElemAt': ['$users', {'$indexOfArray': ['$times', {'$max': '$times'}]}]}
+                    }}
+                ]):
+                doc.update(doc['state'])
+                del doc['state']
                 self.latest_settings[doc['detector']]=doc
             return self.latest_settings
         except:
@@ -303,8 +328,6 @@ class MongoConnect():
                             del incdoc[field]
                     newdoc.update(incdoc)
             return newdoc
-        except NotMasterError:
-            self.log.error('Database snafu')
         except Exception as E:
             # LOG ERROR
             self.log.error("Got a %s exception in doc pulling: %s" % (type(E), E))
@@ -392,7 +415,7 @@ class MongoConnect():
                 "user": user,
                 "detector": detector,
                 "mode": mode,
-                "options_override": {"run_identifier": n_id},
+                "options_override": {"number": number},
                 "number": number,
                 "createdAt": datetime.datetime.utcnow()
             }

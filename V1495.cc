@@ -10,7 +10,7 @@
 #include "MongoLog.hh"
 
 
-V1495::V1495(MongoLog  *log, Options *options, int bid, int handle, unsigned int address){
+V1495::V1495(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& options, int bid, int handle, unsigned int address){
 	fOptions = options;
 	fLog = log;
 	fBID = bid;

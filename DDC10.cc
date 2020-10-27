@@ -41,12 +41,12 @@ int DDC10::Initialize(HEVOptions d_opts)
 		exp_glob, "Network is unreachable", connection_failed,
                 exp_end)) {
 	case connection_failed:
-		cout << endl << "DDC10: connection failed" << endl;
+		std::cout << std::endl << "DDC10: connection failed" << std::endl;
 		return 1;	
         case prompt:
                 break;
         case EXP_TIMEOUT:
-                cout << "DDC10: Timeout,  may be invalid host" << endl;
+                std::cout << "DDC10: Timeout,  may be invalid host" << std::endl;
                 return 1;
         }
 
@@ -58,10 +58,10 @@ int DDC10::Initialize(HEVOptions d_opts)
         case prompt:
                 break;
         case permission_denied:
-                cout << endl << "DDC10: Permission denied" << endl;
+                std::cout << std::endl << "DDC10: Permission denied" << std::endl;
                 return 1;
         case EXP_TIMEOUT:
-                cout << "DDC10: Timeout,  may be invalid host" << endl;
+                std::cout << "DDC10: Timeout,  may be invalid host" << std::endl;
                 return 1;
         }
 
@@ -116,22 +116,22 @@ int DDC10::Initialize(HEVOptions d_opts)
                 exp_glob, "initialization done", prompt, // third case
                 exp_end)) {
         case command_not_found:
-                cout << endl << "DDC10: unknown command" << endl;
+                std::cout << std::endl << "DDC10: unknown command" << std::endl;
                 success = false;
                 break;
         case usage:
                 success = false;
-                cout << endl << "DDC10: wrong usage of \"Initialize\"" << endl;
+                std::cout << std::endl << "DDC10: wrong usage of \"Initialize\"" << std::endl;
                 break;
         case EXP_TIMEOUT:
 		success = false;
-                cout << "DDC10: Login timeout" << endl;
+                std::cout << "DDC10: Login timeout" << std::endl;
                 break;
         case prompt:
 		break;
         default:
 		success = false;
-		cout << endl << "DDC10: unknown error" << endl;
+		std::cout << std::endl << "DDC10: unknown error" << std::endl;
 		break;
 	}
 

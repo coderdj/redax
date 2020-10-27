@@ -5,6 +5,9 @@
 #include <vector>
 #include <map>
 #include <chrono>
+#include <memory>
+#include <atomic>
+#include <tuple>
 
 class MongoLog;
 class Options;
@@ -13,22 +16,28 @@ class data_packet;
 class V1724{
 
  public:
-  V1724(MongoLog *log, Options *options);
+  V1724(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, int, unsigned=0);
   virtual ~V1724();
 
-  virtual int Init(int link, int crate, int bid, unsigned int address=0);
-  virtual int ReadMBLT(u_int32_t* &buffer);
+  virtual int Read(std::unique_ptr<data_packet>&);
   virtual int WriteRegister(unsigned int reg, unsigned int value);
   virtual unsigned int ReadRegister(unsigned int reg);
-  virtual int GetClockCounter(u_int32_t timestamp);
   virtual int End();
 
   int bid() {return fBID;}
+  uint16_t SampleWidth() {return fSampleWidth;}
+  int GetClockWidth() {return fClockCycle;}
+  int16_t GetADChannel() {return fArtificialDeadtimeChannel;}
 
-  virtual int LoadDAC(std::vector<u_int16_t> &dac_values);
-  void ClampDACValues(std::vector<u_int16_t>&, std::map<std::string, std::vector<double>>&);
+  virtual int LoadDAC(std::vector<uint16_t>&);
+  void ClampDACValues(std::vector<uint16_t>&, std::map<std::string, std::vector<double>>&);
   unsigned GetNumChannels() {return fNChannels;}
-  int SetThresholds(std::vector<u_int16_t> vals);
+  int SetThresholds(std::vector<uint16_t> vals);
+
+  virtual std::tuple<int, int, bool, uint32_t> UnpackEventHeader(std::u32string_view);
+  virtual std::tuple<int64_t, int, uint16_t, std::u32string_view> UnpackChannelHeader(std::u32string_view, long, uint32_t, uint32_t, int, int);
+
+  bool CheckFail(bool val=false) {bool ret = fError; fError = val; return ret;}
 
   // Acquisition Control
 
@@ -41,10 +50,8 @@ class V1724{
   virtual bool EnsureStarted(int ntries, int sleep);
   virtual bool EnsureStopped(int ntries, int sleep);
   virtual int CheckErrors();
-  virtual u_int32_t GetAcquisitionStatus();
-  u_int32_t GetHeaderTime(u_int32_t *buff, u_int32_t size);
-
-  std::map<std::string, int> DataFormatDefinition;
+  virtual uint32_t GetAcquisitionStatus();
+  virtual int ResetClocks();
 
 protected:
   // Some values for base classes to override 
@@ -52,6 +59,7 @@ protected:
   unsigned int fAqStatusRegister;
   unsigned int fSwTrigRegister;
   unsigned int fResetRegister;
+  unsigned int fClearRegister;
   unsigned int fChStatusRegister;
   unsigned int fChDACRegister;
   unsigned int fChTrigRegister;
@@ -66,22 +74,26 @@ protected:
   int BLT_SIZE;
   std::map<int, long> fBLTCounter;
 
-  bool MonitorRegister(u_int32_t reg, u_int32_t mask, int ntries, int sleep, u_int32_t val=1);
-  Options *fOptions;
+  virtual int Init(int, int, std::shared_ptr<Options>&);
+  bool MonitorRegister(uint32_t reg, uint32_t mask, int ntries, int sleep, uint32_t val=1);
+  virtual std::tuple<uint32_t, long> GetClockInfo(std::u32string_view);
+  virtual int GetClockCounter(uint32_t);
   int fBoardHandle;
-  int fLink, fCrate, fBID;
+  int fBID;
   unsigned int fBaseAddress;
 
   // Stuff for clock reset tracking
-  u_int32_t fRolloverCounter;
-  u_int32_t fLastClock;
+  int fRolloverCounter;
+  uint32_t fLastClock;
   std::chrono::high_resolution_clock::time_point fLastClockTime;
   std::chrono::nanoseconds fClockPeriod;
 
-  MongoLog *fLog;
+  std::shared_ptr<MongoLog> fLog;
+  std::atomic_bool fError;
 
   float fBLTSafety, fBufferSafety;
-
+  int fSampleWidth, fClockCycle;
+  int16_t fArtificialDeadtimeChannel;
 };
 
 

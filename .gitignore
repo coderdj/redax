@@ -6,9 +6,8 @@
 *.swp
 *~
 
-# executables
-main
-ccontrol
+# executable
+redax
 
 # DAQ logs
 *.log

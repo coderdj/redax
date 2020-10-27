@@ -51,9 +51,9 @@ class MongoLog{
   /*
     Logging class that writes to MongoDB
   */
-  
+
 public:
-  MongoLog(int DeleteAfterDays=7, std::string log_dir="./");
+  MongoLog(int DeleteAfterDays, std::string log_dir, std::string, std::string, std::string, std::string);
   ~MongoLog();
   
   int  Initialize(std::string connection_string,
@@ -68,7 +68,7 @@ public:
   const static int Local   = -1; // Write to local (file) log only
 
   int Entry(int priority,std::string message, ...);
-  void SetRunId(const std::string& runid) {fRunId = runid;}
+  void SetRunId(const int runid) {fRunId = runid;}
 
 private:
   void Flusher();
@@ -90,7 +90,7 @@ private:
   std::thread fFlushThread;
   std::atomic_bool fFlush;
   int fFlushPeriod;
-  std::string fRunId;
+  int fRunId;
 };
 
 #endif

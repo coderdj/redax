@@ -5,6 +5,7 @@
 * [Installation](installation.md) 
 * [Options reference](daq_options.md) 
 * [Example operation](how_to_run.md)
+* [Waveform simulator](fax.md)
 
 # Examples of Running the Program
 
@@ -16,7 +17,7 @@ Note: this is going to be a minor pain in the neck. This software is designed to
 
 ## 1. Create and insert an options file
 
-Refer to the example script helpers/set_run_mode.py
+Refer to the example script helpers/set_run_mode.py. These settings are unlikely to cause crashes, but also unlikely to be exactly what you want. This is provided as an example, it is not a "complete" options doc.
 
 ```python
 from pymongo import MongoClient
@@ -133,6 +134,7 @@ idoc = {
         "comment" : "",
         "link_mv" : "false",
         "link_nv" : "false",
+        "remote": "false"
 } 
 collection.insert(idoc)
 ```
@@ -145,10 +147,11 @@ Stop the run by updating the document. Either in a python script or just in shel
 
 ```javascript
 use daq_db_name
-db.detector_control.update({"detector": "my_detector"}, {"$set": {"active": false}})
+db.detector_control.update({detector: "my_detector"}, {$set: {active: "false"}})
 ```
 The daq should cease acquisition in window (2) and go idle. You can also update the mode to a different mode (if you defined one) or change 'stop_after'.
 
-## 5. Just for fun, check you runs DB
+## 5. Just for fun, check your runs DB
 
 You must have defined a runs DB in your dispatcher settings. Have a look at the run collection and make sure you see entries for the data that was just taken.
+
