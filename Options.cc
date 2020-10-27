@@ -131,8 +131,18 @@ double Options::GetDouble(std::string path, double default_value) {
   try{
     return bson_options[path].get_double();
   } catch (const std::exception& e) {
-    fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
-    return default_value;
+    // maybe it's actually a long?
+    try{
+      return bson_options[path].get_int64();
+    }catch(const std::exception& ee) {
+      // an integer???
+      try{
+        return bson_options[path].get_int32();
+      }catch(const std::exception& eee) {
+        fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
+        return default_value;
+      }
+    }
   }
 }
 
@@ -142,7 +152,6 @@ int Options::GetInt(std::string path, int default_value){
     return bson_options[path].get_int32();
   }
   catch (const std::exception &e){
-    //LOG
     fLog->Entry(MongoLog::Local, "Using default value for %s", path.c_str());
     return default_value;
   }

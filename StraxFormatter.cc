@@ -36,12 +36,13 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
   fFullChunkLength = fChunkLength+fChunkOverlap;
   fHostname = fOptions->Hostname();
   std::string run_name;
+  const int run_name_length = 6;
   int run_num = fOptions->GetInt("number", -1);
   if (run_num == -1) run_name = "run";
   else {
     run_name = std::to_string(run_num);
-    // chunk names are 6 digits long
-    if (run_name.size() < 6) run_name.insert(0, 6 - run_name.size(), int('0'));
+    if (run_name.size() < run_name_length)
+      run_name.insert(0, run_name_length - run_name.size(), int('0'));
   }
 
   fEmptyVerified = 0;

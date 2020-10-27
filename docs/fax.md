@@ -5,6 +5,7 @@
 * [Installation](installation.md) 
 * [Options reference](daq_options.md) 
 * [Example operation](how_to_run.md)
+* [Extending redax](new_digi.md)
 * [Waveform simulator](fax.md)
 
 # Hardware-free DAQ
