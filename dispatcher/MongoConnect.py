@@ -328,8 +328,6 @@ class MongoConnect():
                             del incdoc[field]
                     newdoc.update(incdoc)
             return newdoc
-        except NotMasterError:
-            self.log.error('Database snafu')
         except Exception as E:
             # LOG ERROR
             self.log.error("Got a %s exception in doc pulling: %s" % (type(E), E))
