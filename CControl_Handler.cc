@@ -144,7 +144,8 @@ int CControl_Handler::Stop(){
 void CControl_Handler::StatusUpdate(mongocxx::collection* collection){
   bsoncxx::builder::stream::document builder{};
   builder << "host" << fHostname << "status" << fStatus <<
-    "time" << bsoncxx::types::b_date(std::chrono::system_clock::now());
+    "time" << bsoncxx::types::b_date(std::chrono::system_clock::now()) <<
+    "mode" << (fOptions ? fOptions->GetString("name", "none") : "none");
   auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
 
   if(fV2718){
