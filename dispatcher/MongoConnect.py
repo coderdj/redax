@@ -150,7 +150,6 @@ class MongoConnect():
         for detector in self.latest_status.keys():
             doc = {
                 "status": self.latest_status[detector]['status'].value,
-                "number": -1,
                 "detector": detector,
                 "rate": self.latest_status[detector]['rate'],
                 "readers": len(self.latest_status[detector]['readers'].keys()),
@@ -181,9 +180,10 @@ class MongoConnect():
         #  - If any single node reports error then the whole thing is in error
         #  - If any single node times out then the whole thing is in timeout
 
-        whattimeisit = datetime.datetime.utcnow()
+        now = time.time()
         for detector in self.latest_status.keys():
             status_list = []
+            report_times = {}
             status = None
             rate = 0
             mode = None
@@ -194,7 +194,7 @@ class MongoConnect():
                 except:
                     pass
                 try:
-                    buff += doc['buffer'] + doc['strax_buffer']
+                    buff += doc['buffer_size']
                 except:
                     pass
 
@@ -210,8 +210,9 @@ class MongoConnect():
 
                 # Now check if this guy is timing out
                 try:
-                    if "time" in doc.keys() and (whattimeisit - doc['time']).seconds > self.timeout:
+                    if (now - int(str(doc['_id'])[:8], 16)) > self.timeout:
                         status = STATUS.TIMEOUT
+                    report_times[doc['host']] = now - int(str(doc['_id'])[:8], 16)
                 except:
                     status = STATUS.UNKNOWN
 
@@ -225,11 +226,13 @@ class MongoConnect():
                 except KeyError:
                     status = STATUS.UNKNOWN
                 try:
-                    if "time" in doc.keys() and (whattimeisit - doc['time']).seconds > self.timeout:
+                    if (now - int(str(doc['_id'])[:8], 16)) > self.timeout:
                         status = STATUS.TIMEOUT
+                    report_times[doc['host']] = now - int(str(doc['_id'])[:8], 16)
                 except:
                     status = STATUS.UNKNOWN
                 status_list.append(status)
+                mode = doc.get('mode', 'none')
 
             # Now we aggregate the statuses
             for stat in ['ARMING','ERROR','TIMEOUT','UNKNOWN']:
@@ -254,6 +257,8 @@ class MongoConnect():
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
             self.latest_status[detector]['buffer'] = buff
+            if status == STATUS.TIMEOUT:
+                self.log.info(report_times)
 
 
     def GetWantedState(self):
