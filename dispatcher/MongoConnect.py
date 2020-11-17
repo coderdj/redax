@@ -181,55 +181,53 @@ class MongoConnect():
         #  - If any single node reports error then the whole thing is in error
         #  - If any single node times out then the whole thing is in timeout
 
-        whattimeisit = datetime.datetime.utcnow()
+        now = self.collections['outgoing_commands'].find_one_and_update(
+                {'host' : 'dispatcher'},
+                {'$currentDate': {'createdAt': True}},
+                upsert=True, return_document=True)['createdAt']
         for detector in self.latest_status.keys():
-            status_list = []
+            statuses = {}
             status = None
+            mode = 'none'
             rate = 0
-            mode = None
             buff = 0
+            run_num = -1
             for doc in self.latest_status[detector]['readers'].values():
                 try:
                     rate += doc['rate']
                 except:
                     pass
                 try:
-                    buff += doc['buffer'] + doc['strax_buffer']
+                    buff += doc['buffer_size']
                 except:
                     pass
 
-                if mode is None and 'mode' in doc.keys():
-                    mode = doc['mode']
-                elif 'mode' in doc.keys() and doc['mode'] != mode:
-                    mode = 'undefined'
-
                 try:
                     status = STATUS(doc['status'])
-                except KeyError:
-                    status = STATUS.UNKNOWN
-
-                # Now check if this guy is timing out
-                try:
-                    if "time" in doc.keys() and (whattimeisit - doc['time']).seconds > self.timeout:
+                    if (now - doc['time']).seconds > self.timeout:
                         status = STATUS.TIMEOUT
                 except:
                     status = STATUS.UNKNOWN
-
-                status_list.append(status)
+                statuses[doc['host']] = status
 
             # If we have a crate controller check on it too
             for doc in self.latest_status[detector]['controller'].values():
                 # Copy above. I guess it would be possible to have no readers
                 try:
+                    mode = doc['mode']
                     status = STATUS(doc['status'])
-                except KeyError:
-                    status = STATUS.UNKNOWN
-                try:
-                    if "time" in doc.keys() and (whattimeisit - doc['time']).seconds > self.timeout:
+                    run_num = doc['number']
+                    if (now - doc['time']).seconds > self.timeout:
                         status = STATUS.TIMEOUT
                 except:
                     status = STATUS.UNKNOWN
-                status_list.append(status)
+                statuses[doc['host']] = status
+
+            if run_num != -1:  # DAQ is "active"
+                active = self.GetHostsForActive(run_num)
+                status_list = [v for k,v in statuses.items() if k in active]
+            else:
+                status_list = list(statuses.values())
 
             # Now we aggregate the statuses
             for stat in ['ARMING','ERROR','TIMEOUT','UNKNOWN']:
@@ -323,6 +321,9 @@ class MongoConnect():
             if "includes" in doc.keys():
                 for i in doc['includes']:
                     incdoc = self.collections["options"].find_one({"name": i})
+                    if incdoc is None:
+                        self.LogError("Is %s a valid config? Subconfig %i doesn't seem to exist" % (mode, i), "ERROR", "arm")
+                        continue
                     for field in fields_to_exclude:
                         if field in incdoc:
                             del incdoc[field]
@@ -332,6 +333,20 @@ class MongoConnect():
             # LOG ERROR
             self.log.error("Got a %s exception in doc pulling: %s" % (type(E), E))
         return None
+
+    def GetHostsForActive(self, number):
+        '''
+        Get the hosts that should be active for the numbered run (assumed to be
+        the current run)
+        '''
+        doc = self.collections[''].find_one({'number': number},{'daq_config.boards' : 1})
+        if doc is None:
+            return []
+        boards = []
+        for bd in doc['daq_config']['boards']:
+            if bd['host'] not in boards:
+                boards.append(bd['host'])
+        return boards
 
     def GetHostsForMode(self, mode):
         '''
@@ -349,13 +364,13 @@ class MongoConnect():
         for b in doc['boards']:
             if 'V17' in b['type'] and b['host'] not in hostlist:
                 hostlist.append(b['host'])
-            elif b['type'] == 'V2718':
+            elif b['type'] == 'V2718' and b['host'] not in cc:
                 cc.append(b['host'])
         return hostlist, cc
 
     def GetNextRunNumber(self):
         try:
-            cursor = self.collections["run"].find().sort("number", -1).limit(1)
+            cursor = self.collections["run"].find({},{'number': 1}).sort("number", -1).limit(1)
         except:
             self.log.error('Database is having a moment?')
             return -1
@@ -393,7 +408,7 @@ class MongoConnect():
                  '_id' : self.command_oid[detector][command]}
         doc = self.collections['outgoing_commands'].find_one(query)
         if doc is not None:
-            return datetime.datetime.utcfromtimestamp(doc['acknowledged'][cc]/1000)
+            return doc['acknowledged'][cc]
         self.log.debug('No ACK time for %s-%s' % (detector, command))
         return None
 
@@ -416,7 +431,6 @@ class MongoConnect():
                 "detector": detector,
                 "mode": mode,
                 "options_override": {"number": number},
-                "number": number,
                 "createdAt": datetime.datetime.utcnow()
             }
             if delay == 0:
@@ -459,7 +473,7 @@ class MongoConnect():
             self.event.wait(dt)
             self.event.clear()
 
-    def LogError(self, reporter, message, priority, etype):
+    def LogError(self, message, priority, etype):
 
         # Note that etype allows you to define timeouts.
         nowtime = datetime.datetime.utcnow()
@@ -471,13 +485,13 @@ class MongoConnect():
         self.error_sent[etype] = nowtime
         try:
             self.collections['log'].insert({
-                "user": reporter,
+                "user": "dispatcher",
                 "message": message,
                 "priority": self.loglevels[priority]
             })
         except:
             self.log.error('Database error, can\'t issue error message')
-        self.log.info("Error message from %s: %s" % (reporter, message))
+        self.log.info("Error message from dispatcher: %s" % (message))
         return
 
     def GetRunStart(self, number):

@@ -144,24 +144,20 @@ int main(int argc, char** argv){
     controller = std::make_unique<DAQController>(fLog, hostname);
   std::thread status_update(&UpdateStatus, suri, dbname, std::ref(controller));
 
+  using namespace bsoncxx::builder::stream;
   // Sort oldest to newest
-  auto order = bsoncxx::builder::stream::document{} <<
-    "_id" << 1 <<bsoncxx::builder::stream::finalize;
+  auto order = document{} << "_id" << 1 << finalize;
   auto opts = mongocxx::options::find{};
   opts.sort(order.view());
+  auto query = document{} << "host" << hostname << "acknowledged." + hostname <<
+    open_document << "$exists" << 0 << close_document << finalize;
   using namespace std::chrono;
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
   while(b_run == true){
     // Try to poll for commands
-    bsoncxx::stdx::optional<bsoncxx::document::value> querydoc;
     try{
-      mongocxx::cursor cursor = control.find(
-	 bsoncxx::builder::stream::document{} << "host" << hostname << "acknowledged." + hostname <<
-	 bsoncxx::builder::stream::open_document << "$exists" << 0 <<
-	 bsoncxx::builder::stream::close_document << 
-	 bsoncxx::builder::stream::finalize, opts
-	 );
+      mongocxx::cursor cursor = control.find(query.view(), opts);
 
       for(auto doc : cursor) {
 	fLog->Entry(MongoLog::Debug, "Found a doc with command %s",
@@ -169,15 +165,10 @@ int main(int argc, char** argv){
 	// Very first thing: acknowledge we've seen the command. If the command
 	// fails then we still acknowledge it because we tried
         auto ack_time = system_clock::now();
-	control.update_one(
-	   bsoncxx::builder::stream::document{} << "_id" << (doc)["_id"].get_oid() <<
-	   bsoncxx::builder::stream::finalize,
-	   bsoncxx::builder::stream::document{} << "$set" <<
-	   bsoncxx::builder::stream::open_document << "acknowledged." + hostname <<
-           (long)duration_cast<milliseconds>(ack_time.time_since_epoch()).count() <<
-	   bsoncxx::builder::stream::close_document <<
-	   bsoncxx::builder::stream::finalize
-	   );
+        auto q = document{} << "_id" << doc["_id"].get_oid() << finalize;
+        auto u = document{} << "$currentDate" << open_document <<
+          "acknowledged."+hostname << true << close_document << finalize;
+	control.update_one(std::move(q), std::move(u));
 
 	// Get the command out of the doc
 	std::string command = "";
