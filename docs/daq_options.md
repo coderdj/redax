@@ -20,7 +20,7 @@ This section provides all settings and their function.
 
 The following fields are required for organizational purposes:
 
-|Field |Description |
+| Field | Description |
 | ---- | ----- |
 | name | The name of this mode. Must be unique. The web interface will ensure that this is unique but if you're not using nodiaq you have to ensure this yourself. |
 | user | The user who created the mode. |
@@ -111,14 +111,14 @@ Electronics are defined in the 'boards' field as follows:
 This is an example that might be used for reading out 3 boards and defining one crate controller with V1495 in the electronics 
 setup given in the [previous chapter](installation.md). Each subdocument contains the following:
 
-|Option |Description |
+| Option | Description |
 | ----- | ---------  |
-|board |A unique identifier for this board. The best thing is to just use the digitizer serial number. |
-|crate |The 'crate' as defined in CAEN lingo. Namely, if multiple boards are connected to one optical link they get crate numbers zero to seven (max) defining their order in the daisy chain. The first board in the daisy chain is zero. The order is defined by the direction of the optical link propagation, which you can deduce by the little lights on the board that light when they receive an input. |
-|vme_address |It is planned to support readout via a V2718 crate controller over the VME backplane. In this case board addressing is via VME address only and crate would refer to the location of the crate controller in the daisy chain. This feature is not yet implemented so the option is placeholder (but must be included). |
-|link |Defines the optical link index this board is connected to. This is simple in case of one optical link, though like plugging in USB-A there's always a 50-50 chance to guesss it backwards. It becomes a bit more complicated when you include multiple A3818s on one server. There's a good diagram in CAEN's A3818 documentation. |
-|host |This is the DAQ name of the process that should control the board. Multiple processes cannot share one optical link (but one process can control one optical link). |
-|type |Either V1724, V1724_MV, or V1730 for digitizers, V2718 for crate controllers, or V1495 for the FGPA. If more board types are supported they will be added. |
+| board | A unique identifier for this board. The best thing is to just use the digitizer serial number. |
+| crate | The 'crate' as defined in CAEN lingo. Namely, if multiple boards are connected to one optical link they get crate numbers zero to seven (max) defining their order in the daisy chain. The first board in the daisy chain is zero. The order is defined by the direction of the optical link propagation, which you can deduce by the little lights on the board that light when they receive an input. |
+| vme_address | It is planned to support readout via a V2718 crate controller over the VME backplane. In this case board addressing is via VME address only and crate would refer to the location of the crate controller in the daisy chain. This feature is not yet implemented so the option is placeholder (but must be included). |
+| link | Defines the optical link index this board is connected to. This is simple in case of one optical link, though like plugging in USB-A there's always a 50-50 chance to guesss it backwards. It becomes a bit more complicated when you include multiple A3818s on one server. There's a good diagram in CAEN's A3818 documentation. |
+| host | This is the DAQ name of the process that should control the board. Multiple processes cannot share one optical link (but one process can control one optical link). |
+| type | Either V1724, V1724_MV, or V1730 for digitizers, V2718 for crate controllers, or V1495 for the FGPA. If more board types are supported they will be added. |
 Note that the "crate" and "link" fields for the V1495 don't have meaning and can take any value, but its host should match that of the V2718.
 
 ## Register Definitions
@@ -203,15 +203,15 @@ Various options that tell redax how to run.
 }
 ```
 
-|Option | Description |
+| Option | Description |
 | -------- | ---------- |
 | run_start | Tells the DAQ whether to start the run via register or S-in. 0 for register, 1 for S-in. Note that starting by register means that the digitizer clocks will not be synchronized. This can be fine if you run with an external trigger and use the trigger time as synchronization signal. If running in triggerless mode you need to run with '1' and have your hardware set up accordingly. |
 | baseline_dac_mode | cached/fixed/fit. This defines how the DAC-offset values per channel are set. If set to "cached" the program will load cached baselines from the run specified in *baseline_reference_run*. If it can't find that run it will fall back to the value in *baseline_fixed_value*. If set to "fixed" it will use *baseline_fixed_value* in any case. If set to 'fit' it will attempt to adjust the DAC offset values until the baseline for each channel matches the value in *baseline_value*. If using negative voltage signals the default value of 16000 is a good one. Baselines for each run are cached in the *dac_values* collection of the daq database. |
-|baseline_reference_run | Int. If 'baseline_dac_mode' is set to 'cached' it will use the values from the run number defined here. |
-|baseline_value | Int. If 'baseline_dac_mode' is set to 'fit' it will attempt to adjust the baselines until they hit the decimal value defined here, which must lie between 0 and 16385 for a 14-bit ADC. Default 16000. |
-|baseline_fixed_value | Int. Use this to set the DAC offset register directly with this value. See CAEN documentation for more details. Default 4000. |
-|processing_threads | Dict. The number of threads working on converting data between CAEN and strax format. Should be larger for processes responsible for more boards and can be smaller for processes only reading a few boards. For example, 24 threads will very easily handle a data flow of 200 MB/s (uncompressed) through that instance, but if you aren't expecting that much data then smaller values are fine. The default value is 8, but not specifying this could cause issues with processing. |
-|detectors | Dict. Which detector a given instance is attached to. Used mainly in aggregating registers. Required |
+| baseline_reference_run | Int. If 'baseline_dac_mode' is set to 'cached' it will use the values from the run number defined here. |
+| baseline_value | Int. If 'baseline_dac_mode' is set to 'fit' it will attempt to adjust the baselines until they hit the decimal value defined here, which must lie between 0 and 16385 for a 14-bit ADC. Default 16000. |
+| baseline_fixed_value | Int. Use this to set the DAC offset register directly with this value. See CAEN documentation for more details. Default 4000. |
+| processing_threads | Dict. The number of threads working on converting data between CAEN and strax format. Should be larger for processes responsible for more boards and can be smaller for processes only reading a few boards. For example, 24 threads will very easily handle a data flow of 200 MB/s (uncompressed) through that instance, but if you aren't expecting that much data then smaller values are fine. The default value is 8, but not specifying this could cause issues with processing. |
+| detectors | Dict. Which detector a given instance is attached to. Used mainly in aggregating registers. Required |
 
 ## Strax Output Options
 
@@ -228,14 +228,14 @@ There are various configuration options for the strax output that must be set.
 }
 ```
 
-|Option | Description |
-| ---- | ---- | 
+| Option | Description |
+| ---- | ---- |
 | strax_chunk_overlap | Float. Defines the overlap period between strax chunks in seconds. Make is at least some few times larger than your typical event length. In any case it should be larger than your largest expected event. Default 0.5. |
 | strax_chunk_length | Float. Length of each strax chunk in seconds. There's some balance required here. It should be short enough that strax can process reasonably online, as it waits for each chunk to finish then loads it at once (the size should be digestable). But it shouldn't be so short that it needlessly micro-segments the data. Order of 5-15 seconds seems reasonable at the time of writing. Default 5. |
-|strax_fragment_payload_bytes | Int. How long are the fragments? In general this should be long enough that it definitely covers the vast majority of your SPE pulses. Our SPE pulses are ~100 samples, so the default value of 220 bytes (2 bytes per sample) provides a small amount of overhead. Undefined behavior if the value is odd, possibly undefined if it isn't a multiple of 4. |
-|strax_output_path | String. Where should we write data? This must be a locally mounted data store. Redax will handle sub-directories so just provide the top-level directory where all the live data should go (e.g. `/data/live`). |
-|strax_buffer_num_chunks | Int. How many full chunks should get buffered? Setting this at 1 or lower may cause data loss, and greater than 2 usually means you need more memory in your readout machine. For instance, if 5 and 6 are buffered, as soon as something in chunk 7 shows up, chunk 5 is dumped to disk. |
-|strax_chunk_phase_limit | Int. Sometimes pulses will show up at the processing stage late (or somehow behind the rest of them). If a pulse is this many chunks behind (or out of phase with) the chunks currently being buffered, log a warning to the database. |
+| strax_fragment_payload_bytes | Int. How long are the fragments? In general this should be long enough that it definitely covers the vast majority of your SPE pulses. Our SPE pulses are ~100 samples, so the default value of 220 bytes (2 bytes per sample) provides a small amount of overhead. Undefined behavior if the value is odd, possibly undefined if it isn't a multiple of 4. |
+| strax_output_path | String. Where should we write data? This must be a locally mounted data store. Redax will handle sub-directories so just provide the top-level directory where all the live data should go (e.g. `/data/live`). |
+| strax_buffer_num_chunks | Int. How many full chunks should get buffered? Setting this at 1 or lower may cause data loss, and greater than 2 usually means you need more memory in your readout machine. For instance, if 5 and 6 are buffered, as soon as something in chunk 7 shows up, chunk 5 is dumped to disk. |
+| strax_chunk_phase_limit | Int. Sometimes pulses will show up at the processing stage late (or somehow behind the rest of them). If a pulse is this many chunks behind (or out of phase with) the chunks currently being buffered, log a warning to the database. |
 
 ## Channel Map
 
@@ -281,7 +281,7 @@ Redax assigns trigger thresholds using a syntax identical to that of the channel
 
 Redax accepts a variety of options that control various low-level operations. The default values should be fine, and really should only be adjusted if you know what's going on or don't mind dealing with strange behavior.
 
-|Option | Description |
+| Option | Description |
 | ---- | ---- |
 | baseline_max_iterations | Int. The maximum number of overall iterations to go through when fitting baselines. Baselining runs until either this number of iterations are completed, or the baselines converge, whichever happens first. Default 2. |
 | baseline_max_steps | Int. The maximum number of steps per iteration during baselining. Steps involve measuring the baseline and trying to adjust it towards the target value. Default 20. |

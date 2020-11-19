@@ -184,7 +184,7 @@ class MongoConnect():
         now = self.collections['outgoing_commands'].find_one_and_update(
                 {'host' : 'dispatcher'},
                 {'$currentDate': {'createdAt': True}},
-                upsert=True, return_document=True)['createdAt']
+                return_document=True)['createdAt']
         for detector in self.latest_status.keys():
             statuses = {}
             status = None

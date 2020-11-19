@@ -10,17 +10,15 @@
 
 # Configuration of Backend Databases
 
-There are two separate databases defined in the DAQ: the DAQ database and the runs database. In principle they could 
-both point to the same deployment, or they could not. This is meant to give flexibility since the DAQ-internal database 
-should *definitely* be installed somewhere local to the system (since outages bring the whole thing down) while the run 
-database should just *probably* be installed local to the system (since temporary outages may go unnoticed). Even if 
-both databases are locally installed, it may make sense to put them in separate deployments because of different replication 
-rules. The runs database should probably be replicated out to remote computing sites for easy access while the DAQ database 
-is fine with a more localized replication strategy, since in the latter case the replication is more to serve backup than 
-availability.
+There are two separate databases defined in the DAQ: the DAQ database and the runs database.
+In principle they could both point to the same deployment, or they could not.
+This is meant to give flexibility since the DAQ-internal database should *definitely* be installed somewhere local to the system (since outages bring the whole thing down) while the run database should just *probably* be installed local to the system (since temporary outages may go unnoticed).
+Even if both databases are locally installed, it may make sense to put them in separate deployments because of different replication rules.
+The runs database should probably be replicated out to remote computing sites for easy access while the DAQ database is fine with a more localized replication strategy, since in the latter case the replication is more to serve backup than availability.
 
-This section will list each collection in each database, explain what it is for, and give the document schema. Note that since this is noSQL you can consider this a 'minimum document schema', as in the code expects these fields to be there but additional 
-fields can be present as well. This is especially pertinent to run documents.
+This section will list each collection in each database, explain what it is for, and give the document schema.
+Note that since this is noSQL you can consider this a 'minimum document schema', as in the code expects these fields to be there but additional fields can be present as well.
+This is especially pertinent to run documents.
 
 ## The DAQ Database
 
