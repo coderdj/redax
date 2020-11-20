@@ -57,7 +57,7 @@ V1724::~V1724(){
   fLog->Entry(MongoLog::Local, msg.str());
   if (headers.size() > 0) {
     std::ofstream fout("headers_" + std::to_string(fBID), std::ios::out | std::ios::binary);
-    fout.write(headers.data(), headers.size() * sizeof(headers[0]));
+    fout.write((char*)headers.data(), headers.size() * sizeof(headers[0]));
     fout.close();
   }
 }
