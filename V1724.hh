@@ -94,6 +94,8 @@ protected:
   float fBLTSafety, fBufferSafety;
   int fSampleWidth, fClockCycle;
   int16_t fArtificialDeadtimeChannel;
+
+  std::vector<uint32_t> headers;
 };
 
 

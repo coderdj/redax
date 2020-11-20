@@ -8,6 +8,7 @@
 #include <sstream>
 #include <list>
 #include <utility>
+#include <fstream>
 
 
 V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int link, int crate, int bid, unsigned address){
@@ -54,6 +55,11 @@ V1724::~V1724(){
   msg << "BLT report for board " << fBID << " (BLT " << BLT_SIZE << ")";
   for (auto p : fBLTCounter) msg << " | " << p.first << " " << int(std::log2(p.second));
   fLog->Entry(MongoLog::Local, msg.str());
+  if (headers.size() > 0) {
+    std::ofstream fout("headers_" + std::to_string(fBID), std::ios::out | std::ios::binary);
+    fout.write(headers.data(), headers.size() * sizeof(headers[0]));
+    fout.close();
+  }
 }
 
 int V1724::Init(int link, int crate, std::shared_ptr<Options>& opts) {
@@ -147,6 +153,7 @@ int V1724::Reset() {
 }
 
 std::tuple<uint32_t, long> V1724::GetClockInfo(std::u32string_view sv) {
+  for (int i=0; i < 6; i++) headers.push_back(sv[i]);
   auto it = sv.begin();
   do {
     if ((*it)>>28 == 0xA) {
