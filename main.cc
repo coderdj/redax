@@ -146,31 +146,22 @@ int main(int argc, char** argv){
 
   using namespace bsoncxx::builder::stream;
   // Sort oldest to newest
-  auto order = document{} << "_id" << 1 << finalize;
-  auto opts = mongocxx::options::find{};
-  opts.sort(order.view());
+  auto opts = mongocxx::options::find_one_and_update{};
+  opts.sort(document{} << "_id" << 1 << finalize);
   auto query = document{} << "host" << hostname << "acknowledged." + hostname <<
     open_document << "$exists" << 0 << close_document << finalize;
+  auto update = document{} << "$currentDate" << open_document <<
+    "acknowledged."+hostname << true << close_document << finalize;
   using namespace std::chrono;
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
   while(b_run == true){
     // Try to poll for commands
     try{
-      mongocxx::cursor cursor = control.find(query.view(), opts);
-
-      for(auto doc : cursor) {
-	fLog->Entry(MongoLog::Debug, "Found a doc with command %s",
-	  doc["command"].get_utf8().value.to_string().c_str());
-	// Very first thing: acknowledge we've seen the command. If the command
-	// fails then we still acknowledge it because we tried
-        auto ack_time = system_clock::now();
-        auto q = document{} << "_id" << doc["_id"].get_oid() << finalize;
-        auto u = document{} << "$currentDate" << open_document <<
-          "acknowledged."+hostname << true << close_document << finalize;
-	control.update_one(std::move(q), std::move(u));
-
+      auto qdoc = control.find_one_and_update(query.view(), update.view(), opts);
+      if (qdoc) {
 	// Get the command out of the doc
+        auto doc = qdoc->view();
 	std::string command = "";
 	std::string user = "";
 	try{
@@ -178,10 +169,11 @@ int main(int argc, char** argv){
 	  user = (doc)["user"].get_utf8().value.to_string();
 	}
 	catch (const std::exception &e){
-	  //LOG
 	  fLog->Entry(MongoLog::Warning, "Received malformed command %s",
 			bsoncxx::to_json(doc).c_str());
 	}
+	fLog->Entry(MongoLog::Debug, "Found a doc with command %s", command.c_str());
+        auto ack_time = system_clock::now();
 
 	// Process commands
 	if(command == "start"){
@@ -204,18 +196,17 @@ int main(int argc, char** argv){
           fLog->Entry(MongoLog::Local, "Ack to stop took %i us",
               duration_cast<microseconds>(now-ack_time).count());
 	} else if(command == "arm"){
-	  // Can only arm if we're in the idle, arming, or armed state
-	  if(controller->status() >= 0 || controller->status() <= 2){
+	  // Can only arm if we're idle
+	  if(controller->status() == 0){
 	    controller->Stop();
 
 	    // Get an override doc from the 'options_override' field if it exists
 	    std::string override_json = "";
 	    try{
-	      bsoncxx::document::view oopts = doc["options_override"].get_document().view();
+	      auto oopts = doc["options_override"].get_document().view();
 	      override_json = bsoncxx::to_json(oopts);
 	    }
 	    catch(const std::exception &e){
-	      fLog->Entry(MongoLog::Debug, "No override options provided, continue without.");
 	    }
 	    // Mongocxx types confusing so passing json strings around
             std::string mode = doc["mode"].get_utf8().value.to_string();
@@ -235,9 +226,8 @@ int main(int argc, char** argv){
 	  else
 	    fLog->Entry(MongoLog::Warning, "Cannot arm DAQ while not 'Idle'");
 	} else if (command == "quit") b_run = false;
-      } // for doc in cursor
-    }
-    catch(const std::exception &e){
+      } // if doc
+    }catch(const std::exception &e){
       std::cout<<e.what()<<std::endl;
       std::cout<<"Can't connect to DB so will continue what I'm doing"<<std::endl;
     }
