@@ -32,6 +32,30 @@ Options::~Options(){
 }
 
 int Options::Load(std::string name, mongocxx::collection& opts_collection,
+    std::string override_opts) {
+  using namespace bsoncxx::builder::stream;
+  auto pl = mongocxx::pipeline();
+  pl.match(document{} << "name" << name << finalize);
+  pl.lookup(document{} << "from" << "options" << "localField" << "includes" <<
+      "foreignField" << "name" << "as" << "subconfig" << finalize);
+  pl.add_fields(document{} << "$concatArrays" << open_array << "$subconfig" <<
+      open_array << "$$ROOT" << close_array << close_array << finalize);
+  pl.unwind("subconfig");
+  pl.group(document{} << "_id" << 0 << "config" << open_document << "$mergeObjects" <<
+      "$subconfig" << close_document << finalize);
+  pl.replace_root(document{} << "newRoot" << "$config" << finalize);
+  pl.project(document{} << "subconfig" << 0 << finalize);
+  if (override_opts != "")
+    pl.add_fields(bsoncxx::from_json(override_opts));
+  for (auto doc : opts_collection.aggregate(pl)) {
+    bson_value = new bsoncxx::document::value(doc);
+    bson_options = bson_value->view();
+    return 0;
+  }
+  return -1;
+}
+
+int Options::Load(std::string name, mongocxx::collection& opts_collection,
 	std::string override_opts){
   // Try to pull doc from DB
   bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
