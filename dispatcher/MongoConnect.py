@@ -309,27 +309,28 @@ class MongoConnect():
         '''
         if mode is None:
             return None
-        try:
-            doc = self.collections["options"].find_one({"name": mode})
-        except:
-            self.log.error('Database snafu')
+        base_doc = self.collections['options'].find_one({'name': mode}, {'includes': 1})
+        if base_doc is None:
+            self.LogError("dispatcher", "Mode '%s' doesn't exist" % mode, "info", "info")
             return None
-        fields_to_exclude = ['name', 'detector', 'description', 'user', '_id']
+        if 'includes' not in base_doc:
+            return base_doc
         try:
-            newdoc = {**dict(doc)}
-            if "includes" in doc.keys():
-                for i in doc['includes']:
-                    incdoc = self.collections["options"].find_one({"name": i})
-                    if incdoc is None:
-                        self.LogError("Is %s a valid config? Subconfig %i doesn't seem to exist" % (mode, i), "ERROR", "arm")
-                        continue
-                    for field in fields_to_exclude:
-                        if field in incdoc:
-                            del incdoc[field]
-                    newdoc.update(incdoc)
-            return newdoc
-        except Exception as E:
-            # LOG ERROR
+            if self.collections['options'].count_documents({'name':
+                {'$in': base_doc['includes']}}) != len(base_doc['includes']):
+                self.LogError("dispatcher", "At least one subconfig for mode '%s' doesn't exist" % mode, "warn", "warn"):
+                return None
+            return list(self.collections["options"].aggregate([
+                {'$match': {'name': mode}},
+                {'$lookup': {'from': 'options', 'localField': 'includes',
+                    'foreignField': 'name', 'as': 'subconfig'}},
+                {'$addFields': {'subconfig': {'$concatArrays': ['$subconfig', ['$$ROOT']]}}},
+                {'$unwind': {'path': '$subconfig'}},
+                {'$group': {'_id': None, 'config': {'$mergeObjects': '$subconfig'}}},
+                {'$replaceWith': '$config'},
+                {'$project': {'_id': 0, 'description': 0, 'includes': 0, 'subconfig': 0}},
+                ]))[0]
+        except Exception as e:
             self.log.error("Got a %s exception in doc pulling: %s" % (type(E), E))
         return None
 

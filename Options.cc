@@ -31,80 +31,34 @@ Options::~Options(){
 }
 
 int Options::Load(std::string name, mongocxx::collection* opts_collection,
-	std::string override_opts){
-  // Try to pull doc from DB
-  bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
-  trydoc = opts_collection->find_one(bsoncxx::builder::stream::document{}<<
-				    "name" << name.c_str() << bsoncxx::builder::stream::finalize);
-  if(!trydoc){
-    fLog->Entry(MongoLog::Warning, "Failed to find your options file '%s' in DB", name.c_str());
-    return -1;
-  }
-  if(bson_value != NULL) {
-    delete bson_value;
-    bson_value = NULL;
-  }
-  bson_value = new bsoncxx::document::value((*trydoc).view());
-  bson_options = bson_value->view();
-
-  // Pull all subdocuments
-  int success = 0;
-  try{
-    bsoncxx::array::view include_array = (*trydoc).view()["includes"].get_array().value;
-    for(bsoncxx::array::element ele : include_array){
-      auto sd = opts_collection->find_one(bsoncxx::builder::stream::document{} <<
-					 "name" << ele.get_utf8().value.to_string() <<
-					 bsoncxx::builder::stream::finalize);
-      if(sd)
-	success += Override(*sd); // include_json.push_back(bsoncxx::to_json(*sd));
-      else
-	fLog->Entry(MongoLog::Warning, "Possible improper run config. Check your options includes");
-    }
-  }catch(...){}; // will catch if there are no includes, for example
-
-  if(override_opts != "")
-    success += Override(bsoncxx::from_json(override_opts));
-
-  if(success!=0){
-    fLog->Entry(MongoLog::Warning, "Failed to override options doc with includes and overrides.");
-    return -1;
-  }
-  try{
-    fDetector = bson_options["detectors"][fHostname].get_utf8().value.to_string();
-  }catch(const std::exception& e){
-    fLog->Entry(MongoLog::Warning, "No detector specified for this host");
-    return -1;
-  }
-
-  return 0;
-}
-
-int Options::Override(bsoncxx::document::view override_opts){
-
-  // Here's the best way I can find to do this. We create a new doc, which
-  // is a concatenation of the two old docs (original first). Then we
-  // use the concatenation object to initialize a 'new' value for the
-  // combined doc and delete the orginal. A new view will point to the new value.
-
-  using bsoncxx::builder::stream::document;
-  using bsoncxx::builder::stream::finalize;    
-
-  // auto doc = document{};
-  bsoncxx::document::value *new_value = new bsoncxx::document::value
-    ( document{}<<bsoncxx::builder::concatenate_doc{bson_options}<<
-      // "override_doc" << bsoncxx::builder::stream::open_document<<
-      bsoncxx::builder::concatenate_doc{override_opts}<<
-      // bsoncxx::builder::stream::close_document<<
+    std::string override_opts) {
+  using namespace bsoncxx::builder::stream;
+  auto pl = mongocxx::pipeline();
+  pl.match(document{} << "name" << name << finalize);
+  pl.lookup(document{} << "from" << "options" << "localField" << "includes" <<
+      "foreignField" << "name" << "as" << "subconfig" << finalize);
+  pl.add_fields(document{} << "subconfig" << open_document << "$concatArrays" << open_array <<
+      "$subconfig" << open_array << "$$ROOT" << close_array << close_array << close_document <<
       finalize);
-  
-  // Delete the original
-  delete bson_value;
-
-  // Set to new
-  bson_value = new_value;
-  bson_options = bson_value->view();
-
-  return 0;  
+  pl.unwind("$subconfig");
+  pl.group(document{} << "_id" << 0 << "config" << open_document << "$mergeObjects" <<
+      "$subconfig" << close_document << finalize);
+  pl.replace_root(document{} << "newRoot" << "$config" << finalize);
+  pl.project(document{} << "subconfig" << 0 << finalize);
+  if (override_opts != "")
+    pl.add_fields(bsoncxx::from_json(override_opts));
+  for (auto doc : opts_collection.aggregate(pl)) {
+    bson_value = new bsoncxx::document::value(doc);
+    bson_options = bson_value->view();
+    try{
+      fDetector = bson_options["detectors"][fHostname].get_utf8().value.to_string();
+    }catch(const std::exception& e){
+      fLog->Entry(MongoLog::Warning, "No detector specified for this host");
+      return -1;
+    }
+    return 0;
+  }
+  return -1;
 }
 
 long int Options::GetLongInt(std::string path, long int default_value){
