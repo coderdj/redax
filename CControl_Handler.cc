@@ -135,6 +135,7 @@ int CControl_Handler::Stop(){
   // Don't need to stop the DDC10 but just clean up a bit
   fDDC10.reset();
 #endif
+  fOptions.reset();
 
   fStatus = DAXHelpers::Idle;
   return 0;
@@ -145,14 +146,14 @@ void CControl_Handler::StatusUpdate(mongocxx::collection* collection){
   bsoncxx::builder::stream::document builder{};
   builder << "host" << fHostname << "status" << fStatus <<
     "time" << bsoncxx::types::b_date(std::chrono::system_clock::now()) <<
-    "mode" << (fOptions ? fOptions->GetString("name", "none") : "none");
+    "mode" << (fOptions ? fOptions->GetString("name", "none") : "none") <<
+    "number" << (fOptions ? fOptions->GetInt("number", -1) : -1);
   auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
 
   if(fV2718){
     auto crate_options = fV2718->GetCrateOptions();
     in_array << bsoncxx::builder::stream::open_document
-	     << "run_number" << fCurrentRun
-             << "type" << "V2718"
+         << "type" << "V2718"
 	     << "s_in" << crate_options.s_in
 	     << "neutron_veto" << crate_options.neutron_veto
 	     << "muon_veto" << crate_options.muon_veto

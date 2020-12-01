@@ -182,57 +182,52 @@ class MongoConnect():
 
         now = time.time()
         for detector in self.latest_status.keys():
-            status_list = []
-            report_times = {}
+            statuses = {}
             status = None
             rate = 0
-            mode = None
+            mode = 'none'
             buff = 0
+            run_num = -1
             for doc in self.latest_status[detector]['readers'].values():
                 try:
                     rate += doc['rate']
-                except:
-                    pass
-                try:
                     buff += doc['buffer_size']
                 except:
                     pass
 
-                if mode is None and 'mode' in doc.keys():
-                    mode = doc['mode']
-                elif 'mode' in doc.keys() and doc['mode'] != mode:
-                    mode = 'undefined'
-
                 try:
                     status = STATUS(doc['status'])
-                except KeyError:
-                    status = STATUS.UNKNOWN
-
-                # Now check if this guy is timing out
-                try:
-                    if (now - int(str(doc['_id'])[:8], 16)) > self.timeout:
+                    dt = (now - int(str(doc['_id'])[:8], 16))
+                    if dt > self.timeout:
+                        self.log.debug('%i reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
-                    report_times[doc['host']] = now - int(str(doc['_id'])[:8], 16)
                 except:
                     status = STATUS.UNKNOWN
 
-                status_list.append(status)
+                statuses[doc['host']] = status
 
             # If we have a crate controller check on it too
             for doc in self.latest_status[detector]['controller'].values():
                 # Copy above. I guess it would be possible to have no readers
                 try:
                     status = STATUS(doc['status'])
-                except KeyError:
-                    status = STATUS.UNKNOWN
-                try:
-                    if (now - int(str(doc['_id'])[:8], 16)) > self.timeout:
+                    dt = (now - int(str(doc['_id'])[:8], 16))
+                    if dt > self.timeout:
+                        self.log.debug('%i reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
-                    report_times[doc['host']] = now - int(str(doc['_id'])[:8], 16)
                 except:
                     status = STATUS.UNKNOWN
-                status_list.append(status)
+
+                statuses[doc['host']] = status
                 mode = doc.get('mode', 'none')
+                run_num = doc.get('number', -1)
+
+            if mode != 'none': # readout is "active":
+                a,b = self.GetHostsForMode(mode)
+                active = a + b
+                status_list = [v for k,v in statuses.items() if k in active]
+            else:
+                status_list = list(statuses.values())
 
             # Now we aggregate the statuses
             for stat in ['ARMING','ERROR','TIMEOUT','UNKNOWN']:
