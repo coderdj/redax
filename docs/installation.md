@@ -4,6 +4,7 @@
 * [DB config](databases.md) 
 * [Installation](installation.md) 
 * [Options reference](daq_options.md) 
+* [Dispatchers](dispatcher.md)
 * [Example operation](how_to_run.md)
 * [Extending redax](new_digi.md)
 * [Waveform simulator](fax.md)
