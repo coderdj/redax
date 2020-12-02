@@ -150,7 +150,6 @@ class MongoConnect():
         for detector in self.latest_status.keys():
             doc = {
                 "status": self.latest_status[detector]['status'].value,
-                "number": -1,
                 "detector": detector,
                 "rate": self.latest_status[detector]['rate'],
                 "readers": len(self.latest_status[detector]['readers'].keys()),
@@ -181,10 +180,7 @@ class MongoConnect():
         #  - If any single node reports error then the whole thing is in error
         #  - If any single node times out then the whole thing is in timeout
 
-        now = self.collections['outgoing_commands'].find_one_and_update(
-                {'host' : 'dispatcher'},
-                {'$currentDate': {'createdAt': True}},
-                return_document=True)['createdAt']
+        now = time.time()
         for detector in self.latest_status.keys():
             statuses = {}
             status = None
@@ -195,19 +191,19 @@ class MongoConnect():
             for doc in self.latest_status[detector]['readers'].values():
                 try:
                     rate += doc['rate']
-                except:
-                    pass
-                try:
                     buff += doc['buffer_size']
                 except:
                     pass
 
                 try:
                     status = STATUS(doc['status'])
-                    if (now - doc['time']).seconds > self.timeout:
+                    dt = (now - int(str(doc['_id'])[:8], 16))
+                    if dt > self.timeout:
+                        self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
                 except:
                     status = STATUS.UNKNOWN
+
                 statuses[doc['host']] = status
 
             # If we have a crate controller check on it too
@@ -216,15 +212,21 @@ class MongoConnect():
                 try:
                     mode = doc['mode']
                     status = STATUS(doc['status'])
-                    run_num = doc['number']
-                    if (now - doc['time']).seconds > self.timeout:
+
+                    dt = (now - int(str(doc['_id'])[:8], 16))
+                    if dt > self.timeout:
+                        self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
                 except:
                     status = STATUS.UNKNOWN
-                statuses[doc['host']] = status
 
-            if run_num != -1:  # DAQ is "active"
-                active = self.GetHostsForActive(run_num)
+                statuses[doc['host']] = status
+                mode = doc.get('mode', 'none')
+                run_num = doc.get('number', -1)
+
+            if mode != 'none': # readout is "active":
+                a,b = self.GetHostsForMode(mode)
+                active = a + b
                 status_list = [v for k,v in statuses.items() if k in active]
             else:
                 status_list = list(statuses.values())
@@ -252,6 +254,8 @@ class MongoConnect():
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
             self.latest_status[detector]['buffer'] = buff
+            if status == STATUS.TIMEOUT:
+                self.log.info(report_times)
 
 
     def GetWantedState(self):
@@ -333,20 +337,6 @@ class MongoConnect():
             # LOG ERROR
             self.log.error("Got a %s exception in doc pulling: %s" % (type(E), E))
         return None
-
-    def GetHostsForActive(self, number):
-        '''
-        Get the hosts that should be active for the numbered run (assumed to be
-        the current run)
-        '''
-        doc = self.collections[''].find_one({'number': number},{'daq_config.boards' : 1})
-        if doc is None:
-            return []
-        boards = []
-        for bd in doc['daq_config']['boards']:
-            if bd['host'] not in boards:
-                boards.append(bd['host'])
-        return boards
 
     def GetHostsForMode(self, mode):
         '''

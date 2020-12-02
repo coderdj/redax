@@ -97,14 +97,14 @@ def main():
     sh = SignalHandler()
 
     while(sh.event.is_set() == False):
-        sh.event.wait(sleep_period)
-
         # Get most recent check-in from all connected hosts
+        print('Getting update')
         if MongoConnector.GetUpdate():
             continue
         latest_status = MongoConnector.latest_status
 
         # Get most recent goal state from database. Users will update this from the website.
+        print('Getting goal state')
         goal_state = MongoConnector.GetWantedState()
         if goal_state is None:
             continue
@@ -120,6 +120,8 @@ def main():
 
         # Time to report back
         MongoConnector.UpdateAggregateStatus()
+
+        sh.event.wait(sleep_period)
     MongoConnector.Quit()
     return
 
