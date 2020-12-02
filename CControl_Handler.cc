@@ -31,7 +31,7 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
 
   fOptions = opts;
   try{
-    fCurrentRun = opts->GetInt("run_identifier", -1);
+    fCurrentRun = opts->GetInt("number", -1);
   }catch(std::exception& e) {
     fLog->Entry(MongoLog::Warning, "No run number specified in config?? %s", e.what());
     return -1;
@@ -161,8 +161,9 @@ void CControl_Handler::StatusUpdate(mongocxx::collection* collection){
 	     << "pulser_freq" << crate_options.pulser_freq
 	     << bsoncxx::builder::stream::close_document;
   }
-  auto after_array = in_array << bsoncxx::builder::stream::close_array;
-  collection->insert_one(after_array << bsoncxx::builder::stream::finalize);
+  auto after_array = in_array << close_array;
+  auto doc = after_array << close_document << finalize;
+  collection->insert_one(std::move(doc));
   return;
   /*
   // DDC10 parameters might change for future updates of the XENONnT HEV

@@ -184,8 +184,8 @@ class MongoConnect():
         for detector in self.latest_status.keys():
             statuses = {}
             status = None
-            rate = 0
             mode = 'none'
+            rate = 0
             buff = 0
             run_num = -1
             for doc in self.latest_status[detector]['readers'].values():
@@ -199,7 +199,7 @@ class MongoConnect():
                     status = STATUS(doc['status'])
                     dt = (now - int(str(doc['_id'])[:8], 16))
                     if dt > self.timeout:
-                        self.log.debug('%i reported %i sec ago' % (doc['host'], int(dt)))
+                        self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
                 except:
                     status = STATUS.UNKNOWN
@@ -210,10 +210,12 @@ class MongoConnect():
             for doc in self.latest_status[detector]['controller'].values():
                 # Copy above. I guess it would be possible to have no readers
                 try:
+                    mode = doc['mode']
                     status = STATUS(doc['status'])
+
                     dt = (now - int(str(doc['_id'])[:8], 16))
                     if dt > self.timeout:
-                        self.log.debug('%i reported %i sec ago' % (doc['host'], int(dt)))
+                        self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
                 except:
                     status = STATUS.UNKNOWN
@@ -323,6 +325,9 @@ class MongoConnect():
             if "includes" in doc.keys():
                 for i in doc['includes']:
                     incdoc = self.collections["options"].find_one({"name": i})
+                    if incdoc is None:
+                        self.LogError("Is %s a valid config? Subconfig %i doesn't seem to exist" % (mode, i), "ERROR", "arm")
+                        continue
                     for field in fields_to_exclude:
                         if field in incdoc:
                             del incdoc[field]
@@ -349,13 +354,13 @@ class MongoConnect():
         for b in doc['boards']:
             if 'V17' in b['type'] and b['host'] not in hostlist:
                 hostlist.append(b['host'])
-            elif b['type'] == 'V2718':
+            elif b['type'] == 'V2718' and b['host'] not in cc:
                 cc.append(b['host'])
         return hostlist, cc
 
     def GetNextRunNumber(self):
         try:
-            cursor = self.collections["run"].find().sort("number", -1).limit(1)
+            cursor = self.collections["run"].find({},{'number': 1}).sort("number", -1).limit(1)
         except:
             self.log.error('Database is having a moment?')
             return -1
@@ -393,7 +398,7 @@ class MongoConnect():
                  '_id' : self.command_oid[detector][command]}
         doc = self.collections['outgoing_commands'].find_one(query)
         if doc is not None:
-            return datetime.datetime.utcfromtimestamp(doc['acknowledged'][cc]/1000)
+            return doc['acknowledged'][cc]
         self.log.debug('No ACK time for %s-%s' % (detector, command))
         return None
 
@@ -416,7 +421,6 @@ class MongoConnect():
                 "detector": detector,
                 "mode": mode,
                 "options_override": {"number": number},
-                "number": number,
                 "createdAt": datetime.datetime.utcnow()
             }
             if delay == 0:
@@ -459,7 +463,7 @@ class MongoConnect():
             self.event.wait(dt)
             self.event.clear()
 
-    def LogError(self, reporter, message, priority, etype):
+    def LogError(self, message, priority, etype):
 
         # Note that etype allows you to define timeouts.
         nowtime = datetime.datetime.utcnow()
@@ -471,13 +475,13 @@ class MongoConnect():
         self.error_sent[etype] = nowtime
         try:
             self.collections['log'].insert({
-                "user": reporter,
+                "user": "dispatcher",
                 "message": message,
                 "priority": self.loglevels[priority]
             })
         except:
             self.log.error('Database error, can\'t issue error message')
-        self.log.info("Error message from %s: %s" % (reporter, message))
+        self.log.info("Error message from dispatcher: %s" % (message))
         return
 
     def GetRunStart(self, number):

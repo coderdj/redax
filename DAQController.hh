@@ -42,9 +42,8 @@ private:
   void ReadData(int link);
   int OpenThreads();
   void CloseThreads();
-  void InitLink(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::map<std::string, std::vector<double>>>&, int&);
-  int FitBaselines(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::vector<uint16_t>>&, int,
-      std::map<int, std::map<std::string, std::vector<double>>>&);
+  void InitLink(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::vector<uint16_t>>&, int&);
+  int FitBaselines(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::vector<uint16_t>>&, int);
 
   std::vector<std::unique_ptr<StraxFormatter>> fFormatters;
   std::vector<std::thread> fProcessingThreads;

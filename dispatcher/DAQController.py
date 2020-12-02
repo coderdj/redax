@@ -333,7 +333,7 @@ class DAQController():
             if command == 'stop':
                 if self.error_stop_count[detector] >= self.stop_retries:
                     # failed too many times, issue error
-                    self.mongo.LogError("dispatcher",
+                    self.mongo.LogError(
                                         ("Dispatcher control loop detects a timeout that STOP " +
                                          "can't solve"),
                                         'ERROR',
@@ -344,7 +344,7 @@ class DAQController():
                     self.log.debug('Working on a stop counter for %s' % detector)
                     self.error_stop_count[detector] += 1
             else:
-                self.mongo.LogError("dispatcher",
+                self.mongo.LogError(
                         ('%s took more than %i seconds to %s, indicating a possible timeout or error' %
                             (detector, self.timeouts[command], command)),
                         'ERROR',
@@ -358,7 +358,7 @@ class DAQController():
         '''
         Throw a general error that the DAQ is stuck
         '''
-        self.mongo.LogError("dispatcher",
+        self.mongo.LogError(
                             "Dispatcher control loop can't get DAQ out of stuck state",
                             'ERROR',
                             "GENERAL_ERROR")

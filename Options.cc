@@ -333,74 +333,48 @@ int Options::GetFaxOptions(fax_options_t& opts) {
   return 0;
 }
 
-int Options::GetDAC(std::map<int, std::map<std::string, std::vector<double>>>& board_dacs,
-                    std::vector<int>& bids) {
-  board_dacs.clear();
-  std::map<std::string, std::vector<double>> defaults {
-                {"slope", std::vector<double>(16, -0.2695)},
-                {"yint", std::vector<double>(16, 17169)}};
-  // let's provide a default
-  board_dacs[-1] = defaults;
-  std::map<std::string, std::vector<double>> this_board_dac{
-    {"slope", std::vector<double>(16)},
-    {"yint", std::vector<double>(16)}};
-  int ret(0);
-  auto sort_order = bsoncxx::builder::stream::document{} <<
-    "_id" << -1 << bsoncxx::builder::stream::finalize;
+std::vector<uint16_t> Options::GetDAC(int bid, int num_chan, uint16_t default_value) {
+  using namespace bsoncxx::builder::stream;
+  std::vector<uint16_t> ret(num_chan, default_value);
+  auto sort_order = document{} << "_id" << -1 << finalize;
+  auto q = document{} << bid << open_document << "$exists" << 1 << close_document << finalize;
   auto opts = mongocxx::options::find{};
   opts.sort(sort_order.view());
-  auto cursor = fDAC_collection.find({}, opts);
+  auto cursor = fDAC_collection.find(q, opts);
   auto doc = cursor.begin();
-  if (doc == cursor.end()) {
+  if (doc == cursor.end() || doc->find(std::to_string(bid)) == doc->end()) {
     fLog->Entry(MongoLog::Local, "No baseline calibrations? You must be new");
-    return -1;
+    return ret;
   }
 /* doc should look like this:
- *{ run : 000042,
- * bid : {
- *              slope : [ch0, ch1, ch2, ...],
- *              yint : [ch0, ch1, ch2, ...],
- *         },
+ *{ run : 42,
+ * bid : [ val, val, val, ...],
  *         ...
  * }
  */
-  for (auto bid : bids) {
-    if ((*doc).find(std::to_string(bid)) == (*doc).end()) {
-      board_dacs[bid] = defaults;
-      continue;
-    }
-    for (auto& kv : this_board_dac) { // (string, vector<double>)
-      kv.second.clear();
-      for(auto& val : (*doc)[std::to_string(bid)][kv.first].get_array().value)
-	kv.second.push_back(val.get_double());
-    }
-    board_dacs[bid] = this_board_dac;
-  }
+  for (int i = 0; i < num_chan; i++)
+    ret[i] = (*doc)[std::to_string(bid)][i];
   return ret;
 }
 
-void Options::UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>& all_dacs){
+void Options::UpdateDAC(std::map<int, std::vector<uint16_t>>& all_dacs){
   using namespace bsoncxx::builder::stream;
-  std::string run_id = GetString("run_identifier", "default");
+  int run_id = GetInt("number", -1);
   fLog->Entry(MongoLog::Local, "Saving DAC calibration");
   auto search_doc = document{} << "run" << run_id << finalize;
   auto update_doc = document{};
   update_doc<< "$set" << open_document << "run" << run_id;
-  for (auto& bid_map : all_dacs) { // (bid, map<string, vector>)
-    update_doc << std::to_string(bid_map.first) << open_document;
-    for(auto& str_vec : bid_map.second){ // (string, vector)
-      update_doc << str_vec.first << open_array <<
-        [&](array_context<> arr){
-        for (auto& val : str_vec.second) arr << val;
-        } << close_array;
-    }
-    update_doc << close_document;
+  for (auto& bid_map : all_dacs) { // (bid, vector)
+    update_doc << std::to_string(bid_map.first) << open_array <<
+      [&](array_context<> arr){
+        for (auto& val : bid_map.second) arr << val;
+      } << close_array;
   }
   update_doc << close_document;
   auto write_doc = update_doc<<finalize;
   mongocxx::options::update options;
   options.upsert(true);
-  fDAC_collection.update_one(search_doc.view(), write_doc.view(), options);
+  fDAC_collection.update_one(std::move(search_doc), std::move(write_doc), options);
   return;
 }
 

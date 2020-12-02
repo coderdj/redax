@@ -11,6 +11,8 @@ docs:
         url: /docs/installation.md
       - title: "Options reference"
         url: /docs/daq_options.md
+      - title: "Dispatchers"
+        url: /docs/dispatcher.md
       - title: "Simple use case"
         url: /docs/how_to_run.md
       - title: "Extending redax"
