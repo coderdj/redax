@@ -201,7 +201,7 @@ class MongoConnect():
                     if dt > self.timeout:
                         self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
-                except:
+                except Exception as e:
                     status = STATUS.UNKNOWN
 
                 statuses[doc['host']] = status
@@ -244,9 +244,6 @@ class MongoConnect():
                 else:
                     status = STATUS['UNKNOWN']
 
-            #if detector == 'tpc':
-            #    self.log.debug("Status list for %s: %s = %s" % (
-            #        detector, [x.name for x in status_list], status.name))
             if detector == 'neutron_veto':
                 status = STATUS.IDLE
 
@@ -383,8 +380,8 @@ class MongoConnect():
                 updates["$push"] = {"tags" : {"name" : "messy", "user" : "daq",
                     "date" : datetime.datetime.utcnow()}}
             self.collections['run'].update_one(query, updates)
-        except:
-            self.log.error("Database having a moment, hope this doesn't crash")
+        except Exception as e:
+            self.log.error("Database having a moment, hope this doesn't crash (%s)" % type(e))
         return
 
     def GetAckTime(self, detector, command):
@@ -544,7 +541,7 @@ class MongoConnect():
             run_doc['start'] = start_time
 
             self.collections['run'].insert_one(run_doc)
-        except:
-            self.log.error('Database having a moment')
+        except Exception as e:
+            self.log.error('Database having a moment (%s)' % type(e))
             return -1
         return number

@@ -23,15 +23,16 @@ class SignalHandler(object):
 class LogHandler(logging.Handler):
     def __init__(self, logdir='/live_data/redax_logs/', retention=7):
         logging.Handler.__init__(self)
-        self.today = datetime.date()
+        self.today = datetime.date.today()
         self.logdir = logdir
         self.retention = retention
         self.Rotate(self.today)
         self.count = 0
 
     def close(self):
-        self.f.flush()
-        self.f.close()
+        if not self.f.closed:
+            self.f.flush()
+            self.f.close()
 
     def __del__(self):
         self.close()
@@ -56,19 +57,19 @@ class LogHandler(logging.Handler):
         last_file = when - datetime.timedelta(days=self.retention)
         if os.path.exists(self.FullFilename(last_file)):
             os.remove(self.FullFilename(last_file))
-            m=self.FormattedMessage(datetime.datetime.utcnow(), "init", "Deleting " + self.Filename(last_file)))
+            m=self.FormattedMessage(datetime.datetime.utcnow(), "init", "Deleting " + self.Filename(last_file))
         else:
             m=self.FormattedMessage(datetime.datetime.utcnow(), "init", "No older file to delete :(")
         self.f.write(m)
-        self.today = datetime.date()
+        self.today = datetime.date.today()
 
     def FullFilename(self, when):
         return os.path.join(self.logdir, self.Filename(when))
 
     def Filename(self, when):
-        return f"{when.isoformat()}_dispatcher.log"
+        return f"{when.year:04d}{when.month:02d}{when.day:02d}_dispatcher.log"
 
-    def FormattedMessage(when, level, msg):
+    def FormattedMessage(self, when, level, msg):
         return f"{when.isoformat()} | [{str(level).upper()}] | {msg}\n"
 
 
