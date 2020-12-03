@@ -311,7 +311,6 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
     }
   }
   auto doc = document{} <<
-    "$set" << open_document <<
     "host" << fHostname <<
     "time" << bsoncxx::types::b_date(std::chrono::system_clock::now())<<
     "rate" << rate/1e6 <<
@@ -324,7 +323,7 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
       for( auto const& pair : retmap)
         doc << std::to_string(pair.first) << short(pair.second>>10); // KB not MB
       } << close_document << 
-    close_document << finalize;
+    finalize;
   collection->insert_one(std::move(doc)); // opts is const&
   return;
 }
