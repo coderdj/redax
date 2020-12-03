@@ -143,23 +143,24 @@ int CControl_Handler::Stop(){
 
 // Reporting back on the status of V2718, V1495, DDC10 etc...
 void CControl_Handler::StatusUpdate(mongocxx::collection* collection){
-  bsoncxx::builder::stream::document builder{};
+  using namespace bsoncxx::builder::stream;
+  document builder{};
   builder << "host" << fHostname << "status" << fStatus <<
     "time" << bsoncxx::types::b_date(std::chrono::system_clock::now()) <<
     "mode" << (fOptions ? fOptions->GetString("name", "none") : "none") <<
     "number" << (fOptions ? fOptions->GetInt("number", -1) : -1);
-  auto in_array = builder << "active" << bsoncxx::builder::stream::open_array;
+  auto in_array = builder << "active" << open_array;
 
   if(fV2718){
     auto crate_options = fV2718->GetCrateOptions();
-    in_array << bsoncxx::builder::stream::open_document
+    in_array << open_document
          << "type" << "V2718"
 	     << "s_in" << crate_options.s_in
 	     << "neutron_veto" << crate_options.neutron_veto
 	     << "muon_veto" << crate_options.muon_veto
 	     << "led_trigger" << crate_options.led_trigger
 	     << "pulser_freq" << crate_options.pulser_freq
-	     << bsoncxx::builder::stream::close_document;
+	     << close_document;
   }
   auto after_array = in_array << close_array;
   auto doc = after_array << close_document << finalize;

@@ -39,7 +39,6 @@ DAQController::~DAQController(){
 
 int DAQController::Arm(std::shared_ptr<Options>& options){
   fOptions = options;
-  fLog->SetRunId(fOptions->GetInt("number", -1));
   fNProcessingThreads = fOptions->GetNestedInt("processing_threads."+fHostname, 8);
   fLog->Entry(MongoLog::Local, "Beginning electronics initialization with %i threads",
 	      fNProcessingThreads);
@@ -312,10 +311,9 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
     }
   }
   auto doc = document{} <<
-    "$currentDate" << open_document << "time" << true << close_document <<
     "$set" << open_document <<
     "host" << fHostname <<
-    //"time" << bsoncxx::types::b_date(std::chrono::system_clock::now())<<
+    "time" << bsoncxx::types::b_date(std::chrono::system_clock::now())<<
     "rate" << rate/1e6 <<
     "status" << fStatus <<
     "buffer_size" << (buf.first + buf.second)/1e6 <<
@@ -326,11 +324,8 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
       for( auto const& pair : retmap)
         doc << std::to_string(pair.first) << short(pair.second>>10); // KB not MB
       } << close_document << 
-    finalize;
-  mongocxx::options::update opts;
-  opts.upsert(true);
-  auto query = document{} << finalize;
-  collection->update_one(std::move(query), std::move(doc), opts); // opts is const&
+    close_document << finalize;
+  collection->update_one(std::move(doc)); // opts is const&
   return;
 }
 

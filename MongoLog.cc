@@ -125,8 +125,8 @@ int MongoLog::Entry(int priority, std::string message, ...){
         "user" << fHostname <<
         "message" << message <<
         "priority" << priority <<
-        "runid" << runid <<
-        bxoncxx::builder::stream::finalize;
+        "runid" << fRunid <<
+        bsoncxx::builder::stream::finalize;
       fMongoCollection.insert_one(std::move(d));
     }
     catch(const std::exception &e){

@@ -195,6 +195,7 @@ int main(int argc, char** argv){
           auto now = system_clock::now();
           fLog->Entry(MongoLog::Local, "Ack to stop took %i us",
               duration_cast<microseconds>(now-ack_time).count());
+          fLog->SetRunId(-1);
 	} else if(command == "arm"){
 	  // Can only arm if we're idle
 	  if(controller->status() == 0){
@@ -214,6 +215,7 @@ int main(int argc, char** argv){
 	    fOptions = std::make_shared<Options>(fLog, mode,
 				   hostname, suri, dbname, override_json);
             int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
+            fLog->SetRunId(fOptions->GetInt("number", -1));
             fLog->Entry(MongoLog::Local, "Took %i ms to load config", dt);
             if (dt < delay) std::this_thread::sleep_for(milliseconds(delay-dt));
 	    if(controller->Arm(fOptions) != 0){
