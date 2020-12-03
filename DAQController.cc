@@ -75,7 +75,7 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
   sleep(2); // <-- this one. Leave it here.
   // Seriously. This sleep statement is absolutely vital.
   fLog->Entry(MongoLog::Local, "That felt great, thanks.");
-  std::map<int, std::map<std::string, std::vector<double>>> dac_values;
+  std::map<int, std::vector<uint16_t>> dac_values;
   std::vector<std::thread> init_threads;
   init_threads.reserve(fDigitizers.size());
   std::map<int,int> rets;
@@ -325,7 +325,7 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
         doc << std::to_string(pair.first) << short(pair.second>>10); // KB not MB
       } << close_document << 
     close_document << finalize;
-  collection->update_one(std::move(doc)); // opts is const&
+  collection->insert_one(std::move(doc)); // opts is const&
   return;
 }
 
@@ -376,7 +376,7 @@ void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
     }
     success += digi->LoadDAC(dac_values[bid]);
     // Load all the other fancy stuff
-    success += digi->SetThresholds(fOptions->GetThresholds(bid), digi->GetNumChannels());
+    success += digi->SetThresholds(fOptions->GetThresholds(bid));
 
     fLog->Entry(MongoLog::Local, "Board %i programmed", digi->bid());
     if(success!=0){

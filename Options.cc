@@ -337,10 +337,10 @@ std::vector<uint16_t> Options::GetDAC(int bid, int num_chan, uint16_t default_va
   using namespace bsoncxx::builder::stream;
   std::vector<uint16_t> ret(num_chan, default_value);
   auto sort_order = document{} << "_id" << -1 << finalize;
-  auto q = document{} << bid << open_document << "$exists" << 1 << close_document << finalize;
+  auto q = document{} << std::to_string(bid) << open_document << "$exists" << 1 << close_document << finalize;
   auto opts = mongocxx::options::find{};
   opts.sort(sort_order.view());
-  auto cursor = fDAC_collection.find(q, opts);
+  auto cursor = fDAC_collection.find(std::move(q), opts);
   auto doc = cursor.begin();
   if (doc == cursor.end() || doc->find(std::to_string(bid)) == doc->end()) {
     fLog->Entry(MongoLog::Local, "No baseline calibrations? You must be new");
@@ -353,7 +353,7 @@ std::vector<uint16_t> Options::GetDAC(int bid, int num_chan, uint16_t default_va
  * }
  */
   for (int i = 0; i < num_chan; i++)
-    ret[i] = (*doc)[std::to_string(bid)][i];
+    ret[i] = (*doc)[std::to_string(bid)][i].get_int32();
   return ret;
 }
 

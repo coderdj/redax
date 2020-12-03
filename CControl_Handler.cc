@@ -163,7 +163,7 @@ void CControl_Handler::StatusUpdate(mongocxx::collection* collection){
 	     << close_document;
   }
   auto after_array = in_array << close_array;
-  auto doc = after_array << close_document << finalize;
+  auto doc = after_array << finalize;
   collection->insert_one(std::move(doc));
   return;
   /*
