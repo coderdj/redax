@@ -199,7 +199,7 @@ class MongoConnect():
                     status = STATUS(doc['status'])
                     dt = (now - int(str(doc['_id'])[:8], 16))
                     if dt > self.timeout:
-                        self.log.debug('%i reported %i sec ago' % (doc['host'], int(dt)))
+                        self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
                 except:
                     status = STATUS.UNKNOWN
@@ -213,7 +213,7 @@ class MongoConnect():
                     status = STATUS(doc['status'])
                     dt = (now - int(str(doc['_id'])[:8], 16))
                     if dt > self.timeout:
-                        self.log.debug('%i reported %i sec ago' % (doc['host'], int(dt)))
+                        self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
                 except:
                     status = STATUS.UNKNOWN
@@ -252,8 +252,6 @@ class MongoConnect():
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
             self.latest_status[detector]['buffer'] = buff
-            if status == STATUS.TIMEOUT:
-                self.log.info(report_times)
 
 
     def GetWantedState(self):
