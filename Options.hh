@@ -78,7 +78,7 @@ public:
 
   std::vector<BoardType> GetBoards(std::string);
   std::vector<RegisterType> GetRegisters(int, bool=false);
-  int GetDAC(std::map<int, std::map<std::string, std::vector<double>>>&, std::vector<int>&);
+  std::vector<uint16_t> GetDAC(int, int, uint16_t);
   int GetCrateOpt(CrateOptions &ret);
   int GetHEVOpt(HEVOptions &ret);
   int16_t GetChannel(int, int);
@@ -86,7 +86,7 @@ public:
   std::vector<uint16_t> GetThresholds(int);
   int GetFaxOptions(fax_options_t&);
 
-  void UpdateDAC(std::map<int, std::map<std::string, std::vector<double>>>&);
+  void UpdateDAC(std::map<int, std::vector<uint16_t>>&);
   void SaveBenchmarks(std::map<std::string, std::map<int, long>>&, long, std::string,
       std::map<std::string, double>&);
 

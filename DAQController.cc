@@ -39,7 +39,6 @@ DAQController::~DAQController(){
 
 int DAQController::Arm(std::shared_ptr<Options>& options){
   fOptions = options;
-  fLog->SetRunId(fOptions->GetInt("number", -1));
   fNProcessingThreads = fOptions->GetNestedInt("processing_threads."+fHostname, 8);
   fLog->Entry(MongoLog::Local, "Beginning electronics initialization with %i threads",
 	      fNProcessingThreads);
@@ -76,19 +75,17 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
   sleep(2); // <-- this one. Leave it here.
   // Seriously. This sleep statement is absolutely vital.
   fLog->Entry(MongoLog::Local, "That felt great, thanks.");
-  std::map<int, std::map<std::string, std::vector<double>>> dac_values;
-  if (fOptions->GetString("baseline_dac_mode") == "cached")
-    fOptions->GetDAC(dac_values, BIDs);
-  std::vector<std::thread*> init_threads;
+  std::map<int, std::vector<uint16_t>> dac_values;
+  std::vector<std::thread> init_threads;
+  init_threads.reserve(fDigitizers.size());
   std::map<int,int> rets;
   // Parallel digitizer programming to speed baselining
   for( auto& link : fDigitizers ) {
     rets[link.first] = 1;
-    init_threads.push_back(new std::thread(&DAQController::InitLink, this,
-	  std::ref(link.second), std::ref(dac_values), std::ref(rets[link.first])));
+    init_threads.emplace_back(&DAQController::InitLink, this,
+	  std::ref(link.second), std::ref(dac_values), std::ref(rets[link.first]));
   }
-  std::for_each(init_threads.begin(), init_threads.end(),
-      [](std::thread* t) {t->join(); delete t;});
+  for (auto& t : init_threads) if (t.joinable()) t.join();
 
   if (std::any_of(rets.begin(), rets.end(), [](auto& p) {return p.second != 0;})) {
     fLog->Entry(MongoLog::Warning, "Encountered errors during digitizer programming");
@@ -298,7 +295,8 @@ void DAQController::CloseThreads(){
 }
 
 void DAQController::StatusUpdate(mongocxx::collection* collection) {
-  auto insert_doc = bsoncxx::builder::stream::document{};
+  using namespace bsoncxx::builder::stream;
+  auto insert_doc = document{};
   std::map<int, int> retmap;
   std::pair<long, long> buf{0,0};
   int rate = fDataRate;
@@ -312,52 +310,49 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
       buf.second += x.second;
     }
   }
-  insert_doc << "host" << fHostname <<
+  auto doc = document{} <<
+    "$set" << open_document <<
+    "host" << fHostname <<
     "time" << bsoncxx::types::b_date(std::chrono::system_clock::now())<<
     "rate" << rate/1e6 <<
     "status" << fStatus <<
     "buffer_size" << (buf.first + buf.second)/1e6 <<
-    "run_mode" << (fOptions ? fOptions->GetString("name", "none") : "none") <<
-    "channels" << bsoncxx::builder::stream::open_document <<
-      [&](bsoncxx::builder::stream::key_context<> doc){
+    "mode" << (fOptions ? fOptions->GetString("name", "none") : "none") <<
+    "number" << (fOptions ? fOptions->GetInt("number", -1) : -1) <<
+    "channels" << open_document <<
+      [&](key_context<> doc){
       for( auto const& pair : retmap)
         doc << std::to_string(pair.first) << short(pair.second>>10); // KB not MB
-      } << bsoncxx::builder::stream::close_document;
-  collection->insert_one(insert_doc << bsoncxx::builder::stream::finalize);
+      } << close_document << 
+    close_document << finalize;
+  collection->insert_one(std::move(doc)); // opts is const&
   return;
 }
 
 void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
-    std::map<int, std::map<std::string, std::vector<double>>>& cal_values, int& ret) {
+    std::map<int, std::vector<uint16_t>>& dac_values, int& ret) {
   std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
-  std::map<int, std::vector<uint16_t>> dac_values;
   int nominal_baseline = fOptions->GetInt("baseline_value", 16000);
+  int nominal_dac = fOptions->GetInt("baseline_fixed_value", 4000);
   if (BL_MODE == "fit") {
-    if ((ret = FitBaselines(digis, dac_values, nominal_baseline, cal_values))) {
+    if ((ret = FitBaselines(digis, dac_values, nominal_baseline))) {
       fLog->Entry(MongoLog::Warning, "Errors during baseline fitting");
       return;
     }
   }
 
-  for(auto digi : digis){
+  for(auto& digi : digis){
     fLog->Entry(MongoLog::Local, "Board %i beginning specific init", digi->bid());
 
     // Multiple options here
     int bid = digi->bid(), success(0);
     if (BL_MODE == "fit") {
     } else if(BL_MODE == "cached") {
-      fMutex.lock();
-      auto board_dac_cal = cal_values.count(bid) ? cal_values[bid] : cal_values[-1];
-      fMutex.unlock();
-      dac_values[bid] = std::vector<uint16_t>(digi->GetNumChannels());
+      dac_values[bid] = fOptions->GetDAC(bid, digi->GetNumChannels(), nominal_dac);
       fLog->Entry(MongoLog::Local, "Board %i using cached baselines", bid);
-      for (unsigned ch = 0; ch < digi->GetNumChannels(); ch++)
-	dac_values[bid][ch] = nominal_baseline*board_dac_cal["slope"][ch] + board_dac_cal["yint"][ch];
-      digi->ClampDACValues(dac_values[bid], board_dac_cal);
     } else if(BL_MODE == "fixed"){
-      int BLVal = fOptions->GetInt("baseline_fixed_value", 4000);
-      fLog->Entry(MongoLog::Local, "Loading fixed baselines with value 0x%04x", BLVal);
-      dac_values[bid] = std::vector<uint16_t>(digi->GetNumChannels(), BLVal);
+      fLog->Entry(MongoLog::Local, "Loading fixed baselines with value 0x%04x", nominal_dac);
+      dac_values[bid] = std::vector<uint16_t>(digi->GetNumChannels(), nominal_dac);
     } else {
       fLog->Entry(MongoLog::Warning, "Received unknown baseline mode '%s', valid options are \"fit\", \"cached\", and \"fixed\"", BL_MODE.c_str());
       ret = -1;
@@ -382,11 +377,9 @@ void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
     success += digi->LoadDAC(dac_values[bid]);
     // Load all the other fancy stuff
     success += digi->SetThresholds(fOptions->GetThresholds(bid));
-    digi->ResetClocks();
 
     fLog->Entry(MongoLog::Local, "Board %i programmed", digi->bid());
     if(success!=0){
-      //LOG
       fLog->Entry(MongoLog::Warning, "Failed to configure digitizers.");
       ret = -1;
       return;
@@ -398,8 +391,7 @@ void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
 }
 
 int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
-    std::map<int, std::vector<u_int16_t>> &dac_values, int target_baseline,
-    std::map<int, std::map<std::string, std::vector<double>>> &cal_values) {
+    std::map<int, std::vector<u_int16_t>> &dac_values, int target_baseline) {
   using std::vector;
   using namespace std::chrono_literals;
   int max_iter = fOptions->GetInt("baseline_max_iterations", 2);
@@ -418,6 +410,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
   std::map<int, int> words_read;
   std::map<int, vector<vector<double>>> bl_per_channel;
   std::map<int, vector<int>> diff;
+  std::map<int, std::map<std::string, vector<double>>> cal_values;
 
   for (auto digi : digis) { // alloc ALL the things!
     bid = digi->bid();
@@ -541,7 +534,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
         auto it = buffers[bid]->buff.begin();
         while (it < buffers[bid]->buff.end()) {
           if ((*it)>>28 == 0xA) {
-            words = (*it)&0x7FFFFFFF;
+            words = (*it)&0xFFFFFFF;
             std::u32string_view sv(buffers[bid]->buff.data() + std::distance(buffers[bid]->buff.begin(), it), words);
             std::tie(words_in_event, channel_mask, std::ignore, std::ignore) = d->UnpackEventHeader(sv);
             if (words == 4) {
@@ -612,11 +605,9 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
         // ****************************
         for (auto d : digis) {
           bid = d->bid();
-          fMutex.lock();
           cal_values[bid] = std::map<std::string, vector<double>>(
               {{"slope", vector<double>(d->GetNumChannels())},
                {"yint", vector<double>(d->GetNumChannels())}});
-          fMutex.unlock();
           for (unsigned ch = 0; ch < d->GetNumChannels(); ch++) {
             B = C = D = E = F = 0;
             for (unsigned i = 0; i < DAC_cal_points.size(); i++) {

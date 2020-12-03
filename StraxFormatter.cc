@@ -167,7 +167,7 @@ int StraxFormatter::ProcessEvent(std::u32string_view buff,
   auto [words, channel_mask, fail, event_time] = dp->digi->UnpackEventHeader(buff);
 
   if(fail){ // board fail
-    GenerateArtificialDeadtime(((dp->clock_counter<<31) + dp->header_time), dp->digi);
+    //GenerateArtificialDeadtime(((dp->clock_counter<<31) + dp->header_time), dp->digi);
     dp->digi->CheckFail(true);
     fFailCounter[dp->digi->bid()]++;
     return event_header_words;

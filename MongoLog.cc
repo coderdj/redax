@@ -111,23 +111,23 @@ int MongoLog::Entry(int priority, std::string message, ...){
   va_end (args);
   message = &vec[0];
 
-  std::unique_lock<std::mutex> lg(fMutex);
-
   auto t = std::time(nullptr);
   auto tm = *std::gmtime(&t);
   std::stringstream msg;
   msg<<FormatTime(&tm)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
+  std::unique_lock<std::mutex> lg(fMutex);
   std::cout << msg.str();
   if (Today(&tm) != fToday) RotateLogFile();
   fOutfile<<msg.str();
   if(priority >= fLogLevel){
     try{
-      fMongoCollection.insert_one(bsoncxx::builder::stream::document{} <<
-				  "user" << fHostname <<
-				  "message" << message <<
-				  "priority" << priority <<
-                                  "runid" << fRunId <<
-				  bsoncxx::builder::stream::finalize);
+      auto d = bsoncxx::builder::stream::document{} <<
+        "user" << fHostname <<
+        "message" << message <<
+        "priority" << priority <<
+        "runid" << fRunId <<
+        bsoncxx::builder::stream::finalize;
+      fMongoCollection.insert_one(std::move(d));
     }
     catch(const std::exception &e){
       std::cout<<"Failed to insert log message "<<message<<" ("<<
