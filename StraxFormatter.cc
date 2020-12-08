@@ -302,7 +302,7 @@ void StraxFormatter::Process() {
       fBuffer.pop_front();
       lk.unlock();
       ProcessDatapacket(std::move(dp));
-      WriteOutChunks();
+      if (fActive == true) WriteOutChunks();
     } else {
       lk.unlock();
     }
