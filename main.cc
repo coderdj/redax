@@ -15,6 +15,9 @@
 #include <mongocxx/instance.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 #include <bsoncxx/json.hpp>
+#include <mongocxx/uri.hpp>
+#include <mongocxx/database.hpp>
+#include <mongocxx/client.hpp>
 
 std::atomic_bool b_run = true;
 std::string hostname = "";
@@ -25,16 +28,18 @@ void SignalHandler(int signum) {
     return;
 }
 
-void UpdateStatus(std::string suri, mongocxx::collection* collection, std::unique_ptr<DAQController>& controller) {
+void UpdateStatus(mongocxx::collection* collection, std::unique_ptr<DAQController>& controller) {
   using namespace std::chrono;
   while (b_run == true) {
+    auto start = std::chrono::system_clock::now();
     try{
       controller->StatusUpdate(collection);
     }catch(const std::exception &e){
       std::cout<<"Can't connect to DB to update."<<std::endl;
       std::cout<<e.what()<<std::endl;
     }
-    std::this_thread::sleep_for(seconds(1));
+    auto end = std::chrono::system_clock::now();
+    std::this_thread::sleep_for(seconds(1)-(end-start));
   }
   std::cout<<"Status update returning\n";
 }
@@ -129,7 +134,7 @@ int main(int argc, char** argv){
   mongocxx::collection log_collection = db["log"];
 
   // Logging
-  auto fLog = std::make_shared<MongoLog>(log_retention, log_dir, log_collection,hostname);
+  auto fLog = std::make_shared<MongoLog>(log_retention, log_collection,log_dir, hostname);
 
   //Options
   std::shared_ptr<Options> fOptions;

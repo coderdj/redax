@@ -5,7 +5,7 @@
 #include <mongocxx/database.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 
-MongoLog::MongoLog(int DeleteAfterDays, mongocxx::collection* collection, std::string host){
+MongoLog::MongoLog(int DeleteAfterDays, mongocxx::collection* collection, std::string log_dir, std::string host){
   fLogLevel = 0;
   fHostname = host;
   fDeleteAfterDays = DeleteAfterDays;

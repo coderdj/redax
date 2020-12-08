@@ -95,10 +95,10 @@ private:
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   std::shared_ptr<MongoLog> fLog;
-  mongocxx::collection fDAC_collection;
-  mongocxx::collection fBM_collection;
   std::string fHostname;
   std::string fDetector;
+  mongocxx::collection* fDAC_collection;
+  mongocxx::collection* fBM_collection;
 };
 
 #endif
