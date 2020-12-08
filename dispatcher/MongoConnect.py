@@ -309,11 +309,11 @@ class MongoConnect():
         '''
         if mode is None:
             return None
-        base_doc = self.collections['options'].find_one({'name': mode}, {'includes': 1})
+        base_doc = self.collections['options'].find_one({'name': mode})
         if base_doc is None:
             self.LogError("dispatcher", "Mode '%s' doesn't exist" % mode, "info", "info")
             return None
-        if 'includes' not in base_doc:
+        if 'includes' not in base_doc or len(base_doc['includes']) == 0:
             return base_doc
         try:
             if self.collections['options'].count_documents({'name':
