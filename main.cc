@@ -25,7 +25,7 @@ void SignalHandler(int signum) {
     return;
 }
 
-void UpdateStatus(std::string suri, mongocxx::collection* collection, dbname, std::unique_ptr<DAQController>& controller) {
+void UpdateStatus(std::string suri, mongocxx::collection* collection, std::unique_ptr<DAQController>& controller) {
   using namespace std::chrono;
   while (b_run == true) {
     try{
@@ -126,9 +126,10 @@ int main(int argc, char** argv){
   mongocxx::collection opts_collection = db["options"];
   mongocxx::collection dac_collection = db["dac_calibration"];
   mongocxx::collection benchmark_collection = db["redax_benchmarks"];
+  mongocxx::collection log_collection = db["log"];
 
   // Logging
-  auto fLog = std::make_shared<MongoLog>(log_retention, log_dir, suri, dbname, "log", hostname);
+  auto fLog = std::make_shared<MongoLog>(log_retention, log_dir, log_collection,hostname);
 
   //Options
   std::shared_ptr<Options> fOptions;
@@ -211,7 +212,7 @@ int main(int argc, char** argv){
 	    // Mongocxx types confusing so passing json strings around
             std::string mode = doc["mode"].get_utf8().value.to_string();
             fLog->Entry(MongoLog::Local, "Getting options doc for mode %s", mode.c_str());
-	    fOptions = std::make_shared<Options>(fLog, mode, &opts_collection,
+	    fOptions = std::make_shared<Options>(fLog, mode, hostname, &opts_collection,
 			      &dac_collection, &benchmark_collection, override_json);
             int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
             fLog->SetRunId(fOptions->GetInt("number", -1));

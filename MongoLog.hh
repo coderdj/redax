@@ -15,7 +15,6 @@
 #include <thread>
 #include <experimental/filesystem>
 
-#include <mongocxx/client.hpp>
 #include <mongocxx/collection.hpp>
 
 /* 
@@ -53,7 +52,7 @@ class MongoLog{
   */
 
 public:
-  MongoLog(int DeleteAfterDays, std::string log_dir, std::string, std::string, std::string, std::string);
+  MongoLog(int DeleteAfterDays, mongocxx::collection*, std::string);
   ~MongoLog();
   
   int  Initialize(std::string connection_string,
@@ -79,8 +78,7 @@ private:
   std::vector<std::string> fPriorities{"LOCAL", "DEBUG", "MESSAGE",
       "WARNING", "ERROR", "FATAL"};
   std::ofstream fOutfile;
-  mongocxx::client fMongoClient;
-  mongocxx::collection fMongoCollection;
+  mongocxx::collection* fMongoCollection;
   std::string fHostname;
   int fLogLevel;
   int fDeleteAfterDays;
