@@ -79,7 +79,7 @@ StraxFormatter::~StraxFormatter(){
     {"data_packets", fBufferCounter},
     {"chunks", fBytesPerChunk}
   };
-  fOptions->SaveBenchmarks(counters, fBytesProcessed, ss.str(), times);
+  //fOptions->SaveBenchmarks(counters, fBytesProcessed, ss.str(), times);
 }
 
 void StraxFormatter::Close(std::map<int,int>& ret){

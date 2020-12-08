@@ -100,7 +100,7 @@ private:
   std::string fHostname;
   std::string fDetector;
   std::shared_ptr<mongocxx::pool> fPool;
-  mongocxx::client fClient;
+  mongocxx::pool::entry fClient; // yes
   mongocxx::database fDB;
   mongocxx::collection fDAC_collection;
 };

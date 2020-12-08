@@ -118,7 +118,7 @@ int MongoLog::Entry(int priority, std::string message, ...){
         "priority" << priority <<
         "runid" << fRunId <<
         bsoncxx::builder::stream::finalize;
-      fCollection->insert_one(std::move(d));
+      fCollection.insert_one(std::move(d));
     }
     catch(const std::exception &e){
       std::cout<<"Failed to insert log message "<<message<<" ("<<

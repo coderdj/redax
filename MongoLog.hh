@@ -80,7 +80,7 @@ private:
   int RotateLogFile();
   std::string LogFileName(struct tm* date);
   std::shared_ptr<mongocxx::pool> fPool;
-  mongocxx::client fClient;
+  mongocxx::pool::entry fClient;
   mongocxx::database fDB;
   mongocxx::collection fCollection;
   std::vector<std::string> fPriorities{"LOCAL", "DEBUG", "MESSAGE",
