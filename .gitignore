@@ -15,3 +15,4 @@ log_*
 
 # python caches
 *__pycache__*
+*strax_data*
