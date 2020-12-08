@@ -10,7 +10,6 @@
 #include <bsoncxx/document/view.hpp>
 #include <bsoncxx/document/value.hpp>
 #include <mongocxx/collection.hpp>
-#include <mongocxx/client.hpp>
 
 struct BoardType{
   int link;
@@ -67,7 +66,7 @@ class MongoLog;
 class Options{
 
 public:
-  Options(std::shared_ptr<MongoLog>&, std::string, std::string, std::string, std::string, std::string);
+  Options(std::shared_ptr<MongoLog>&, std::string, std::string, mongocxx::collection*, mongocxx::collection*, mongocxx::collection*, std::string);
   ~Options();
 
   int GetInt(std::string, int=-1);
@@ -91,14 +90,13 @@ public:
       std::map<std::string, double>&);
 
 private:
-  int Load(std::string, mongocxx::collection&, std::string);
+  int Load(std::string, mongocxx::collection*, std::string);
   int Override(bsoncxx::document::view);
-  mongocxx::client fClient;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   std::shared_ptr<MongoLog> fLog;
   mongocxx::collection fDAC_collection;
-  std::string fDBname;
+  mongocxx::collection fBM_collection;
   std::string fHostname;
   std::string fDetector;
 };

@@ -25,14 +25,11 @@ void SignalHandler(int signum) {
     return;
 }
 
-void UpdateStatus(std::string suri, std::string dbname, std::unique_ptr<DAQController>& controller) {
-  mongocxx::uri uri(suri);
-  mongocxx::client c(uri);
-  mongocxx::collection status = c[dbname]["status"];
+void UpdateStatus(std::string suri, mongocxx::collection* collection, dbname, std::unique_ptr<DAQController>& controller) {
   using namespace std::chrono;
   while (b_run == true) {
     try{
-      controller->StatusUpdate(&status);
+      controller->StatusUpdate(collection);
     }catch(const std::exception &e){
       std::cout<<"Can't connect to DB to update."<<std::endl;
       std::cout<<e.what()<<std::endl;
@@ -43,14 +40,14 @@ void UpdateStatus(std::string suri, std::string dbname, std::unique_ptr<DAQContr
 }
 
 int PrintUsage() {
-  std::cout<<"Welcome to REDAX readout\nAccepted command-line arguments:\n"
+  std::cout<<"Welcome to REDAX\nAccepted command-line arguments:\n"
     << "--id <id number>: id number of this readout instance, required\n"
     << "--uri <mongo uri>: full MongoDB URI, required\n"
     << "--db <database name>: name of the database to use, default \"daq\"\n"
     << "--logdir <directory>: where to write the logs, default pwd\n"
     << "--reader: this instance is a reader\n"
     << "--cc: this instance is a crate controller\n"
-    << "--arm-delay <delay>: ms to wait between the ARM command and the arming sequence, default 15000\n"
+    << "--arm-delay <delay>: ms to wait between the ARM command and the arming sequence, default 5000\n"
     << "--log-retention <value>: how many days to keep logfiles, default 7\n"
     << "--help: print this message\n"
     << "\n";
@@ -126,8 +123,9 @@ int main(int argc, char** argv){
   mongocxx::database db = client[dbname];
   mongocxx::collection control = db["control"];
   mongocxx::collection status = db["status"];
-  mongocxx::collection options_collection = db["options"];
+  mongocxx::collection opts_collection = db["options"];
   mongocxx::collection dac_collection = db["dac_calibration"];
+  mongocxx::collection benchmark_collection = db["redax_benchmarks"];
 
   // Logging
   auto fLog = std::make_shared<MongoLog>(log_retention, log_dir, suri, dbname, "log", hostname);
@@ -142,16 +140,16 @@ int main(int argc, char** argv){
     controller = std::make_unique<CControl_Handler>(fLog, hostname);
   else
     controller = std::make_unique<DAQController>(fLog, hostname);
-  std::thread status_update(&UpdateStatus, suri, dbname, std::ref(controller));
+  std::thread status_update(&UpdateStatus, &status, std::ref(controller));
 
   using namespace bsoncxx::builder::stream;
   // Sort oldest to newest
   auto opts = mongocxx::options::find_one_and_update{};
   opts.sort(document{} << "_id" << 1 << finalize);
-  auto query = document{} << "host" << hostname << "acknowledged." + hostname <<
-    open_document << "$exists" << 0 << close_document << finalize;
+  std::string ack_host = "acknowledged." + hostname;
+  auto query = document{} << "host" << hostname << ack_host << 0 << finalize;
   auto update = document{} << "$currentDate" << open_document <<
-    "acknowledged."+hostname << true << close_document << finalize;
+    ack_host << true << close_document << finalize;
   using namespace std::chrono;
   // Main program loop. Scan the database and look for commands addressed
   // to this hostname. 
@@ -196,6 +194,7 @@ int main(int argc, char** argv){
           fLog->Entry(MongoLog::Local, "Ack to stop took %i us",
               duration_cast<microseconds>(now-ack_time).count());
           fLog->SetRunId(-1);
+          fOptions.reset();
 	} else if(command == "arm"){
 	  // Can only arm if we're idle
 	  if(controller->status() == 0){
@@ -212,8 +211,8 @@ int main(int argc, char** argv){
 	    // Mongocxx types confusing so passing json strings around
             std::string mode = doc["mode"].get_utf8().value.to_string();
             fLog->Entry(MongoLog::Local, "Getting options doc for mode %s", mode.c_str());
-	    fOptions = std::make_shared<Options>(fLog, mode,
-				   hostname, suri, dbname, override_json);
+	    fOptions = std::make_shared<Options>(fLog, mode, &opts_collection,
+			      &dac_collection, &benchmark_collection, override_json);
             int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
             fLog->SetRunId(fOptions->GetInt("number", -1));
             fLog->Entry(MongoLog::Local, "Took %i ms to load config", dt);

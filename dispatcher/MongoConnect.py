@@ -421,9 +421,12 @@ class MongoConnect():
             if delay == 0:
                 docs = doc_base
                 docs['host'] = hosts[0]+hosts[1] if isinstance(hosts, tuple) else hosts
+                docs['acknowledged'] = {h:0 for h in docs['host']}
             else:
                 docs = [dict(doc_base.items()), dict(doc_base.items())]
                 docs[0]['host'], docs[1]['host'] = hosts
+                docs[0]['acknowledged'] = {h:0 for h in docs[0]['host']}
+                docs[1]['acknowledged'] = {h:0 for h in docs[1]['host']}
                 docs[1]['createdAt'] += datetime.timedelta(seconds=delay)
             self.collections['command_queue'].insert(docs)
         except Exception as e:

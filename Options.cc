@@ -4,8 +4,6 @@
 
 #include <cmath>
 
-#include <mongocxx/uri.hpp>
-#include <mongocxx/database.hpp>
 #include <bsoncxx/array/view.hpp>
 #include <bsoncxx/types.hpp>
 #include <bsoncxx/json.hpp>
@@ -13,13 +11,11 @@
 #include <bsoncxx/exception/exception.hpp>
 
 Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::string hostname,
-          std::string suri, std::string dbname, std::string override_opts) : 
-    fLog(log), fDBname(dbname), fHostname(hostname) {
+          mongocxx::collection* opts_collection, mongocxx::collection* dac_collection,
+          mongocxx::collection* bm_collection, std::string override_opts) : 
+    fLog(log), fHostname(hostname), fDAC_collection(dac_collection),
+    fBM_collection(bm_collection) {
   bson_value = NULL;
-  mongocxx::uri uri{suri};
-  fClient = mongocxx::client{uri};
-  fDAC_collection = fClient[dbname]["dac_calibration"];
-  mongocxx::collection opts_collection = fClient[dbname]["options"];
   if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
 }
@@ -31,11 +27,11 @@ Options::~Options(){
   }
 }
 
-int Options::Load(std::string name, mongocxx::collection& opts_collection,
+int Options::Load(std::string name, mongocxx::collection* opts_collection,
 	std::string override_opts){
   // Try to pull doc from DB
   bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
-  trydoc = opts_collection.find_one(bsoncxx::builder::stream::document{}<<
+  trydoc = opts_collection->find_one(bsoncxx::builder::stream::document{}<<
 				    "name" << name.c_str() << bsoncxx::builder::stream::finalize);
   if(!trydoc){
     fLog->Entry(MongoLog::Warning, "Failed to find your options file '%s' in DB", name.c_str());
@@ -53,7 +49,7 @@ int Options::Load(std::string name, mongocxx::collection& opts_collection,
   try{
     bsoncxx::array::view include_array = (*trydoc).view()["includes"].get_array().value;
     for(bsoncxx::array::element ele : include_array){
-      auto sd = opts_collection.find_one(bsoncxx::builder::stream::document{} <<
+      auto sd = opts_collection->find_one(bsoncxx::builder::stream::document{} <<
 					 "name" << ele.get_utf8().value.to_string() <<
 					 bsoncxx::builder::stream::finalize);
       if(sd)
@@ -340,7 +336,7 @@ std::vector<uint16_t> Options::GetDAC(int bid, int num_chan, uint16_t default_va
   auto q = document{} << std::to_string(bid) << open_document << "$exists" << 1 << close_document << finalize;
   auto opts = mongocxx::options::find{};
   opts.sort(sort_order.view());
-  auto cursor = fDAC_collection.find(std::move(q), opts);
+  auto cursor = fDAC_collection->find(std::move(q), opts);
   auto doc = cursor.begin();
   if (doc == cursor.end() || doc->find(std::to_string(bid)) == doc->end()) {
     fLog->Entry(MongoLog::Local, "No baseline calibrations? You must be new");
@@ -374,14 +370,14 @@ void Options::UpdateDAC(std::map<int, std::vector<uint16_t>>& all_dacs){
   auto write_doc = update_doc<<finalize;
   mongocxx::options::update options;
   options.upsert(true);
-  fDAC_collection.update_one(std::move(search_doc), std::move(write_doc), options);
+  fDAC_collection->update_one(std::move(search_doc), std::move(write_doc), options);
   return;
 }
 
 void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counters,
     long bytes, std::string sid, std::map<std::string, double>& times) {
   using namespace bsoncxx::builder::stream;
-  int level = GetInt("benchmark_level", 1);
+  int level = GetInt("benchmark_level", 0);
   if (level == 0) return;
   int run_id = GetInt("number", -1);
   std::map<std::string, std::map<int, long>> _counters;
@@ -419,6 +415,6 @@ void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counter
   auto write_doc = update_doc << finalize;
   mongocxx::options::update options;
   options.upsert(true);
-  fClient[fDBname]["redax_benchmarks"].update_one(search_doc.view(), write_doc.view(), options);
+  fBM_collection->update_one(search_doc.view(), write_doc.view(), options);
   return;
 }
