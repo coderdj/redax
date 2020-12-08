@@ -134,7 +134,7 @@ int main(int argc, char** argv){
   mongocxx::collection log_collection = db["log"];
 
   // Logging
-  auto fLog = std::make_shared<MongoLog>(log_retention, log_collection,log_dir, hostname);
+  auto fLog = std::make_shared<MongoLog>(log_retention, &log_collection, log_dir, hostname);
 
   //Options
   std::shared_ptr<Options> fOptions;

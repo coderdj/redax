@@ -52,7 +52,7 @@ class MongoLog{
   */
 
 public:
-  MongoLog(int DeleteAfterDays, mongocxx::collection*, std::string);
+  MongoLog(int DeleteAfterDays, mongocxx::collection*, std::string, std::string);
   ~MongoLog();
   
   int  Initialize(std::string connection_string,
