@@ -13,12 +13,12 @@
 Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::string hostname,
           mongocxx::collection* opts_collection, std::shared_ptr<mongocxx::pool>& pool,
           std::string override_opts, std::string dbname) : 
-    fLog(log), fHostname(hostname) {
+    fLog(log), fHostname(hostname), fPool(pool), fClient(pool->acquire()) {
   bson_value = NULL;
   if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
-  fPool = pool;
-  fClient = pool->acquire();
+  //fPool = pool;
+  //fClient = pool->acquire();
   fDB = (*fClient)[dbname];
   fDAC_collection = fDB["dac_calibration"];
 }

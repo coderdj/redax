@@ -3,14 +3,15 @@
 #include <chrono>
 #include <bsoncxx/builder/stream/document.hpp>
 
-MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string log_dir, std::string host){
+MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string log_dir, std::string host) : 
+  fPool(pool), fClient(pool->acquire()) {
   fLogLevel = 0;
   fHostname = host;
   fDeleteAfterDays = DeleteAfterDays;
   fFlushPeriod = 5; // seconds
   fOutputDir = log_dir;
-  fPool = pool;
-  fClient = pool->acquire();
+  //fPool = pool;
+  //fClient = pool->acquire();
   fDB = (*fClient)[dbname];
   fCollection = fDB["log"];
 
