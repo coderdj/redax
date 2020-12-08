@@ -38,7 +38,7 @@ void UpdateStatus(std::shared_ptr<mongocxx::pool> pool, std::string dbname,
   while (b_run == true) {
     auto start = std::chrono::system_clock::now();
     try{
-      controller->StatusUpdate(collection);
+      controller->StatusUpdate(&collection);
     }catch(const std::exception &e){
       std::cout<<"Can't connect to DB to update."<<std::endl;
       std::cout<<e.what()<<std::endl;
