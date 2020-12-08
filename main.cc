@@ -18,6 +18,7 @@
 #include <mongocxx/uri.hpp>
 #include <mongocxx/database.hpp>
 #include <mongocxx/client.hpp>
+#include <mongocxx/pool.hpp>
 
 std::atomic_bool b_run = true;
 std::string hostname = "";
@@ -28,8 +29,12 @@ void SignalHandler(int signum) {
     return;
 }
 
-void UpdateStatus(mongocxx::collection* collection, std::unique_ptr<DAQController>& controller) {
+void UpdateStatus(std::shared_ptr<mongocxx::pool> pool, std::string dbname,
+    std::unique_ptr<DAQController>& controller) {
   using namespace std::chrono;
+  auto client = pool->acquire();
+  auto db = (*client)[dbname];
+  auto collection = db["status"];
   while (b_run == true) {
     auto start = std::chrono::system_clock::now();
     try{
@@ -124,17 +129,14 @@ int main(int argc, char** argv){
   // MongoDB Connectivity for control database. Bonus for later:
   // exception wrap the URI parsing and client connection steps
   mongocxx::uri uri(suri.c_str());
-  mongocxx::client client(uri);
-  mongocxx::database db = client[dbname];
+  auto pool = std::make_shared<mongocxx::pool>(uri);
+  auto client = pool->acquire();
+  mongocxx::database db = (*client)[dbname];
   mongocxx::collection control = db["control"];
-  mongocxx::collection status = db["status"];
   mongocxx::collection opts_collection = db["options"];
-  mongocxx::collection dac_collection = db["dac_calibration"];
-  mongocxx::collection benchmark_collection = db["redax_benchmarks"];
-  mongocxx::collection log_collection = db["log"];
 
   // Logging
-  auto fLog = std::make_shared<MongoLog>(log_retention, &log_collection, log_dir, hostname);
+  auto fLog = std::make_shared<MongoLog>(log_retention, pool, dbname, log_dir, hostname);
 
   //Options
   std::shared_ptr<Options> fOptions;
@@ -146,7 +148,7 @@ int main(int argc, char** argv){
     controller = std::make_unique<CControl_Handler>(fLog, hostname);
   else
     controller = std::make_unique<DAQController>(fLog, hostname);
-  std::thread status_update(&UpdateStatus, &status, std::ref(controller));
+  std::thread status_update(&UpdateStatus, pool, dbname, std::ref(controller));
 
   using namespace bsoncxx::builder::stream;
   // Sort oldest to newest
@@ -218,7 +220,7 @@ int main(int argc, char** argv){
             std::string mode = doc["mode"].get_utf8().value.to_string();
             fLog->Entry(MongoLog::Local, "Getting options doc for mode %s", mode.c_str());
 	    fOptions = std::make_shared<Options>(fLog, mode, hostname, &opts_collection,
-			      &dac_collection, &benchmark_collection, override_json);
+			      pool, dbname, override_json);
             int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
             fLog->SetRunId(fOptions->GetInt("number", -1));
             fLog->Entry(MongoLog::Local, "Took %i ms to load config", dt);

@@ -1,17 +1,18 @@
 #include "MongoLog.hh"
 #include <iostream>
 #include <chrono>
-#include <mongocxx/uri.hpp>
-#include <mongocxx/database.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 
-MongoLog::MongoLog(int DeleteAfterDays, mongocxx::collection* collection, std::string log_dir, std::string host){
+MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string log_dir, std::string host){
   fLogLevel = 0;
   fHostname = host;
   fDeleteAfterDays = DeleteAfterDays;
   fFlushPeriod = 5; // seconds
   fOutputDir = log_dir;
-  fMongoCollection = collection;
+  fPool = pool;
+  fClient = pool->acquire();
+  fDB = (*fClient)[dbname];
+  fCollection = fDB["log"];
 
   std::cout<<"Configured WITH local file logging to " << log_dir << std::endl;
   fFlush = true;
@@ -117,7 +118,7 @@ int MongoLog::Entry(int priority, std::string message, ...){
         "priority" << priority <<
         "runid" << fRunId <<
         bsoncxx::builder::stream::finalize;
-      fMongoCollection->insert_one(std::move(d));
+      fCollection->insert_one(std::move(d));
     }
     catch(const std::exception &e){
       std::cout<<"Failed to insert log message "<<message<<" ("<<

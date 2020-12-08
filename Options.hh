@@ -7,9 +7,13 @@
 #include <streambuf>
 #include <iostream>
 #include <stdexcept>
+#include <memory>
+#include <mongocxx/pool.hpp>
+#include <mongocxx/client.hpp>
+#include <mongocxx/database.hpp>
+#include <mongocxx/collection.hpp>
 #include <bsoncxx/document/view.hpp>
 #include <bsoncxx/document/value.hpp>
-#include <mongocxx/collection.hpp>
 
 struct BoardType{
   int link;
@@ -66,7 +70,7 @@ class MongoLog;
 class Options{
 
 public:
-  Options(std::shared_ptr<MongoLog>&, std::string, std::string, mongocxx::collection*, mongocxx::collection*, mongocxx::collection*, std::string);
+  Options(std::shared_ptr<MongoLog>&, std::string, std::string, mongocxx::collection*, std::shared_ptr<mongocxx::pool>&, std::string, std::string);
   ~Options();
 
   int GetInt(std::string, int=-1);
@@ -86,8 +90,6 @@ public:
   int GetFaxOptions(fax_options_t&);
 
   void UpdateDAC(std::map<int, std::vector<uint16_t>>&);
-  void SaveBenchmarks(std::map<std::string, std::map<int, long>>&, long, std::string,
-      std::map<std::string, double>&);
 
 private:
   int Load(std::string, mongocxx::collection*, std::string);
@@ -97,8 +99,10 @@ private:
   std::shared_ptr<MongoLog> fLog;
   std::string fHostname;
   std::string fDetector;
-  mongocxx::collection* fDAC_collection;
-  mongocxx::collection* fBM_collection;
+  std::shared_ptr<mongocxx::pool> fPool;
+  mongocxx::entry fClient; // yes
+  mongocxx::database fDB;
+  mongocxx::collection fDAC_collection;
 };
 
 #endif
