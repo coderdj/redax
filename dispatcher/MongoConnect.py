@@ -389,10 +389,10 @@ class MongoConnect():
         Finds the time when specified detector's crate controller ack'd the specified command
         '''
         cc = list(self.latest_status[detector]['controller'].keys())[0]
-        query = {'acknowledged.%s' % cc: {'$exists' : 1},
+        query = {'acknowledged.%s' % cc: {'$ne' : 0},
                  '_id' : self.command_oid[detector][command]}
         doc = self.collections['outgoing_commands'].find_one(query)
-        if doc is not None:
+        if doc is not None and not isinstance(doc['acknowledged'][cc], int):
             return doc['acknowledged'][cc]
         self.log.debug('No ACK time for %s-%s' % (detector, command))
         return None
