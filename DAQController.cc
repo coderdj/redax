@@ -184,6 +184,7 @@ int DAQController::Stop(){
   fStatus = DAXHelpers::Idle;
 
   fLog->SetRunId(-1);
+  fOptions.reset();
   std::cout<<"Finished end"<<std::endl;
   fStatus = DAXHelpers::Idle;
   return 0;

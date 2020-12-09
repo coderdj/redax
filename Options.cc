@@ -4,8 +4,6 @@
 
 #include <cmath>
 
-#include <mongocxx/uri.hpp>
-#include <mongocxx/database.hpp>
 #include <bsoncxx/array/view.hpp>
 #include <bsoncxx/types.hpp>
 #include <bsoncxx/json.hpp>
@@ -13,15 +11,16 @@
 #include <bsoncxx/exception/exception.hpp>
 
 Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::string hostname,
-          std::string suri, std::string dbname, std::string override_opts) : 
-    fLog(log), fDBname(dbname), fHostname(hostname) {
+          mongocxx::collection* opts_collection, std::shared_ptr<mongocxx::pool>& pool,
+          std::string dbname, std::string override_opts) : 
+    fLog(log), fHostname(hostname), fPool(pool), fClient(pool->acquire()) {
   bson_value = NULL;
-  mongocxx::uri uri{suri};
-  fClient = mongocxx::client{uri};
-  fDAC_collection = fClient[dbname]["dac_calibration"];
-  mongocxx::collection opts_collection = fClient[dbname]["options"];
   if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
+  //fPool = pool;
+  //fClient = pool->acquire();
+  fDB = (*fClient)[dbname];
+  fDAC_collection = fDB["dac_calibration"];
 }
 
 Options::~Options(){
@@ -31,11 +30,11 @@ Options::~Options(){
   }
 }
 
-int Options::Load(std::string name, mongocxx::collection& opts_collection,
+int Options::Load(std::string name, mongocxx::collection* opts_collection,
 	std::string override_opts){
   // Try to pull doc from DB
   bsoncxx::stdx::optional<bsoncxx::document::value> trydoc;
-  trydoc = opts_collection.find_one(bsoncxx::builder::stream::document{}<<
+  trydoc = opts_collection->find_one(bsoncxx::builder::stream::document{}<<
 				    "name" << name.c_str() << bsoncxx::builder::stream::finalize);
   if(!trydoc){
     fLog->Entry(MongoLog::Warning, "Failed to find your options file '%s' in DB", name.c_str());
@@ -53,7 +52,7 @@ int Options::Load(std::string name, mongocxx::collection& opts_collection,
   try{
     bsoncxx::array::view include_array = (*trydoc).view()["includes"].get_array().value;
     for(bsoncxx::array::element ele : include_array){
-      auto sd = opts_collection.find_one(bsoncxx::builder::stream::document{} <<
+      auto sd = opts_collection->find_one(bsoncxx::builder::stream::document{} <<
 					 "name" << ele.get_utf8().value.to_string() <<
 					 bsoncxx::builder::stream::finalize);
       if(sd)
@@ -378,47 +377,3 @@ void Options::UpdateDAC(std::map<int, std::vector<uint16_t>>& all_dacs){
   return;
 }
 
-void Options::SaveBenchmarks(std::map<std::string, std::map<int, long>>& counters,
-    long bytes, std::string sid, std::map<std::string, double>& times) {
-  using namespace bsoncxx::builder::stream;
-  int level = GetInt("benchmark_level", 1);
-  if (level == 0) return;
-  int run_id = GetInt("number", -1);
-  std::map<std::string, std::map<int, long>> _counters;
-  if (level == 1) {
-    for (const auto& p : counters)
-      for (const auto& pp : p.second)
-        if (pp.first != 0)
-          _counters[p.first][int(std::log2(pp.first))] += pp.second;
-        else
-          _counters[p.first][-1] += pp.second;
-  } else if (level == 2) {
-    _counters = counters;
-  }
-
-  auto search_doc = document{} << "run" << run_id << finalize;
-  auto update_doc = document{};
-  update_doc << "$set" << open_document << "run" << run_id << close_document;
-  update_doc << "$push" << open_document << "data" << open_document;
-  update_doc << "host" << fHostname;
-  update_doc << "id" << sid;
-  update_doc << "bytes" << bytes;
-  for (auto& p : times)
-    update_doc << p.first << p.second;
-  if (level >= 1) {
-    for (auto& p : _counters) {
-      update_doc << p.first << open_document;
-      for (auto& pp : p.second)
-        update_doc << std::to_string(pp.first) << pp.second;
-      update_doc << close_document;
-    }
-  }
-
-  update_doc << close_document; // data
-  update_doc << close_document; // push
-  auto write_doc = update_doc << finalize;
-  mongocxx::options::update options;
-  options.upsert(true);
-  fClient[fDBname]["redax_benchmarks"].update_one(search_doc.view(), write_doc.view(), options);
-  return;
-}

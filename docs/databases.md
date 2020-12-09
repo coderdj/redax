@@ -122,7 +122,7 @@ The control database is used to propagate commands from the dispatcher to the re
      "user" : "web",
      "host" : ["fdaq00_reader_0"],
      "acknowledged" : {
-         "fdaq00_reader_0" : 1601469970934
+         "fdaq00_reader_0" : 0
      },
      "command" : "arm",
      "createdAt": <date object>
@@ -135,7 +135,7 @@ The control database is used to propagate commands from the dispatcher to the re
 |mode	|Options file to use for this run. Corresponds to the 'name' field of the options doc. |
 |user	|Who started the run? Corresponds to the last person to change the detector_status doc during normal operation. Exceptional stop commands can be automatically issued by various subsystems as well in case of errors.
 |host	|List of all hosts to which this command is directed. Readers and crate controllers will only process commands addressed to them. |
-|acknowledged	|Before attempting to process a command all reader and crate controller processes will first acknowledge the command as received. This does not indicate that processing the command was successful! It just indicates the thing tried. The dispatcher has to watch for the appropriate state change of the slave nodes in order to determine if the command achieved its goal. This is a dictionary, with values set to the timestamp (in ms) of when the acknowledgement happened. |
+|acknowledged	|Before attempting to process a command all reader and crate controller processes will first acknowledge the command as received. This does not indicate that processing the command was successful! It just indicates the thing tried. The dispatcher has to watch for the appropriate state change of the slave nodes in order to determine if the command achieved its goal. This is a dictionary, with values set to the timestamp of when the acknowledgement happened. This dictionary must be populated with 0s before insertion. |
 |command	|This is the actual command. 'arm' gets the DAQ ready to start. 'start' and 'stop' do what they say on the tin. 'stop' can also be used as a general reset command for a given instance. |
 
 ### db.options

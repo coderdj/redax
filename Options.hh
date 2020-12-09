@@ -7,10 +7,13 @@
 #include <streambuf>
 #include <iostream>
 #include <stdexcept>
+#include <memory>
+#include <mongocxx/pool.hpp>
+#include <mongocxx/client.hpp>
+#include <mongocxx/database.hpp>
+#include <mongocxx/collection.hpp>
 #include <bsoncxx/document/view.hpp>
 #include <bsoncxx/document/value.hpp>
-#include <mongocxx/collection.hpp>
-#include <mongocxx/client.hpp>
 
 struct BoardType{
   int link;
@@ -67,7 +70,7 @@ class MongoLog;
 class Options{
 
 public:
-  Options(std::shared_ptr<MongoLog>&, std::string, std::string, std::string, std::string, std::string);
+  Options(std::shared_ptr<MongoLog>&, std::string, std::string, mongocxx::collection*, std::shared_ptr<mongocxx::pool>&, std::string, std::string);
   ~Options();
 
   int GetInt(std::string, int=-1);
@@ -87,20 +90,19 @@ public:
   int GetFaxOptions(fax_options_t&);
 
   void UpdateDAC(std::map<int, std::vector<uint16_t>>&);
-  void SaveBenchmarks(std::map<std::string, std::map<int, long>>&, long, std::string,
-      std::map<std::string, double>&);
 
 private:
-  int Load(std::string, mongocxx::collection&, std::string);
+  int Load(std::string, mongocxx::collection*, std::string);
   int Override(bsoncxx::document::view);
-  mongocxx::client fClient;
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   std::shared_ptr<MongoLog> fLog;
-  mongocxx::collection fDAC_collection;
-  std::string fDBname;
   std::string fHostname;
   std::string fDetector;
+  std::shared_ptr<mongocxx::pool> fPool;
+  mongocxx::pool::entry fClient; // yes
+  mongocxx::database fDB;
+  mongocxx::collection fDAC_collection;
 };
 
 #endif

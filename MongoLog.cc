@@ -1,32 +1,24 @@
 #include "MongoLog.hh"
 #include <iostream>
 #include <chrono>
-#include <mongocxx/uri.hpp>
-#include <mongocxx/database.hpp>
 #include <bsoncxx/builder/stream/document.hpp>
 
-MongoLog::MongoLog(int DeleteAfterDays, std::string log_dir, std::string connection_uri,
-    std::string db, std::string collection, std::string host){
+MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string log_dir, std::string host) : 
+  fPool(pool), fClient(pool->acquire()) {
   fLogLevel = 0;
   fHostname = host;
   fDeleteAfterDays = DeleteAfterDays;
   fFlushPeriod = 5; // seconds
   fOutputDir = log_dir;
+  //fPool = pool;
+  //fClient = pool->acquire();
+  fDB = (*fClient)[dbname];
+  fCollection = fDB["log"];
 
   std::cout<<"Configured WITH local file logging to " << log_dir << std::endl;
   fFlush = true;
   fFlushThread = std::thread(&MongoLog::Flusher, this);
   fRunId = -1;
-
-  try{
-    mongocxx::uri uri{connection_uri};
-    fMongoClient = mongocxx::client(uri);
-    fMongoCollection = fMongoClient[db][collection];
-  }
-  catch(const std::exception &e){
-    std::cout<<"Couldn't initialize the log. So gonna fail then."<<std::endl;
-    throw std::runtime_error("Couldn't initialize the log");
-  }
 
   RotateLogFile();
 
@@ -127,7 +119,7 @@ int MongoLog::Entry(int priority, std::string message, ...){
         "priority" << priority <<
         "runid" << fRunId <<
         bsoncxx::builder::stream::finalize;
-      fMongoCollection.insert_one(std::move(d));
+      fCollection.insert_one(std::move(d));
     }
     catch(const std::exception &e){
       std::cout<<"Failed to insert log message "<<message<<" ("<<

@@ -12,6 +12,8 @@ def main(coll):
     parser.add_argument('--host', nargs='+', default=[os.uname()[1]], help="Hosts to issue to")
 
     args = parser.parse_args()
+    if not isinstance(args.host, (list, tuple)):
+        args.host = [args.host]
 
     doc = {
             "command": args.command,
@@ -20,13 +22,14 @@ def main(coll):
             "host": args.host,
             "user": os.getlogin(),
             "run_identifier": '%06i' % args.number,
-            "createdAt": datetime.datetime.utcnow()
+            "createdAt": datetime.datetime.utcnow(),
+            "acknowledged": {h:0 for h in args.host}
             }
     coll.insert_one(doc)
     return
 
 if __name__ == '__main__':
-    with MongoClient("mongodb://daq:%s@xenon1t-daq:27017/admin" % os.environ['MONGO_PASSWORD_DAQ']) as client:
+    with MongoClient("mongodb://daq:%s@gw:27020/admin" % os.environ['MONGO_PASSWORD_DAQ']) as client:
         try:
             main(client['daq']['control'])
         except Exception as e:

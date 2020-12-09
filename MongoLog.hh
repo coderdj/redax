@@ -14,8 +14,11 @@
 #include <atomic>
 #include <thread>
 #include <experimental/filesystem>
+#include <memory>
 
+#include <mongocxx/pool.hpp>
 #include <mongocxx/client.hpp>
+#include <mongocxx/database.hpp>
 #include <mongocxx/collection.hpp>
 
 /* 
@@ -53,7 +56,7 @@ class MongoLog{
   */
 
 public:
-  MongoLog(int DeleteAfterDays, std::string log_dir, std::string, std::string, std::string, std::string);
+  MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>&, std::string, std::string, std::string);
   ~MongoLog();
   
   int  Initialize(std::string connection_string,
@@ -76,11 +79,13 @@ private:
   int Today(struct tm* date);
   int RotateLogFile();
   std::string LogFileName(struct tm* date);
+  std::shared_ptr<mongocxx::pool> fPool;
+  mongocxx::pool::entry fClient;
+  mongocxx::database fDB;
+  mongocxx::collection fCollection;
   std::vector<std::string> fPriorities{"LOCAL", "DEBUG", "MESSAGE",
       "WARNING", "ERROR", "FATAL"};
   std::ofstream fOutfile;
-  mongocxx::client fMongoClient;
-  mongocxx::collection fMongoCollection;
   std::string fHostname;
   int fLogLevel;
   int fDeleteAfterDays;

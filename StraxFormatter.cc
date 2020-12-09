@@ -79,7 +79,7 @@ StraxFormatter::~StraxFormatter(){
     {"data_packets", fBufferCounter},
     {"chunks", fBytesPerChunk}
   };
-  fOptions->SaveBenchmarks(counters, fBytesProcessed, ss.str(), times);
+  //fOptions->SaveBenchmarks(counters, fBytesProcessed, ss.str(), times);
 }
 
 void StraxFormatter::Close(std::map<int,int>& ret){
@@ -302,7 +302,7 @@ void StraxFormatter::Process() {
       fBuffer.pop_front();
       lk.unlock();
       ProcessDatapacket(std::move(dp));
-      WriteOutChunks();
+      if (fActive == true) WriteOutChunks();
     } else {
       lk.unlock();
     }
