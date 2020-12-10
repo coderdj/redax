@@ -244,9 +244,6 @@ class MongoConnect():
                 else:
                     status = STATUS['UNKNOWN']
 
-            if detector == 'neutron_veto':
-                status = STATUS.IDLE
-
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
