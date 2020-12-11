@@ -325,7 +325,7 @@ class MongoConnect():
                 {'$lookup': {'from': 'options', 'localField': 'includes',
                     'foreignField': 'name', 'as': 'subconfig'}},
                 {'$addFields': {'subconfig': {'$concatArrays': ['$subconfig', ['$$ROOT']]}}},
-                {'$unwind': {'path': '$subconfig'}},
+                {'$unwind': '$subconfig'},
                 {'$group': {'_id': None, 'config': {'$mergeObjects': '$subconfig'}}},
                 {'$replaceWith': '$config'},
                 {'$project': {'_id': 0, 'description': 0, 'includes': 0, 'subconfig': 0}},

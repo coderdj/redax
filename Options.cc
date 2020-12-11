@@ -30,8 +30,7 @@ Options::~Options(){
   }
 }
 
-int Options::Load(std::string name, mongocxx::collection* opts_collection,
-    std::string override_opts) {
+int Options::Load(std::string name, mongocxx::collection* opts_collection, std::string override_opts) {
   using namespace bsoncxx::builder::stream;
   auto pl = mongocxx::pipeline();
   pl.match(document{} << "name" << name << finalize);
