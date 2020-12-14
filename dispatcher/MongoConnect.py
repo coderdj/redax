@@ -543,6 +543,7 @@ class MongoConnect():
             if start_time is None:
                 start_time = datetime.datetime.utcnow()-datetime.timedelta(seconds=2)
             run_doc['start'] = start_time
+            run_doc['end'] = None
 
             self.collections['run'].insert_one(run_doc)
         except Exception as e:
