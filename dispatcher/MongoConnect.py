@@ -512,6 +512,7 @@ class MongoConnect():
             'detectors': detectors,
             'user': goal_state[detector]['user'],
             'mode': goal_state[detector]['mode'],
+            'bootstrax': {'state': None},
         }
 
         # If there's a source add the source. Also add the complete ini file.
