@@ -402,7 +402,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
   int bins_around_max = fOptions->GetInt("baseline_bins_around_max", 3);
   int steps_repeated(0), max_repeated_steps(10), bid(0);
   int triggers_per_step = fOptions->GetInt("baseline_triggers_per_step", 3);
-  int nominal_baseline = fOptions->GetInt("baseline_value", 16000);
+  int target_baseline = fOptions->GetInt("baseline_value", 16000);
   bool force = fOptions->GetInt("baseline_force", 0);
   std::chrono::milliseconds ms_between_triggers(fOptions->GetInt("baseline_ms_between_triggers", 10));
   vector<long> DAC_cal_points = {60000, 30000, 6000}; // arithmetic overflow
