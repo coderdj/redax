@@ -374,7 +374,7 @@ class MongoConnect():
             endtime = self.GetAckTime(detector, 'stop')
             if endtime is None:
                 endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
-            query = {"number" : int(number), "end" : {"$exists" : False}}
+            query = {"number" : int(number), "end" : None, 'detector': detector}
             updates = {"$set" : {"end" : endtime}}
             if force:
                 updates["$push"] = {"tags" : {"name" : "messy", "user" : "daq",
@@ -512,7 +512,7 @@ class MongoConnect():
             'detectors': detectors,
             'user': goal_state[detector]['user'],
             'mode': goal_state[detector]['mode'],
-            'bootstrax': {'state': None},
+            #'bootstrax': {'state': None}, # SOON (TM)
         }
 
         # If there's a source add the source. Also add the complete ini file.
