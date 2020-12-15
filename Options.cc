@@ -46,7 +46,7 @@ int Options::Load(std::string name, mongocxx::collection* opts_collection, std::
   pl.project(document{} << "subconfig" << 0 << finalize);
   if (override_opts != "")
     pl.add_fields(bsoncxx::from_json(override_opts));
-  for (auto doc : opts_collection.aggregate(pl)) {
+  for (auto doc : opts_collection->aggregate(pl)) {
     bson_value = new bsoncxx::document::value(doc);
     bson_options = bson_value->view();
     try{
