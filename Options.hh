@@ -93,7 +93,6 @@ public:
 
 private:
   int Load(std::string, mongocxx::collection*, std::string);
-  int Override(bsoncxx::document::view);
   bsoncxx::document::view bson_options;
   bsoncxx::document::value *bson_value;
   std::shared_ptr<MongoLog> fLog;
