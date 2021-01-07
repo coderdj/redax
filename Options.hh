@@ -8,6 +8,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <memory>
+#include <map>
 #include <mongocxx/pool.hpp>
 #include <mongocxx/client.hpp>
 #include <mongocxx/database.hpp>
@@ -22,6 +23,7 @@ struct BoardType{
   std::string type;
   std::string host;
   unsigned int vme_address;
+  std::string detector;
 };
 
 struct RegisterType{
@@ -82,6 +84,7 @@ public:
   std::vector<BoardType> GetBoards(std::string);
   std::vector<RegisterType> GetRegisters(int, bool=false);
   std::vector<uint16_t> GetDAC(int, int, uint16_t);
+  int GetV1495Opts(std::map<std::string, int>&);
   int GetCrateOpt(CrateOptions &ret);
   int GetHEVOpt(HEVOptions &ret);
   int16_t GetChannel(int, int);

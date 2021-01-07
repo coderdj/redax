@@ -1,10 +1,8 @@
 #ifndef _V1495_HH_
 #define _V1495_HH_
 
-#include <CAENVMElib.h>
-#include "MongoLog.hh"
-#include "Options.hh"
-#include "V1724.hh"
+#include <memory>
+#include <map>
 
 //Register address definitions taken from XENON1T m_veto class in kodiaq
 //https://github.com/coderdj/kodiaq and XENON1T DAQ m_veto config files
@@ -19,20 +17,26 @@
 #define V1495_CTRL			0x1018
 */
 
-using namespace std;
+class MongoLog;
+class Options;
 
 class V1495{
 
 public:
       V1495(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, unsigned);
       virtual ~V1495();
-      int WriteReg(unsigned int reg, unsigned int value);
+      virtual int Init(std::map<std::string, int>&) {return 0;}
+      int WriteReg(unsigned int, unsigned int);
+      // Functions for a child class to implement
+      virtual int BeforeSINStart() {return 0;}
+      virtual int AfterSINStart() {return 0;}
+      virtual int BeforeSINStop() {return 0;}
+      virtual int AfterSINStop() {return 0;}
 
 private:
       int fBoardHandle, fBID;
       unsigned int fBaseAddress;
       std::shared_ptr<Options> fOptions;
       std::shared_ptr<MongoLog> fLog;
-
 };
 #endif
