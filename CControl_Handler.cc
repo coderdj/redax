@@ -1,6 +1,7 @@
 #include "CControl_Handler.hh"
 #include "DAXHelpers.hh"
 #include "V2718.hh"
+#include "f2718.hh"
 #ifdef HASDDC10
 #include "DDC10.hh"
 #endif
@@ -48,15 +49,18 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
   }
 
   // Getting the link and crate for V2718
-  std::vector<BoardType> bv = fOptions->GetBoards("V2718");
+  std::vector<BoardType> bv = fOptions->GetBoards("V27XX");
   if(bv.size() != 1){
     fLog->Entry(MongoLog::Message, "Require one V2718 to be defined");
     fStatus = DAXHelpers::Idle;
     return -1;
   }
-  BoardType cc_def = bv[0];
+  BoardType cc = bv[0];
   try{
-    fV2718 = std::make_unique<V2718>(fLog, copts, cc_def.link, cc_def.crate);
+    if (cc.type == "f2718")
+      fV2718 = std::make_unique<f2718>(fLog, copts, cc.link, cc.crate);
+    else
+      fV2718 = std::make_unique<V2718>(fLog, copts, cc.link, cc.crate);
   }catch(std::exception& e){
     fLog->Entry(MongoLog::Error, "Failed to initialize V2718 crate controller: %s", e.what());
     fStatus = DAXHelpers::Idle;
