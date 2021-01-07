@@ -47,6 +47,7 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
 
   fEmptyVerified = 0;
   fLog = log;
+  fMutexWaitTime = fMutexLocks = 0;
 
   fBufferNumChunks = fOptions->GetInt("strax_buffer_num_chunks", 2);
   fWarnIfChunkOlderThan = fOptions->GetInt("strax_chunk_phase_limit", 2);
@@ -80,6 +81,8 @@ StraxFormatter::~StraxFormatter(){
     {"chunks", fBytesPerChunk}
   };
   //fOptions->SaveBenchmarks(counters, fBytesProcessed, ss.str(), times);
+  fLog->Entry(MongoLog::Local, "Thread %s waited %i ns and %i locks", ss.str().c_str(),
+      fMutexWaitTime, fMutexLocks);
 }
 
 void StraxFormatter::Close(std::map<int,int>& ret){
@@ -277,11 +280,15 @@ void StraxFormatter::AddFragmentToBuffer(std::string fragment, uint32_t ts, int 
 }
 
 void StraxFormatter::ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>& in, int bytes) {
+  auto start = std::chrono::high_resolution_clock::now();
   {
     const std::lock_guard<std::mutex> lk(fBufferMutex);
+    auto end = std::chrono::high_resolution_clock::now();
     fBufferCounter[in.size()]++;
     fBuffer.splice(fBuffer.end(), in);
     fInputBufferSize += bytes;
+    fMutexWaitTime += std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count();
+    fMutexLocks++;
   }
   fCV.notify_one();
 }
