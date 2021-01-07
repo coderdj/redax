@@ -2,6 +2,7 @@
 #include "MongoLog.hh"
 #include "Options.hh"
 #include <CAENVMElib.h>
+#include "DAXHelpers.hh"
 
 
 V1495::V1495(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& options, int bid, int handle, unsigned int address){
@@ -13,6 +14,15 @@ V1495::V1495(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& options, 
 }
 
 V1495::~V1495(){}
+
+int V1495::Arm(std::map<std::string, int>&) {
+  for (auto reg : fOptions->GetRegisters(fBID, true)) {
+    if (WriteReg(DAXHelpers::StringToHex(reg.reg), DAXHelpers::StringToHex(reg.val))) {
+      return -1;
+    }
+  }
+  return 0;
+}
 
 int V1495::WriteReg(unsigned int reg, unsigned int value){
   u_int32_t write=0;

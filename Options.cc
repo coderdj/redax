@@ -149,9 +149,11 @@ std::vector<BoardType> Options::GetBoards(std::string type){
   std::vector <std::string> types;
   if(type == "V17XX")
     types = {"V1724", "V1730", "V1724_MV", "f1724"};
+  else if (type == "V1495")
+    types = {"V1495", "V1495_TPC"};
   else
     types.push_back(type);
-  
+
   for(bsoncxx::array::element ele : subarr){
     std::string btype = ele["type"].get_utf8().value.to_string();
     if(!std::count(types.begin(), types.end(), btype))
@@ -168,11 +170,6 @@ std::vector<BoardType> Options::GetBoards(std::string type){
     bt.crate = ele["crate"].get_int32();
     bt.board = ele["board"].get_int32();
     bt.type = ele["type"].get_utf8().value.to_string();
-    try {
-      bt.detector = ele["detector"].get_utf8().value.to_string();
-    } catch (const std::exception& e) {
-      bt.detector = "";
-    }
     bt.vme_address = DAXHelpers::StringToHex(ele["vme_address"].get_utf8().value.to_string());
     ret.push_back(bt);
   }
@@ -224,15 +221,18 @@ std::vector<u_int16_t> Options::GetThresholds(int board) {
 }
 
 int Options::GetV1495Opts(std::map<std::string, int>& ret) {
+  auto subdoc = bson_options["V1495"];
+  if (subdoc->find(fDetector) == subdoc->end())
+    return 1;
   try {
-    for (auto& value : bson_options["V1495"][fDetector])
-      ret[value->key()] = value->get_int32().value;
+    for (auto& value : subdoc[fDetector])
+      ret[value->key()] = value->get_int32().value;  // TODO std::any
     return 0;
   } catch (std::exception& e) {
     fLog->Entry(MongoLog::Local, "Exception getting V1495 opts: %s", e.what());
     return -1;
   }
-  return 1;
+  return -1;
 }
 
 int Options::GetCrateOpt(CrateOptions &ret){

@@ -23,7 +23,6 @@ struct BoardType{
   std::string type;
   std::string host;
   unsigned int vme_address;
-  std::string detector;
 };
 
 struct RegisterType{

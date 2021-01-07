@@ -7,7 +7,7 @@ class V1495_TPC : public V1495 {
   public:
     V1495_TPC(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, unsigned);
     virtual ~V1495_TPC();
-    virtual int Init(std::map<std::string, int>&);
+    virtual int Arm(std::map<std::string, int>&);
     virtual int BeforeSINStart();
     virtual int AfterSINStop();
 

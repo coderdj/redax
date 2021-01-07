@@ -8,7 +8,7 @@ V1495_TPC::V1495_TPC(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& o
 
 V1495_TPC::~V1495_TPC() {}
 
-int V1495_TPC::Init(std::map<std::string, int>& opts) {
+int V1495_TPC::Arm(std::map<std::string, int>& opts) {
   int clocks_per_us = 40;
   if ((fFractionalModeActive = opts["fractional_mode_active"]) == 1) {
     fVetoOn_clk = opts["veto_on_us"] * us_to_clock;

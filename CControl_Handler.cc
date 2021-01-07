@@ -90,7 +90,7 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
   if (boards.size() == 1){
     BoardType v1495 = boards[0];
     fBID = v1495.board;
-    if (v1495.detector == "tpc")
+    if (v1495.type == "V1495_TPC")
       fV1495 = std::make_unique<V1495_TPC>(fLog, fOptions, fBID, fBoardHandle, v1495.vme_address);
     else
       fV1495 = std::make_unique<V1495>(fLog, fOptions, fBID, fBoardHandle, v1495.vme_address);
@@ -101,16 +101,6 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
     } else if (fV1495->Arm(opts)) {
       fLog->Entry(MongoLog::Warning, "Could not initialize V1495");
     }
-/*    // Writing registers to the V1495 board
-    for(auto regi : fOptions->GetRegisters(fBID, true)){
-      unsigned int reg = DAXHelpers::StringToHex(regi.reg);
-      unsigned int val = DAXHelpers::StringToHex(regi.val);
-      if(fV1495->WriteReg(reg, val)!=0){
-        fLog->Entry(MongoLog::Error, "Failed to initialise V1495 board");
-        fStatus = DAXHelpers::Idle;
-        return -1;
-      }
-    }*/
   }else{
   }
   fStatus = DAXHelpers::Armed;
