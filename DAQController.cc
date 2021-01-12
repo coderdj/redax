@@ -44,6 +44,7 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
 	      fNProcessingThreads);
 
   // Initialize digitizers
+  fPLL = false;
   fStatus = DAXHelpers::Arming;
   std::vector<int> BIDs;
   for(auto d : fOptions->GetBoards("V17XX")){
@@ -221,6 +222,7 @@ void DAQController::ReadData(int link){
 
         } else {
           fStatus = DAXHelpers::Error; // stop command will be issued soon
+          fPLL = true;
           if (err_val & 0x1) fLog->Entry(MongoLog::Local, "Board %i has PLL unlock",
                                          digi->bid());
           if (err_val & 0x2) fLog->Entry(MongoLog::Local, "Board %i has VME bus error",
@@ -319,6 +321,7 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
     "buffer_size" << (buf.first + buf.second)/1e6 <<
     "mode" << (fOptions ? fOptions->GetString("name", "none") : "none") <<
     "number" << (fOptions ? fOptions->GetInt("number", -1) : -1) <<
+    "pll" < (bool)fPLL <<
     "channels" << open_document <<
       [&](key_context<> doc){
       for( auto const& pair : retmap)
