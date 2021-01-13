@@ -1,5 +1,6 @@
 #include "CControl_Handler.hh"
 #include "DAXHelpers.hh"
+#include "MongoLog.hh"
 #include "V2718.hh"
 #include "f2718.hh"
 #ifdef HASDDC10
@@ -102,7 +103,7 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
     std::map<std::string, int> opts;
     if (fOptions->GetV1495Opts(opts) < 0) {
       fLog->Entry(MongoLog::Warning, "Error getting V1495 options");
-    } else if (fV1495->Arm(opts)) {
+    } else if (fV1495->Init(opts)) {
       fLog->Entry(MongoLog::Warning, "Could not initialize V1495");
     }
 /*    // Writing registers to the V1495 board

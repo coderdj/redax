@@ -33,7 +33,7 @@ public:
       virtual int BeforeSINStop() {return 0;}
       virtual int AfterSINStop() {return 0;}
 
-private:
+protected:
       int fBoardHandle, fBID;
       unsigned int fBaseAddress;
       std::shared_ptr<Options> fOptions;

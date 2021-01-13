@@ -170,11 +170,6 @@ std::vector<BoardType> Options::GetBoards(std::string type){
     bt.crate = ele["crate"].get_int32();
     bt.board = ele["board"].get_int32();
     bt.type = ele["type"].get_utf8().value.to_string();
-    try {
-      bt.detector = ele["detector"].get_utf8().value.to_string();
-    } catch (const std::exception& e) {
-      bt.detector = "";
-    }
     bt.vme_address = DAXHelpers::StringToHex(ele["vme_address"].get_utf8().value.to_string());
     ret.push_back(bt);
   }
@@ -227,8 +222,10 @@ std::vector<u_int16_t> Options::GetThresholds(int board) {
 
 int Options::GetV1495Opts(std::map<std::string, int>& ret) {
   try {
-    for (auto& value : bson_options["V1495"][fDetector])
-      ret[value->key()] = value->get_int32().value;
+    if (bson_options.find("V1495") == bson_options.end() || bson_options["V1495"].get_document().value.find(fDetector) == bson_options["V1495"].get_document().value.end())
+      return 1;
+    for (auto& value : bson_options["V1495"][fDetector].get_document().value)
+      ret[std::string(value.key())] = value.get_int32().value;
     return 0;
   } catch (std::exception& e) {
     fLog->Entry(MongoLog::Local, "Exception getting V1495 opts: %s", e.what());
