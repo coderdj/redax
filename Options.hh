@@ -102,6 +102,7 @@ private:
   mongocxx::pool::entry fClient; // yes
   mongocxx::database fDB;
   mongocxx::collection fDAC_collection;
+  bsoncxx::document::value fDAC_cache;
 };
 
 #endif

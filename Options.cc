@@ -21,6 +21,15 @@ Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::
   //fClient = pool->acquire();
   fDB = (*fClient)[dbname];
   fDAC_collection = fDB["dac_calibration"];
+  int ref = GetInt("baseline_reference_run", -1);
+  if ((GetString("baseline_dac_mode", "") == "cached") && (ref != -1)) {
+    auto doc = fDAC_collection.find_one(bsoncxx::builder::stream::document{} << "run" << ref << bsoncxx::builder::stream::finalize);
+    if (doc) fDAC_cache = *doc;
+    else {
+      fLog->Entry(MongoLog::Warning, "Could not load baseline reference run %i", ref);
+      throw std::runtime_error("Can't load cached baselines");
+    }
+  }
 }
 
 Options::~Options(){
@@ -286,16 +295,11 @@ int Options::GetFaxOptions(fax_options_t& opts) {
 }
 
 std::vector<uint16_t> Options::GetDAC(int bid, int num_chan, uint16_t default_value) {
-  using namespace bsoncxx::builder::stream;
   std::vector<uint16_t> ret(num_chan, default_value);
-  auto sort_order = document{} << "_id" << -1 << finalize;
-  auto q = document{} << std::to_string(bid) << open_document << "$exists" << 1 << close_document << finalize;
-  auto opts = mongocxx::options::find{};
-  opts.sort(sort_order.view());
-  auto cursor = fDAC_collection.find(std::move(q), opts);
-  auto doc = cursor.begin();
-  if (doc == cursor.end() || doc->find(std::to_string(bid)) == doc->end()) {
-    fLog->Entry(MongoLog::Local, "No baseline calibrations? You must be new");
+  auto doc = fDAC_cache.view();
+  if (doc.find(std::to_string(bid)) == doc.end()) {
+    fLog->Entry(MongoLog::Message, "No cached baselines for board %i, using default %04x",
+        bid, default_value);
     return ret;
   }
 /* doc should look like this:
@@ -305,7 +309,7 @@ std::vector<uint16_t> Options::GetDAC(int bid, int num_chan, uint16_t default_va
  * }
  */
   for (int i = 0; i < num_chan; i++)
-    ret[i] = (*doc)[std::to_string(bid)][i].get_int32();
+    ret[i] = doc[std::to_string(bid)][i].get_int32().value;
   return ret;
 }
 
