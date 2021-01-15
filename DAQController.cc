@@ -410,7 +410,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
     channel_finished[bid] = vector<int>(ch_this_digi, 0);
     bl_per_channel[bid] = vector<vector<double>>(ch_this_digi, vector<double>(max_steps,0));
     diff[bid] = vector<int>(ch_this_digi, 0);
-    current_step[bid] = vector<int>(ch_this_digi, 0);
+    current_step[bid] = vector<unsigned>(ch_this_digi, 0);
     cal_values[bid] = std::map<std::string, vector<double>>(
         {{"slope", vector<double>(ch_this_digi)},
         {"yint", vector<double>(ch_this_digi)}});
