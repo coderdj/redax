@@ -11,8 +11,8 @@ class V1495_TPC : public V1495 {
     virtual int BeforeSINStart();
     virtual int AfterSINStop();
 
-  private:
-    const uint32_t fControlReg
+  protected:
+    const uint32_t fControlReg;
     const uint32_t fVetoOffMSBReg;
     const uint32_t fVetoOffLSBReg;
     const uint32_t fVetoOnMSBReg;

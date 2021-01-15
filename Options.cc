@@ -221,7 +221,9 @@ std::vector<u_int16_t> Options::GetThresholds(int board) {
 }
 
 int Options::GetV1495Opts(std::map<std::string, int>& ret) {
-  auto subdoc = bson_options["V1495"];
+  if (bson_options.find("V1495") == bson_options.end())
+    return 1;
+  auto subdoc = bson_options["V1495"].get_document().value;
   if (subdoc->find(fDetector) == subdoc->end())
     return 1;
   try {

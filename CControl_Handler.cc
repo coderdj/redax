@@ -1,5 +1,6 @@
 #include "CControl_Handler.hh"
 #include "DAXHelpers.hh"
+#include "MongoLog.hh"
 #include "V2718.hh"
 #ifdef HASDDC10
 #include "DDC10.hh"
