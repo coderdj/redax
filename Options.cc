@@ -13,7 +13,8 @@
 Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::string hostname,
           mongocxx::collection* opts_collection, std::shared_ptr<mongocxx::pool>& pool,
           std::string dbname, std::string override_opts) : 
-    fLog(log), fHostname(hostname), fPool(pool), fClient(pool->acquire()) {
+    fLog(log), fHostname(hostname), fPool(pool), fClient(pool->acquire()), 
+    fDAC_cache(bsoncxx::document::view()) {
   bson_value = NULL;
   if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");

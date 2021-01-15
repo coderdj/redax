@@ -401,7 +401,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
   std::map<int, vector<vector<double>>> bl_per_channel;
   std::map<int, vector<int>> diff;
   std::map<int, std::map<std::string, vector<double>>> cal_values;
-  std::map<int, vector<int>> current_step;
+  std::map<int, vector<unsigned>> current_step;
 
   for (auto digi : digis) { // alloc ALL the things!
     bid = digi->bid();
@@ -500,8 +500,6 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
       for (auto& p : words_read) if ((0 <= p.second) && (p.second <= 16))
         fLog->Entry(MongoLog::Local, "Board %i undersized readout (%i)",
             p.first, p.second);
-      step--;
-      steps_repeated++;
       continue;
     }
 
@@ -560,9 +558,9 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
             bl_per_channel[bid][ch][step] = baseline;
             current_step[bid][ch]++;
 
-            if (current_step[bid][ch] < DAQ_cal_points.size()) {
+            if (current_step[bid][ch] < DAC_cal_points.size()) {
               continue;
-            } else if (current_step[bid][ch] == DAQ_cal_points.size()) {
+            } else if (current_step[bid][ch] == DAC_cal_points.size()) {
               // calibration constants
               B = C = D = E = F = 0;
               for (unsigned i = 0; i < DAC_cal_points.size(); i++) {
