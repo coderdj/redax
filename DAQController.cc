@@ -559,6 +559,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
             current_step[bid][ch]++;
 
             if (current_step[bid][ch] < DAC_cal_points.size()) {
+              done &= false;
               continue;
             } else if (current_step[bid][ch] == DAC_cal_points.size()) {
               // calibration constants
@@ -573,6 +574,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
               cal_values[bid]["slope"][ch] = slope = (C*D - E*F)/(B*C - F*F);
               cal_values[bid]["yint"][ch] = yint = (B*E - D*F)/(B*C - F*F);
               dac_values[bid][ch] = (target_baseline-yint)/slope;
+              done &= false;
             } else {
               // iterate
               if (channel_finished[bid][ch] >= convergence_threshold) {
