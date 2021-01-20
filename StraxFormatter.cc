@@ -47,7 +47,6 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
 
   fEmptyVerified = 0;
   fLog = log;
-  fMutexWaitTime = fMutexLocks = 0;
 
   fBufferNumChunks = fOptions->GetInt("strax_buffer_num_chunks", 2);
   fWarnIfChunkOlderThan = fOptions->GetInt("strax_chunk_phase_limit", 2);
