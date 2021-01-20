@@ -110,7 +110,7 @@ private:
   std::condition_variable fCV;
   std::mutex fBufferMutex;
   std::list<std::unique_ptr<data_packet>> fBuffer;
-  long fMutexWaitTime, fMutexLocks;
+  std::vector<int> fMutexWaitTime;
 };
 
 #endif

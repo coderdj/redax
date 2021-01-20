@@ -68,21 +68,9 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
 StraxFormatter::~StraxFormatter(){
   std::stringstream ss;
   ss << std::hex << fThreadId;
-  std::map<std::string, double> times {
-    {"data_packets_us", fProcTimeDP},
-    {"events_us", fProcTimeEv},
-    {"fragments_us", fProcTimeCh},
-    {"compression_us", fCompTime}
-  };
-  std::map<std::string, std::map<int, long>> counters {
-    {"fragments", fFragsPerEvent},
-    {"events", fEvPerDP},
-    {"data_packets", fBufferCounter},
-    {"chunks", fBytesPerChunk}
-  };
-  //fOptions->SaveBenchmarks(counters, fBytesProcessed, ss.str(), times);
-  fLog->Entry(MongoLog::Local, "Thread %s waited %i ns and %i locks", ss.str().c_str(),
-      fMutexWaitTime, fMutexLocks);
+  std::ofstream fout("/live_data/test/mutex_"+fFullHostname, std::ios::binary);
+  fout.write((char*)fMutexWaitTime.data(), sizeof(int)*fMutexWaitTime.size());
+  fout.close();
 }
 
 void StraxFormatter::Close(std::map<int,int>& ret){
@@ -287,8 +275,7 @@ void StraxFormatter::ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>&
     fBufferCounter[in.size()]++;
     fBuffer.splice(fBuffer.end(), in);
     fInputBufferSize += bytes;
-    fMutexWaitTime += std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count();
-    fMutexLocks++;
+    fMutexWaitTime.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count());
   }
   fCV.notify_one();
 }
