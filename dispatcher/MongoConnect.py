@@ -244,9 +244,6 @@ class MongoConnect():
                 else:
                     status = STATUS['UNKNOWN']
 
-            if detector == 'neutron_veto':
-                status = STATUS.IDLE
-
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
@@ -374,7 +371,7 @@ class MongoConnect():
             endtime = self.GetAckTime(detector, 'stop')
             if endtime is None:
                 endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
-            query = {"number" : int(number), "end" : None, 'detector': detector}
+            query = {"number" : int(number), "end" : None, 'detectors': detector}
             updates = {"$set" : {"end" : endtime}}
             if force:
                 updates["$push"] = {"tags" : {"name" : "messy", "user" : "daq",
