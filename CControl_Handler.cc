@@ -99,7 +99,7 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
     std::map<std::string, int> opts;
     if (fOptions->GetV1495Opts(opts) < 0) {
       fLog->Entry(MongoLog::Warning, "Error getting V1495 options");
-    } else if (fV1495->Init(opts)) {
+    } else if (fV1495->Arm(opts)) {
       fLog->Entry(MongoLog::Warning, "Could not initialize V1495");
     }
   }else{

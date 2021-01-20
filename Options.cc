@@ -227,8 +227,8 @@ int Options::GetV1495Opts(std::map<std::string, int>& ret) {
   if (subdoc.find(fDetector) == subdoc.end())
     return 1;
   try {
-    for (auto& value : subdoc[fDetector])
-      ret[value->key()] = value->get_int32().value;  // TODO std::any
+    for (auto& value : subdoc[fDetector].get_document().value)
+      ret[std::string(value.key())] = value.get_int32().value;  // TODO std::any
     return 0;
   } catch (std::exception& e) {
     fLog->Entry(MongoLog::Local, "Exception getting V1495 opts: %s", e.what());
