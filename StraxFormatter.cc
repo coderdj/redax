@@ -67,9 +67,11 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
 StraxFormatter::~StraxFormatter(){
   std::stringstream ss;
   ss << std::hex << fThreadId;
-  std::ofstream fout("/live_data/test/mutex_"+fFullHostname, std::ios::binary);
-  fout.write((char*)fMutexWaitTime.data(), sizeof(int)*fMutexWaitTime.size());
-  fout.close();
+  if (fMutexWaitTime.size() > 0) {
+    std::ofstream fout("/live_data/test/mutex_"+fFullHostname, std::ios::binary);
+    fout.write((char*)fMutexWaitTime.data(), sizeof(fMutexWaitTime[0])*fMutexWaitTime.size());
+    fout.close();
+  }
 }
 
 void StraxFormatter::Close(std::map<int,int>& ret){

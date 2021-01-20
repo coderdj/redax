@@ -12,6 +12,7 @@
 #include <chrono>
 #include <cmath>
 #include <numeric>
+#include <fstream>
 
 #include <bsoncxx/builder/stream/document.hpp>
 
@@ -200,6 +201,7 @@ void DAQController::ReadData(int link){
   int err_val = 0;
   std::list<std::unique_ptr<data_packet>> local_buffer;
   std::unique_ptr<data_packet> dp;
+  std::vector<int> mutex_wait_times;
   int words = 0;
   int local_size(0);
   fRunning[link] = true;
@@ -240,12 +242,22 @@ void DAQController::ReadData(int link){
     if (local_buffer.size() > 0) {
       fDataRate += local_size;
       int selector = (fCounter++)%fNProcessingThreads;
+      auto t_start = std::chrono::high_resolution_clock::now();
       fFormatters[selector]->ReceiveDatapackets(local_buffer, local_size);
+      auto t_end = std::chrono::high_resolution_clock::now();
+      mutex_wait_times.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            t_end-t_start).count());
       local_size = 0;
     }
     readcycler++;
     std::this_thread::sleep_for(sleep_time);
   } // while run
+  if (mutex_wait_times.size() > 0) {
+    std::ofstream fout("/live_data/test/mutex_"+fHostname+"_ro"+std::to_string(link),
+        std::ios::binary);
+    fout.write((char*)mutex_wait_times.data(), sizeof(mutex_wait_times[0])*mutex_wait_times.size());
+    fout.close();
+  }
   fRunning[link] = false;
   fLog->Entry(MongoLog::Local, "RO thread %i returning", link);
 }
