@@ -1,6 +1,8 @@
 # REDAX
 D. Coderre, 2018, D. Masson, 2020. Please see license in LICENSE file.
 
+NOTE: this repository is no longer maintained - please refer to the active fork on the [AxFoundation](https://github.com/AxFoundation/redax)
+
 See documentation here: [link](https://coderdj.github.io/redax)
 ## Prerequisites
 
