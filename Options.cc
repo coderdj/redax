@@ -224,7 +224,7 @@ int Options::GetV1495Opts(std::map<std::string, int>& ret) {
   if (bson_options.find("V1495") == bson_options.end())
     return 1;
   auto subdoc = bson_options["V1495"].get_document().value;
-  if (subdoc->find(fDetector) == subdoc->end())
+  if (subdoc.find(fDetector) == subdoc.end())
     return 1;
   try {
     for (auto& value : subdoc[fDetector])
@@ -234,7 +234,7 @@ int Options::GetV1495Opts(std::map<std::string, int>& ret) {
     fLog->Entry(MongoLog::Local, "Exception getting V1495 opts: %s", e.what());
     return -1;
   }
-  return -1;
+  return 1;
 }
 
 int Options::GetCrateOpt(CrateOptions &ret){
