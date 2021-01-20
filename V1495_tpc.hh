@@ -19,7 +19,7 @@ class V1495_TPC : public V1495 {
     const uint32_t fVetoOnLSBReg;
 
     int fFractionalModeActive;
-    long fVetoOn_clk, fVetoOff_clk;
+    uint32_t fVetoOn_clk, fVetoOff_clk;
 };
 
 #endif // _V1495_TPC_HH_ defined

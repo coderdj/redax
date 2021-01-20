@@ -4,8 +4,10 @@
 V1495_TPC::V1495_TPC(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int bid, int handle, unsigned int address) :
   V1495(log, opts, bid, handle, address), fControlReg(0x101E),
   fVetoOffMSBReg(0x1012), fVetoOffLSBReg(0x1010),
-  fVetoOnMSBReg(0x100E), fVetoOnLSBReg(0x100C)
-{}
+  fVetoOnMSBReg(0x100E), fVetoOnLSBReg(0x100C) {
+  fFractionalModeActive = 0;
+  fVetoOn_clk = fVetoOff_clk = 0;
+}
 
 V1495_TPC::~V1495_TPC() {}
 
