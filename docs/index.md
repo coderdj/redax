@@ -12,6 +12,8 @@
 # redax Docs
 D. Coderre, D. Masson, 24. January 2020
 
+NOTE: this version of the documentation is no longer maintained, please refer to the latest copy via the [AxFoundation](https://https://axfoundation.github.io/redax/)
+
 ## Brief
 
 Redax is a DAQ readout code based on CAEN electronics.
