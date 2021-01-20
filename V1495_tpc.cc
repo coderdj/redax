@@ -32,10 +32,10 @@ int V1495_TPC::BeforeSINStart() {
   int ret = 0;
   if (fFractionalModeActive) {
     ret += WriteReg(fControlReg, 0x1);
-    ret += WriteReg(fVetoOffMSBReg, fVetoOff_clk >> 32);
-    ret += WriteReg(fVetoOffLSBReg, fVetoOff_clk & 0xFFFFFFFF);
-    ret += WriteReg(fVetoOnMSBReg, fVetoOn_clk >> 32);
-    ret += WriteReg(fVetoOnLSBReg, fVetoOn_clk & 0xFFFFFFFF);
+    ret += WriteReg(fVetoOffMSBReg, (fVetoOff_clk & 0xFFFF0000) >> 16);
+    ret += WriteReg(fVetoOffLSBReg, fVetoOff_clk & 0xFFFF);
+    ret += WriteReg(fVetoOnMSBReg, (fVetoOn_clk & 0xFFFF0000) >> 16);
+    ret += WriteReg(fVetoOnLSBReg, fVetoOn_clk & 0xFFFF);
   } else {
     ret = WriteReg(fControlReg, 0x0);
   }
