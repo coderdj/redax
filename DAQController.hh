@@ -43,7 +43,7 @@ private:
   int OpenThreads();
   void CloseThreads();
   void InitLink(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::vector<uint16_t>>&, int&);
-  int FitBaselines(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::vector<uint16_t>>&, int);
+  int FitBaselines(std::vector<std::shared_ptr<V1724>>&, std::map<int, std::vector<uint16_t>>&);
 
   std::vector<std::unique_ptr<StraxFormatter>> fFormatters;
   std::vector<std::thread> fProcessingThreads;
