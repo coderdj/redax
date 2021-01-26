@@ -76,7 +76,7 @@ int main(int argc, char** argv){
   std::string dbname = "daq", suri = "", sid = "";
   bool reader = false, cc = false;
   int log_retention = 7; // days
-  int c(0), opt_index, delay(15000);
+  int c(0), opt_index, delay(0);
   struct option longopts[] = {
     {"id", required_argument, 0, c++},
     {"uri", required_argument, 0, c++},
