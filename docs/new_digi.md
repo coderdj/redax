@@ -179,3 +179,21 @@ If this isn't the case, your mileage will probably vary quite significantly.
 One option would be to reformat the data as you read it from the digitizer, which would not work well under high data rates, because you would be doing this processing in the readout thread.
 Another option would be to subclass the StraxFormatter, but this would require more structural changes as well, because this option wasn't strictly foreseen in the design.
 Or, you just make whatever changes are necessary and don't bother ever pulling from master again, but this can very easily become untenable.
+
+# Adding new V1495 firmwares
+
+The V1495 (or V2495, the difference is not important) is a very versatile board that can be used to do a wide variety of things as part of the readout.
+The TPC board is responsible for both the BUSY and VETO subystems, as well as the fractional livetime mode; the MV board is responsible for its trigger.
+The simplest way to handle these boards is to merely add a few registers into the config list, but that is very inflexible and doesn't provide an options to do cleanup at the end of a run.
+
+To remedy this, the V1495 base class was extended to provide an interface for specific subclasses to implement.
+One function for setup is provided: `V1495::Arm(std::map<std::string, int>&)`.
+The argument is a map that is read from the `V1495.<detector>` field in the config document.
+Rather than require that a custom struct with specific named fields is used, a more flexible option is to merely look at what fields the user has specified in the config and load those.
+Currently, only integer options are supported, but an upgrade to `std::any` is foreseen.
+If a derived class does not implement `V1495::Arm`, the default behavior is to load registers from the config list.
+
+Four functions are also provided for subclasses to implement.
+These functions allow the V1495 to perform actions on either side of the issuing of the S-IN command at the start and end of a run.
+These functions are clearly named: `V1495::BeforeSINStart()`, `V1495::AfterSINStart()`, `V1495::BeforeSINStop()`, `V1495::AfterSINStop()`.
+If implemented, these functions should perform whatever actions are necessary, returning 0 in case of success and something non-zero otherwise.
