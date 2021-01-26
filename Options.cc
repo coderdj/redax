@@ -159,9 +159,11 @@ std::vector<BoardType> Options::GetBoards(std::string type){
   std::vector <std::string> types;
   if(type == "V17XX")
     types = {"V1724", "V1730", "V1724_MV", "f1724"};
+  else if (type == "V1495")
+    types = {"V1495", "V1495_TPC"};
   else
     types.push_back(type);
-  
+
   for(bsoncxx::array::element ele : subarr){
     std::string btype = ele["type"].get_utf8().value.to_string();
     if(!std::count(types.begin(), types.end(), btype))
@@ -226,6 +228,23 @@ std::vector<u_int16_t> Options::GetThresholds(int board) {
     fLog->Entry(MongoLog::Local, "Using default thresholds for %i", board);
     return std::vector<u_int16_t>(16, default_threshold);
   }
+}
+
+int Options::GetV1495Opts(std::map<std::string, int>& ret) {
+  if (bson_options.find("V1495") == bson_options.end())
+    return 1;
+  auto subdoc = bson_options["V1495"].get_document().value;
+  if (subdoc.find(fDetector) == subdoc.end())
+    return 1;
+  try {
+    for (auto& value : subdoc[fDetector].get_document().value)
+      ret[std::string(value.key())] = value.get_int32().value;  // TODO std::any
+    return 0;
+  } catch (std::exception& e) {
+    fLog->Entry(MongoLog::Local, "Exception getting V1495 opts: %s", e.what());
+    return -1;
+  }
+  return 1;
 }
 
 int Options::GetCrateOpt(CrateOptions &ret){
