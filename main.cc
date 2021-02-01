@@ -75,7 +75,7 @@ int main(int argc, char** argv){
   std::string current_run_id="none", log_dir = "";
   std::string dbname = "daq", suri = "", sid = "";
   bool reader = false, cc = false;
-  int log_retention = 7; // days
+  int log_retention = 0; // days, 0 = someone else's problem
   int c(0), opt_index, delay(0);
   struct option longopts[] = {
     {"id", required_argument, 0, c++},
