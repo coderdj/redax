@@ -23,7 +23,8 @@ Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::
   fDB = (*fClient)[dbname];
   fDAC_collection = fDB["dac_calibration"];
   int ref = GetInt("baseline_reference_run", -1);
-  if ((GetString("baseline_dac_mode", "") == "cached") && (ref != -1)) {
+  bool load_ref = (GetString("basline_dac_mode", "") == "cached" || GetString("baseline_fallback_mode","") == "cached") && (ref != -1);
+  if (load_ref) {
     auto doc = fDAC_collection.find_one(bsoncxx::builder::stream::document{} << "run" << ref << bsoncxx::builder::stream::finalize);
     if (doc) fDAC_cache = *doc;
     else {
@@ -331,6 +332,16 @@ std::vector<uint16_t> Options::GetDAC(int bid, int num_chan, uint16_t default_va
   for (int i = 0; i < num_chan; i++)
     ret[i] = doc[std::to_string(bid)][i].get_int32().value;
   return ret;
+}
+
+uint16_t Options::GetSingleDAC(int bid, int ch, uint16_t default_value) {
+  auto doc = fDAC_cache.view();
+  if (doc.find(std::to_string(bid)) == doc.end()) {
+    fLog->Entry(MongoLog::Message, "No cached baselines for board %i, using default %04x",
+        bid, default_value);
+    return default_value;
+  }
+  return doc[std::string(bid)][ch].get_int32().value;
 }
 
 void Options::UpdateDAC(std::map<int, std::vector<uint16_t>>& all_dacs){

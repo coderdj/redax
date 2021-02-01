@@ -337,8 +337,9 @@ void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
     if ((ret = FitBaselines(digis, dac_values)) < 0) {
       fLog->Entry(MongoLog::Warning, "Errors during baseline fitting");
       return;
-    } else if (ret > 0)
+    } else if (ret > 0) {
       fLog->Entry(MongoLog::Warning, "Baselines didn't converge but we're going ahead");
+    }
   }
 
   for(auto& digi : digis){
@@ -606,5 +607,20 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
 
     if (done) return 0;
   } // end steps
+  std::string backup_bl = fOptions->GetString("baseline_fallback_mode", "fail");
+  if (backup_bl == "fail") {
+    fLog->Entry(MongoLog::Warning, "Baseline fallback mode is 'fail'");
+    return -3;
+  }
+  int fixed = fOptions->GetInt("baseline_fixed_value", 4000);
+  for (auto& p : channel_finished)
+    for (unsigned i = 0; i < p.second.size(); i++)
+      if (p.second[i] < convergence_threshold) {
+        if (backup_bl == "cached")
+          dac_values[p.first][i] = fOptions->GetSingleDAC(p.first, i, fixed);
+        else if (backup_bl == "fixed")
+          dac_values[p.first][i] = fixed;
+      }
   return 1;
 }
+
