@@ -50,6 +50,7 @@ class DAQController():
         self.log = log
         self.time_between_commands = int(config['DEFAULT']['TimeBetweenCommands'])
         self.can_force_stop={k:True for k in detectors}
+        self.one_detector_arming = False
 
     def SolveProblem(self, latest_status, goal_state):
         '''
@@ -78,11 +79,14 @@ class DAQController():
         # cache these so other functions can see them
         self.goal_state = goal_state
         self.latest_status = latest_status
+        self.one_detector_arming = False
 
         for det in latest_status.keys():
             if latest_status[det]['status'] == STATUS.IDLE:
                 self.can_force_stop[det] = True
                 self.error_stop_count[det] = 0
+            if latest_status[det]['status'] in [STATUS.ARMING, STATUS.ARMED]:
+                self.one_detector_arming = True
 
         '''
         CASE 1: DETECTORS ARE INACTIVE
@@ -274,7 +278,13 @@ class DAQController():
 
         if (dt > self.timeouts[command] and dt_last > self.time_between_commands) or force:
             run_mode = self.goal_state[detector]['mode']
-            if command in ['start','arm']:
+            if command == 'arm':
+                if self.one_detector_arming:
+                    # this leads to run number overlaps
+                    return
+                readers, cc = self.mongo.GetHostsForMode(run_mode)
+                delay = 0
+            elif command == 'start':
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
                 delay = 0
             else: # stop
