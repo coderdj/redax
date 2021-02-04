@@ -44,6 +44,6 @@ int V1495_TPC::BeforeSINStart() {
   return ret;
 }
 
-int V1495_TPC::AfterSINStop() {
+int V1495_TPC::BeforeSINStop() {
   return WriteReg(fControlReg, 0x0);
 }
