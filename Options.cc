@@ -18,8 +18,6 @@ Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::
   bson_value = NULL;
   if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
-  //fPool = pool;
-  //fClient = pool->acquire();
   fDB = (*fClient)[dbname];
   fDAC_collection = fDB["dac_calibration"];
   int ref = GetInt("baseline_reference_run", -1);

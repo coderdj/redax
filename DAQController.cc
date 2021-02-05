@@ -454,7 +454,7 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
       else
         fail = true;
     }
-    std::this_thread::sleep_for(5ms);
+    std::this_thread::sleep_for(1ms);
     for (auto d : digis) {
       if (!d->EnsureStarted(1000,1000)) {
         d->AcquisitionStop();
@@ -552,7 +552,6 @@ int DAQController::FitBaselines(std::vector<std::shared_ptr<V1724>> &digis,
             }
             vector<int> bin_ids(std::distance(max_start, max_end), 0);
             std::iota(bin_ids.begin(), bin_ids.end(), std::distance(hist.begin(), max_start));
-            baseline = 0;
             // calculated weighted average
             baseline = std::inner_product(max_start, max_end, bin_ids.begin(), 0) << rebin_factor;
             baseline /= counts_around_max;
