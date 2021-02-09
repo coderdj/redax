@@ -211,7 +211,7 @@ Various options that tell redax how to run.
 | run_start | Tells the DAQ whether to start the run via register or S-in. 0 for register, 1 for S-in. Note that starting by register means that the digitizer clocks will not be synchronized. This can be fine if you run with an external trigger and use the trigger time as synchronization signal. If running in triggerless mode you need to run with '1' and have your hardware set up accordingly. |
 | baseline_dac_mode | cached/fixed/fit. This defines how the DAC-offset values per channel are set. If set to "cached" the program will load cached baselines from the run specified in *baseline_reference_run*. If it can't find that run it will fall back to the value in *baseline_fixed_value*. If set to "fixed" it will use *baseline_fixed_value* in any case. If set to 'fit' it will attempt to adjust the DAC offset values until the baseline for each channel matches the value in *baseline_value*. If using negative voltage signals the default value of 16000 is a good one. Baselines for each run are cached in the *dac_values* collection of the daq database. |
 | baseline_fallback_mode | cached/fixed/fail. Sometimes the baseline fitting routine doesn't converge. This option determines what happens in this case (only the non-converging channels are affected). Default is 'fail'. |
-| baseline_reference_run | Int. If either 'baseline_dac_mode' or 'baseline_fallback_mode' are set to 'cached' it will use the values from the run number defined here. If you don't specify this and try to use it, expect undefined behavior. |
+| baseline_reference_run | Int. If either 'baseline_dac_mode' or 'baseline_fallback_mode' are set to 'cached' it will use the values from the run number defined here. |
 | baseline_value | Int. If 'baseline_dac_mode' is set to 'fit' it will attempt to adjust the baselines until they hit the decimal value defined here, which must lie between 0 and 16385 for a 14-bit ADC. Default 16000. |
 | baseline_fixed_value | Int. Use this to set the DAC offset register directly with this value. See CAEN documentation for more details. Default 4000. |
 | processing_threads | Dict. The number of threads working on converting data between CAEN and strax format. Should be larger for processes responsible for more boards and can be smaller for processes only reading a few boards. For example, 24 threads will very easily handle a data flow of 200 MB/s (uncompressed) through that instance, but if you aren't expecting that much data then smaller values are fine. The default value is 8, but not specifying this could cause issues with processing. |
@@ -228,8 +228,8 @@ There are various configuration options for the strax output that must be set.
   "strax_chunk_length": 5.0,
   "strax_fragment_payload_bytes": 220,
   "strax_buffer_num_chunks": 2,
-  "srax_chunk_phase_limit": 1,
-  "compressor": 
+  "strax_chunk_phase_limit": 1,
+  "compressor": "lz4"
 }
 ```
 
@@ -241,6 +241,7 @@ There are various configuration options for the strax output that must be set.
 | strax_output_path | String. Where should we write data? This must be a locally mounted data store. Redax will handle sub-directories so just provide the top-level directory where all the live data should go (e.g. `/data/live`). |
 | strax_buffer_num_chunks | Int. How many full chunks should get buffered? Setting this at 1 or lower may cause data loss, and greater than 2 usually means you need more memory in your readout machine. A value of 2 means that if chunks 5 and 6 are buffered, as soon as something in chunk 7 shows up, chunk 5 is dumped to disk. |
 | strax_chunk_phase_limit | Int. Sometimes pulses will show up at the processing stage late (or somehow behind the rest of them). If a pulse is this many chunks behind (or out of phase with) the chunks currently being buffered, log a warning to the database. |
+| compressor | lz4/blosc. Which algorithm to use in compressing the chunks. Both have comparable squeeziness, but blosc is slightly faster. Blosc does have an issue where the size must fit into 31 bits, but you have to be running long and hard to hit this. Default lz4 |
 
 ## Channel Map
 
