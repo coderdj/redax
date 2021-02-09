@@ -274,16 +274,22 @@ class DAQController():
 
         if (dt > self.timeouts[command] and dt_last > self.time_between_commands) or force:
             run_mode = self.goal_state[detector]['mode']
-            if command in ['start','arm']:
+            if command == 'arm':
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
+                hosts = (cc, readers)
                 delay = 0
+            elif command == 'start':
+                readers, cc = self.mongo.GetHostsForMode(run_mode)
+                hosts = (readers, cc) # we want the cc to delay by 1s
+                delay = 1
             else: # stop
                 readers, cc = self.mongo.GetConfiguredNodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
+                hosts = (cc, readers)
                 delay = 5 if not force else 0
                 # TODO smart delay?
             self.log.debug('Sending %s to %s' % (command.upper(), detector))
-            if self.mongo.SendCommand(command, (cc, readers), self.goal_state[detector]['user'],
+            if self.mongo.SendCommand(command, hosts, self.goal_state[detector]['user'],
                     detector, self.goal_state[detector]['mode'], delay):
                 # failed
                 return

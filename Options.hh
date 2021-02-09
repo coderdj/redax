@@ -90,6 +90,7 @@ public:
   int GetNestedInt(std::string, int);
   std::vector<uint16_t> GetThresholds(int);
   int GetFaxOptions(fax_options_t&);
+  uint16_t GetSingleDAC(int, int, uint16_t);
 
   void UpdateDAC(std::map<int, std::vector<uint16_t>>&);
 

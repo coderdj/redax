@@ -98,6 +98,8 @@ int V1724::Init(int link, int crate, std::shared_ptr<Options>& opts) {
 
 int V1724::SINStart(){
   fLastClockTime = std::chrono::high_resolution_clock::now();
+  fRolloverCounter = 0;
+  fLastClock = 0;
   return WriteRegister(fAqCtrlRegister,0x105);
 }
 int V1724::SoftwareStart(){
