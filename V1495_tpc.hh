@@ -9,7 +9,7 @@ class V1495_TPC : public V1495 {
     virtual ~V1495_TPC();
     virtual int Arm(std::map<std::string, int>&);
     virtual int BeforeSINStart();
-    virtual int AfterSINStop();
+    virtual int BeforeSINStop();
 
   protected:
     const uint32_t fControlReg;

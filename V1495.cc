@@ -27,11 +27,11 @@ int V1495::Arm(std::map<std::string, int>&) {
 int V1495::WriteReg(unsigned int reg, unsigned int value){
   int ret = 0;
   if((ret = CAENVME_WriteCycle(fBoardHandle, fBaseAddress+reg, &value, cvA32_U_DATA, cvD32)) != cvSuccess){
-    fLog->Entry(MongoLog::Warning, "V1495: %i failed to write register 0x%04x with value %08x (%i)",
+    fLog->Entry(MongoLog::Warning, "V1495: %i failed to write register 0x%04x with value %04x (%i)",
         fBID, reg, value, ret);
     return -1;
   }
-  fLog->Entry(MongoLog::Local, "V1495: %i written register 0x%04x with value %08x",
+  fLog->Entry(MongoLog::Local, "V1495: %i written register 0x%04x with value %04x",
       fBID, reg, value);
   return 0;
 }
