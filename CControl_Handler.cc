@@ -148,9 +148,9 @@ int CControl_Handler::Stop(){
     if (fV1495 && fV1495->AfterSINStop()) {
       fLog->Entry(MongoLog::Warning, "Could not stop V1495");
     }
-    fV2718.reset();
   }
   fV1495.reset();
+  fV2718.reset();
 #ifdef HASDDC10
   // Don't need to stop the DDC10 but just clean up a bit
   fDDC10.reset();
