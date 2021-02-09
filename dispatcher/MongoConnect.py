@@ -256,16 +256,16 @@ class MongoConnect():
             for doc in self.collections['incoming_commands'].aggregate([
                 {'$sort': {'_id': -1}},
                 {'$group': {
-                    '_id': {'$concat': ['$detector', '.', '$field']},
+                    '_id': '$key',
                     'value': {'$first': '$value'},
                     'user': {'$first': '$user'},
                     'time': {'$first': '$time'},
                     'detector': {'$first': '$detector'},
-                    'key': {'$first': '$field'}
+                    'field': {'$first': '$field'}
                     }},
                 {'$group': {
                     '_id': '$detector',
-                    'keys': {'$push': '$key'},
+                    'fields': {'$push': '$field'},
                     'values': {'$push': '$value'},
                     'users': {'$push': '$user'},
                     'times': {'$push': '$time'}
@@ -273,7 +273,7 @@ class MongoConnect():
                 {'$project': {
                     'detector': '$_id',
                     '_id': 0,
-                    'state': {'$arrayToObject': {'$zip': {'inputs': ['$keys', '$values']}}},
+                    'state': {'$arrayToObject': {'$zip': {'inputs': ['$fields', '$values']}}},
                     'user': {'$arrayElemAt': ['$users', {'$indexOfArray': ['$times', {'$max': '$times'}]}]}
                     }}
                 ]):
