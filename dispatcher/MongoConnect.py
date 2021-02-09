@@ -369,7 +369,7 @@ class MongoConnect():
         self.log.info("Updating run %i with end time (%s)" %(number, detectors))
         try:
             time.sleep(2) # this number depends on the delay between CC and reader stop
-            endtime = self.GetAckTime(detector, 'stop')
+            endtime = self.GetAckTime(detectors, 'stop')
             if endtime is None:
                 endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
             query = {"number" : int(number), "end" : None, 'detectors': detectors}
