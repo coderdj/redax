@@ -368,7 +368,7 @@ class MongoConnect():
         '''
         self.log.info("Updating run %i with end time"%number)
         try:
-            time.sleep(2) # this number depends on the delay between CC and reader stop
+            time.sleep(0.5) # this number depends on the CC command polling time
             endtime = self.GetAckTime(detector, 'stop')
             if endtime is None:
                 endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
@@ -400,13 +400,11 @@ class MongoConnect():
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
         number = None
-        n_id = None
         try:
             if command == 'arm':
                 number = self.GetNextRunNumber()
                 if number == -1:
                     return -1
-                n_id = '%06i' % number
                 self.latest_status[detector]['number'] = number
             doc_base = {
                 "command": command,
@@ -510,7 +508,8 @@ class MongoConnect():
             'detectors': detectors,
             'user': goal_state[detector]['user'],
             'mode': goal_state[detector]['mode'],
-            #'bootstrax': {'state': None}, # SOON (TM)
+            'bootstrax': {'state': None},
+            'end': None
         }
 
         # If there's a source add the source. Also add the complete ini file.
@@ -540,8 +539,8 @@ class MongoConnect():
             start_time = self.GetAckTime(detector, 'start')
             if start_time is None:
                 start_time = datetime.datetime.utcnow()-datetime.timedelta(seconds=2)
+                run_doc['tags'] = [{'name': 'messy', 'user': 'daq', 'date': start_time}]
             run_doc['start'] = start_time
-            run_doc['end'] = None
 
             self.collections['run'].insert_one(run_doc)
         except Exception as e:

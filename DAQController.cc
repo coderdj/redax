@@ -100,10 +100,7 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
 
   for(auto& link : fDigitizers ) {
     for(auto& digi : link.second){
-      if(fOptions->GetInt("run_start", 0) == 1)
-	digi->SINStart();
-      else
-	digi->AcquisitionStop();
+      digi->AcquisitionStop();
     }
   }
   fCounter = 0;
@@ -141,6 +138,10 @@ int DAQController::Start(){
 	}
       }
     }
+  } else {
+    for (auto& link : fDigitizers)
+      for (auto& digi : link.second)
+        digi->SINStart();
   }
   fStatus = DAXHelpers::Running;
   return 0;
