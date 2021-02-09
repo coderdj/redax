@@ -20,6 +20,14 @@
 #include <mongocxx/client.hpp>
 #include <mongocxx/pool.hpp>
 
+#ifndef REDAX_BUILD_BRANCH
+#define REDAX_BUILD_BRANCH "unknown"
+#endif
+
+#ifndef REDAX_BUILD_DATE
+#define REDAX_BUILD_DATE "unknown"
+#endif
+
 std::atomic_bool b_run = true;
 std::string hostname = "";
 
@@ -124,6 +132,7 @@ int main(int argc, char** argv){
   gethostname(chostname, HOST_NAME_MAX);
   hostname=chostname;
   hostname+= (reader ? "_reader_" : "_controller_") + sid;
+  std::cout << "Welcome to redax, this is build " << REDAX_BUILD_BRANCH << " compiled on " << REDAX_BUILD_DATE << "\n";
   std::cout<<"Reader starting with ID: "<<hostname<<std::endl;
 
   // MongoDB Connectivity for control database. Bonus for later:
