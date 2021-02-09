@@ -331,14 +331,14 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
 
 void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
     std::map<int, std::vector<uint16_t>>& dac_values, int& ret) {
-  std::string BL_MODE = fOptions->GetString("baseline_dac_mode", "fixed");
+  std::string baseline_mode = fOptions->GetString("baseline_dac_mode", "fixed");
   int nominal_dac = fOptions->GetInt("baseline_fixed_value", 4000);
-  if (BL_MODE == "fit") {
+  if (baseline_mode == "fit") {
     if ((ret = FitBaselines(digis, dac_values)) < 0) {
       fLog->Entry(MongoLog::Warning, "Errors during baseline fitting");
       return;
     } else if (ret > 0) {
-      fLog->Entry(MongoLog::Warning, "Baselines didn't converge but we're going ahead");
+      fLog->Entry(MongoLog::Warning, "Baselines didn't converge so we'll use Plan B");
     }
   }
 
@@ -347,15 +347,15 @@ void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
 
     // Multiple options here
     int bid = digi->bid(), success(0);
-    if (BL_MODE == "fit") {
-    } else if(BL_MODE == "cached") {
+    if (baseline_mode == "fit") {
+    } else if(baseline_mode == "cached") {
       dac_values[bid] = fOptions->GetDAC(bid, digi->GetNumChannels(), nominal_dac);
       fLog->Entry(MongoLog::Local, "Board %i using cached baselines", bid);
-    } else if(BL_MODE == "fixed"){
+    } else if(baseline_mode == "fixed"){
       fLog->Entry(MongoLog::Local, "Loading fixed baselines with value 0x%04x", nominal_dac);
       dac_values[bid].assign(digi->GetNumChannels(), nominal_dac);
     } else {
-      fLog->Entry(MongoLog::Warning, "Received unknown baseline mode '%s', valid options are \"fit\", \"cached\", and \"fixed\"", BL_MODE.c_str());
+      fLog->Entry(MongoLog::Warning, "Received unknown baseline mode '%s', valid options are 'fit', 'cached', and 'fixed'", baseline_mode.c_str());
       ret = -1;
       return;
     }
