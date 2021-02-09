@@ -66,8 +66,8 @@ int MongoLog::RotateLogFile() {
     return -1;
   }
   fOutfile << FormatTime(&today) << " [INIT]: logfile initialized\n";
-  if (fDeleteAfterDays == 0) return 0;
   fToday = Today(&today);
+  if (fDeleteAfterDays == 0) return 0;
   std::vector<int> days_per_month = {31,28,31,30,31,30,31,31,30,31,30,31};
   if (today.tm_year%4 == 0) days_per_month[1] += 1; // the edge-case is SEP
   struct tm last_week = today;
