@@ -284,8 +284,11 @@ class DAQController():
                     return
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
                 delay = 0
+                self.one_detector_arming = True
             elif command == 'start':
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
+                # we can safely short the logic here and buy an extra logic cycle
+                self.one_detector_arming = False
                 delay = 0
             else: # stop
                 readers, cc = self.mongo.GetConfiguredNodes(detector,
