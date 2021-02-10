@@ -244,9 +244,6 @@ class MongoConnect():
                 else:
                     status = STATUS['UNKNOWN']
 
-            if detector == 'neutron_veto':
-                status = STATUS.IDLE
-
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
@@ -259,16 +256,16 @@ class MongoConnect():
             for doc in self.collections['incoming_commands'].aggregate([
                 {'$sort': {'_id': -1}},
                 {'$group': {
-                    '_id': {'$concat': ['$detector', '.', '$field']},
+                    '_id': '$key',
                     'value': {'$first': '$value'},
                     'user': {'$first': '$user'},
                     'time': {'$first': '$time'},
                     'detector': {'$first': '$detector'},
-                    'key': {'$first': '$field'}
+                    'field': {'$first': '$field'}
                     }},
                 {'$group': {
                     '_id': '$detector',
-                    'keys': {'$push': '$key'},
+                    'fields': {'$push': '$field'},
                     'values': {'$push': '$value'},
                     'users': {'$push': '$user'},
                     'times': {'$push': '$time'}
@@ -276,7 +273,7 @@ class MongoConnect():
                 {'$project': {
                     'detector': '$_id',
                     '_id': 0,
-                    'state': {'$arrayToObject': {'$zip': {'inputs': ['$keys', '$values']}}},
+                    'state': {'$arrayToObject': {'$zip': {'inputs': ['$fields', '$values']}}},
                     'user': {'$arrayElemAt': ['$users', {'$indexOfArray': ['$times', {'$max': '$times'}]}]}
                     }}
                 ]):
@@ -365,22 +362,33 @@ class MongoConnect():
             return 0
         return list(cursor)[0]['number']+1
 
-    def SetStopTime(self, number, detector, force):
+    def SetStopTime(self, number, detectors, force):
         '''
         Sets the 'end' field of the run doc to the time when the STOP command was ack'd
         '''
-        self.log.info("Updating run %i with end time"%number)
+        self.log.info("Updating run %i with end time (%s)" %(number, detectors))
         try:
-            time.sleep(2) # this number depends on the delay between CC and reader stop
-            endtime = self.GetAckTime(detector, 'stop')
+            time.sleep(0.5) # this number depends on the CC command polling time
+            endtime = self.GetAckTime(detectors, 'stop')
             if endtime is None:
                 endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
-            query = {"number" : int(number), "end" : None, 'detector': detector}
+            query = {"number" : int(number), "end" : None, 'detectors': detectors}
             updates = {"$set" : {"end" : endtime}}
             if force:
                 updates["$push"] = {"tags" : {"name" : "messy", "user" : "daq",
                     "date" : datetime.datetime.utcnow()}}
-            self.collections['run'].update_one(query, updates)
+            if self.collections['run'].update_one(query, updates).modified_count == 1:
+                rate = {}
+                for doc in self.collections['aggregate_status'].aggregate([
+                    {'$match': {'number': number}},
+                    {'$group': {'_id': '$detector',
+                                'avg': {'$avg': '$rate'},
+                                'max': {'$max': '$rate'}}}
+                    ]):
+                    rate[doc['_id']] = {'avg': doc['avg'], 'max': doc['max']}
+                self.collections['run'].update_one({'number': int(number)},
+                                                   {'$set': {'rate': rate}})
+            self.log.debug('Update successful')
         except Exception as e:
             self.log.error("Database having a moment, hope this doesn't crash (%s)" % type(e))
         return
@@ -403,13 +411,11 @@ class MongoConnect():
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
         number = None
-        n_id = None
         try:
             if command == 'arm':
                 number = self.GetNextRunNumber()
                 if number == -1:
                     return -1
-                n_id = '%06i' % number
                 self.latest_status[detector]['number'] = number
             doc_base = {
                 "command": command,
@@ -513,7 +519,8 @@ class MongoConnect():
             'detectors': detectors,
             'user': goal_state[detector]['user'],
             'mode': goal_state[detector]['mode'],
-            #'bootstrax': {'state': None}, # SOON (TM)
+            'bootstrax': {'state': None},
+            'end': None
         }
 
         # If there's a source add the source. Also add the complete ini file.
@@ -543,8 +550,8 @@ class MongoConnect():
             start_time = self.GetAckTime(detector, 'start')
             if start_time is None:
                 start_time = datetime.datetime.utcnow()-datetime.timedelta(seconds=2)
+                run_doc['tags'] = [{'name': 'messy', 'user': 'daq', 'date': start_time}]
             run_doc['start'] = start_time
-            run_doc['end'] = None
 
             self.collections['run'].insert_one(run_doc)
         except Exception as e:

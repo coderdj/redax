@@ -7,11 +7,11 @@ class V1495_TPC : public V1495 {
   public:
     V1495_TPC(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, unsigned);
     virtual ~V1495_TPC();
-    virtual int Init(std::map<std::string, int>&);
+    virtual int Arm(std::map<std::string, int>&);
     virtual int BeforeSINStart();
-    virtual int AfterSINStop();
+    virtual int BeforeSINStop();
 
-  private:
+  protected:
     const uint32_t fControlReg;
     const uint32_t fVetoOffMSBReg;
     const uint32_t fVetoOffLSBReg;
@@ -19,7 +19,7 @@ class V1495_TPC : public V1495 {
     const uint32_t fVetoOnLSBReg;
 
     int fFractionalModeActive;
-    long fVetoOn_clk, fVetoOff_clk;
+    uint32_t fVetoOn_clk, fVetoOff_clk;
 };
 
 #endif // _V1495_TPC_HH_ defined

@@ -21,7 +21,7 @@ class SignalHandler(object):
         self.event.set()
 
 class LogHandler(logging.Handler):
-    def __init__(self, logdir='/live_data/redax_logs/', retention=7):
+    def __init__(self, logdir='/live_data/redax_logs/', retention=0):
         logging.Handler.__init__(self)
         self.today = datetime.date.today()
         self.logdir = logdir
@@ -53,7 +53,9 @@ class LogHandler(logging.Handler):
     def Rotate(self, when):
         if hasattr(self, 'f'):
             self.f.close()
-        self.f = open(self.FullFilename(when), 'w')
+        self.f = open(self.FullFilename(when), 'a')
+        if self.retention == 0:
+            return
         last_file = when - datetime.timedelta(days=self.retention)
         if os.path.exists(self.FullFilename(last_file)):
             os.remove(self.FullFilename(last_file))

@@ -23,7 +23,6 @@ struct BoardType{
   std::string type;
   std::string host;
   unsigned int vme_address;
-  std::string detector;
 };
 
 struct RegisterType{
@@ -91,6 +90,7 @@ public:
   int GetNestedInt(std::string, int);
   std::vector<uint16_t> GetThresholds(int);
   int GetFaxOptions(fax_options_t&);
+  uint16_t GetSingleDAC(int, int, uint16_t);
 
   void UpdateDAC(std::map<int, std::vector<uint16_t>>&);
 
@@ -105,6 +105,7 @@ private:
   mongocxx::pool::entry fClient; // yes
   mongocxx::database fDB;
   mongocxx::collection fDAC_collection;
+  bsoncxx::document::value fDAC_cache;
 };
 
 #endif
