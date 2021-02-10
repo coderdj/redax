@@ -3,19 +3,22 @@
 #include <chrono>
 #include <bsoncxx/builder/stream/document.hpp>
 
-MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string log_dir, std::string host) : 
+namespace fs=std::experimental::filesystem;
+
+MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string log_dir, std::string host, bool simple_structure) : 
   fPool(pool), fClient(pool->acquire()) {
   fLogLevel = 0;
   fHostname = host;
   fDeleteAfterDays = DeleteAfterDays;
   fFlushPeriod = 5; // seconds
-  fOutputDir = log_dir;
+  fTopOutputDir = log_dir;
   //fPool = pool;
   //fClient = pool->acquire();
   fDB = (*fClient)[dbname];
   fCollection = fDB["log"];
+  fSimpleStructure = simple_structure;
 
-  std::cout<<"Configured WITH local file logging to " << log_dir << std::endl;
+  std::cout<<"Local file logging to " << log_dir << " with " (simple_structure ? "simple" : "manageable") << " structure\n";
   fFlush = true;
   fFlushThread = std::thread(&MongoLog::Flusher, this);
   fRunId = -1;
@@ -51,7 +54,15 @@ int MongoLog::Today(struct tm* date) {
 }
 
 std::string MongoLog::LogFileName(struct tm* date) {
-  return std::to_string(Today(date)) + "_" + fHostname + ".log";
+  if (fSimpleStructure)
+    return std::to_string(Today(date)) + "_" + fHostname + ".log";
+  return fHostname + ".log";
+}
+
+fs::path OutputDir(const fs::path& toplevel, struct tm* date) {
+  char temp[6];
+  std::sprintf(temp, "%02d.%02d", tm->tm_mon+1, tm->tm_mday);
+  return toplevel / std::string(temp);
 }
 
 int MongoLog::RotateLogFile() {

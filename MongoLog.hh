@@ -91,7 +91,7 @@ private:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
-  std::experimental::filesystem::path fOutputDir;
+  std::experimental::filesystem::path fTopOutputDir;
   std::thread fFlushThread;
   std::atomic_bool fFlush;
   int fFlushPeriod;
