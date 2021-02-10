@@ -240,15 +240,8 @@ int Options::GetV1495Opts(std::map<std::string, int>& ret) {
   if (subdoc.find(fDetector) == subdoc.end())
     return 1;
   try {
-<<<<<<< HEAD
-    if (bson_options.find("V1495") == bson_options.end() || bson_options["V1495"].get_document().value.find(fDetector) == bson_options["V1495"].get_document().value.end())
-      return 1;
-    for (auto& value : bson_options["V1495"][fDetector].get_document().value)
-      ret[std::string(value.key())] = value.get_int32().value;
-=======
     for (auto& value : subdoc[fDetector].get_document().value)
       ret[std::string(value.key())] = value.get_int32().value;  // TODO std::any
->>>>>>> master
     return 0;
   } catch (std::exception& e) {
     fLog->Entry(MongoLog::Local, "Exception getting V1495 opts: %s", e.what());
