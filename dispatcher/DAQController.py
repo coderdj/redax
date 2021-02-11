@@ -286,11 +286,14 @@ class DAQController():
                 readers, cc = self.mongo.GetConfiguredNodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
                 hosts = (cc, readers)
-                delay = 5 if not force else 0
+                if force or self.latest_status[detector]['status'] not in [STATUS.RUNNING]:
+                    delay = 0
+                else:
+                    delay = 5
                 # TODO smart delay?
             self.log.debug('Sending %s to %s' % (command.upper(), detector))
             if self.mongo.SendCommand(command, hosts, self.goal_state[detector]['user'],
-                    detector, self.goal_state[detector]['mode'], delay):
+                    detector, self.goal_state[detector]['mode'], delay, force):
                 # failed
                 return
             self.last_command[command][detector] = now
