@@ -56,6 +56,9 @@ f1724::f1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int
   fEventCounter = 0;
   fSeenUnder5 = true;
   fSeenOver15 = false;
+  fSimulateCrashes = true;
+  fFailProb = 1e-4;
+  fCrashProb = 1e-6;
 }
 
 f1724::~f1724() {
@@ -362,8 +365,8 @@ void f1724::MakeWaveform(std::vector<hit_t>& hits, long timestamp) {
 }
 
 void f1724::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask, long ts) {
-  fEventCounter++;
   const int overhead_per_channel = 2, overhead_per_event = 4;
+  double fail = 1;
   std::u32string buffer;
   char32_t word = 0;
   for (auto& ch : wf) word += ch.size(); // samples
@@ -371,8 +374,15 @@ void f1724::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask, long
   buffer.reserve(words_this_event);
   word = words_this_event | 0xA0000000;
   buffer += word;
+  word = mask;
+  if (fSimulateCrashes && ((fail = fFlatDist(fGen)) < fFailProb)) {
+    word |= (1 << 26); // set the FAIL bit
+    if (fail < fCrashProb)
+      throw std::runtime_error("Oops, I crashed");
+  }
   buffer += (char32_t)mask;
   word = fEventCounter.load();
+  fEventCounter++;
   buffer += word;
   char32_t timestamp = (ts/fClockCycle)&0x7FFFFFFF;
   //fLog->Entry(MongoLog::Local, "Bd %i ts %lx/%08x", fBID, ts, timestamp);

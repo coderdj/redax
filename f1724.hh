@@ -93,6 +93,8 @@ protected:
   std::thread fGeneratorThread;
 
   bool fSeenUnder5, fSeenOver15;
+  bool fSimluateCrashes;
+  double fFailProb, fCrashProb;
 };
 
 #endif // _F1724_HH_ defined
