@@ -280,6 +280,7 @@ class DAQController():
             run_mode = self.goal_state[detector]['mode']
             if command == 'arm':
                 if self.one_detector_arming:
+                    self.log.info('Another detector already arming, can\'t arm %s' % detector)
                     # this leads to run number overlaps
                     return
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
@@ -295,6 +296,9 @@ class DAQController():
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
                 delay = 5 if not force else 0
                 # TODO smart delay?
+                if self.latest_status[detector]['status'] in [STATUS.ARMING, STATUS.ARMED]:
+                    # this was the arming detector
+                    self.one_detector_arming = False
             self.log.debug('Sending %s to %s' % (command.upper(), detector))
             if self.mongo.SendCommand(command, (cc, readers), self.goal_state[detector]['user'],
                     detector, self.goal_state[detector]['mode'], delay):
