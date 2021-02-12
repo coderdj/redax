@@ -27,7 +27,7 @@ public:
   virtual bool EnsureReady(int, int) {return sRun || sReady;}
   virtual bool EnsureStarted(int, int) {return sRun == true;}
   virtual bool EnsureStopped(int, int) {return sRun == false;}
-  virtual int CheckErrors() {return 0;}
+  virtual int CheckErrors() {return fError ? 1 : 0;}
   virtual uint32_t GetAcquisitionStatus();
 
 protected:

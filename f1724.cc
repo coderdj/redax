@@ -59,6 +59,7 @@ f1724::f1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int
   fSimulateCrashes = true;
   fFailProb = 1e-4;
   fCrashProb = 1e-6;
+  fError = 0;
 }
 
 f1724::~f1724() {
@@ -377,6 +378,7 @@ void f1724::ConvertToDigiFormat(const vector<vector<double>>& wf, int mask, long
   word = mask;
   if (fSimulateCrashes && ((fail = fFlatDist(fGen)) < fFailProb)) {
     word |= (1 << 26); // set the FAIL bit
+    fError = 1;
     if (fail < fCrashProb)
       throw std::runtime_error("Oops, I crashed");
   }
