@@ -73,7 +73,7 @@ int PrintUsage() {
   return 1;
 }
 
-void PrintVersion() {
+int PrintVersion() {
   std::cout << "Redax branch " << REDAX_BUILD_BRANCH << " built on " << REDAX_BUILD_DATE << "\n";
   return 0;
 }
@@ -101,7 +101,7 @@ int main(int argc, char** argv){
     {"arm-delay", required_argument, 0, c++},
     {"log-retention", required_argument, 0, c++},
     {"help", no_argument, 0, c++},
-    ("version", no_argument, 0, c++}
+    {"version", no_argument, 0, c++}
   };
   while ((c = getopt_long(argc, argv, "", longopts, &opt_index)) != -1) {
     switch(c) {
