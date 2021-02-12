@@ -17,6 +17,7 @@ public:
   int GetHandle(){return fBoardHandle;};
 
 protected:
+  virtual int Init();
   int fBoardHandle;
   CrateOptions fCopts;
   int fCrate, fLink;
