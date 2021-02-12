@@ -249,7 +249,7 @@ class DAQController():
                 # Running normally (not arming, error, timeout, etc)
                 self.latest_status[detector]['status'] == STATUS.RUNNING and
                 # We were asked to wait for the current run to stop
-                self.goal_state[detector].get('finish_run_on_stop', 'false') == 'true'):
+                self.goal_state[detector].get('softstop', 'false') == 'true'):
             self.CheckRunTurnover(detector)
         else:
             self.ControlDetector(detector=detector, command='stop')
