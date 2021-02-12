@@ -11,7 +11,7 @@ MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, s
   fHostname = host;
   fDeleteAfterDays = DeleteAfterDays;
   fFlushPeriod = 5; // seconds
-  fTopOutputDir = log_dir;
+  fOutputDir = log_dir;
   fDB = (*fClient)[dbname];
   fCollection = fDB["log"];
 
@@ -60,7 +60,7 @@ int MongoLog::RotateLogFile() {
   auto t = std::time(0);
   auto today = *std::gmtime(&t);
   std::string filename = LogFileName(&today);
-  auto full_path = OutputDir(fOutputDir, today) / filename;
+  auto full_path = fOutputDir / filename;
   std::cout<<"Logging to " << full_path << std::endl;
   fOutfile.open(full_path, std::ofstream::out | std::ofstream::app);
   if (!fOutfile.is_open()) {
@@ -138,17 +138,17 @@ MongoLog_nT::MongoLog_nT(std::shared_ptr<mongocxx::pool>& pool, std::string dbna
 
 MongoLog_nT::~MongoLog_nT() {}
 
-fs::path OutputDir(struct tm* date) {
+fs::path MongoLog_nT::OutputDir(struct tm* date) {
   char temp[6];
-  std::sprintf(temp, "%02d.%02d", tm->tm_mon+1, tm->tm_mday);
-  return fOutputDir / std::to_string(tm->tm_year+1900) / std::string(temp);
+  std::sprintf(temp, "%02d.%02d", date->tm_mon+1, date->tm_mday);
+  return fOutputDir / std::to_string(date->tm_year+1900) / std::string(temp);
 }
 
 int MongoLog_nT::RotateLogFile() {
   if (fOutfile.is_open()) fOutfile.close();
   auto t = std::time(0);
   auto today = *std::gmtime(&t);
-  auto full_output_file_name = OutputDir(today) / fLogFileName(today);
+  auto full_output_file_name = OutputDir(&today) / LogFileName(&today);
   fOutfile.open(full_output_file_name, std::ofstream::out | std::ofstream::app);
   if (!fOutfile.is_open()) {
     std::cout << "Could not rotate logfile!\n";

@@ -92,7 +92,7 @@ protected:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
-  std::experimental::filesystem::path fTopOutputDir;
+  std::experimental::filesystem::path fOutputDir;
   std::thread fFlushThread;
   std::atomic_bool fFlush;
   int fFlushPeriod;
@@ -103,7 +103,7 @@ class MongoLog_nT : public MongoLog {
 public:
   // subclass to support the managed logging
   MongoLog_nT(std::shared_ptr<mongocxx::pool>&, std::string, std::string);
-  virtual ~MongoLog_NT();
+  virtual ~MongoLog_nT();
 
 protected:
   virtual int RotateLogFile();
