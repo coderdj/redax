@@ -93,7 +93,7 @@ protected:
   std::thread fGeneratorThread;
 
   bool fSeenUnder5, fSeenOver15;
-  bool fSimluateCrashes;
+  bool fSimulateCrashes;
   double fFailProb, fCrashProb;
 };
 
