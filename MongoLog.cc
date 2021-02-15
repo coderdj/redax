@@ -20,9 +20,6 @@ MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, s
   fFlushThread = std::thread(&MongoLog::Flusher, this);
   fRunId = -1;
 
-  if (RotateLogFile())
-    throw std::runtime_error("Could not open logfile");
-
   fLogLevel = 1;
 }
 
@@ -51,18 +48,27 @@ int MongoLog::Today(struct tm* date) {
   return (date->tm_year+1900)*10000 + (date->tm_mon+1)*100 + (date->tm_mday);
 }
 
-std::string MongoLog::LogFileName(struct tm* date) {
-  return std::to_string(Today(date)) + "_" + fHostname + ".log";
+fs::path MongoLog::LogFileName(struct tm* date) {
+  std::string fname = std::to_string(Today(date)) + "_" + fHostname + ".log";
+  return OutputDirectory(date)/fname;
+}
+
+fs::path MongoLog::OutputDirectory(struct tm*) {
+  return fOutputDir;
 }
 
 int MongoLog::RotateLogFile() {
   if (fOutfile.is_open()) fOutfile.close();
   auto t = std::time(0);
   auto today = *std::gmtime(&t);
-  std::string filename = LogFileName(&today);
-  auto full_path = fOutputDir / filename;
-  std::cout<<"Logging to " << full_path << std::endl;
-  fOutfile.open(full_path, std::ofstream::out | std::ofstream::app);
+  auto filename = LogFileName(&today);
+  std::cout<<"Logging to " << filename << std::endl;
+  auto pp = filname.parent_path();
+  if (!fs::exists(pp) && !fs::create_directories(pp)) {
+    std::cout << "Could not create output directories for logging!" << std::endl;
+    return -1;
+  }
+  fOutfile.open(filename, std::ofstream::out | std::ofstream::app);
   if (!fOutfile.is_open()) {
     std::cout << "Could not rotate logfile!\n";
     return -1;
@@ -82,7 +88,7 @@ int MongoLog::RotateLogFile() {
     }
     last_week.tm_mday += days_per_month[last_week.tm_mon]; // off by one error???
   }
-  std::experimental::filesystem::path p = fOutputDir/LogFileName(&last_week);
+  auto p = LogFileName(&last_week);
   if (std::experimental::filesystem::exists(p)) {
     fOutfile << FormatTime(&today) << " [INIT]: Deleting " << p << '\n';
     std::experimental::filesystem::remove(p);
@@ -138,24 +144,9 @@ MongoLog_nT::MongoLog_nT(std::shared_ptr<mongocxx::pool>& pool, std::string dbna
 
 MongoLog_nT::~MongoLog_nT() {}
 
-fs::path MongoLog_nT::OutputDir(struct tm* date) {
+fs::path MongoLog_nT::OutputDirectory(struct tm* date) {
   char temp[6];
   std::sprintf(temp, "%02d.%02d", date->tm_mon+1, date->tm_mday);
   return fOutputDir / std::to_string(date->tm_year+1900) / std::string(temp);
-}
-
-int MongoLog_nT::RotateLogFile() {
-  if (fOutfile.is_open()) fOutfile.close();
-  auto t = std::time(0);
-  auto today = *std::gmtime(&t);
-  auto full_output_file_name = OutputDir(&today) / LogFileName(&today);
-  fOutfile.open(full_output_file_name, std::ofstream::out | std::ofstream::app);
-  if (!fOutfile.is_open()) {
-    std::cout << "Could not rotate logfile!\n";
-    return -1;
-  } else std::cout << "Logging to " << full_output_file_name << std::endl;
-  fOutfile << FormatTime(&today) << " [INIT]: logfile initialized\n";
-  fToday = Today(&today);
-  return 0;
 }
 

@@ -59,10 +59,6 @@ public:
   MongoLog(int, std::shared_ptr<mongocxx::pool>&, std::string, std::string, std::string);
   ~MongoLog();
 
-  int  Initialize(std::string connection_string,
-		  std::string db, std::string collection,
-		  std::string host, bool debug=false);
-
   const static int Debug   = 0;  // Verbose output
   const static int Message = 1;  // Normal output
   const static int Warning = 2;  // Bad but minor operational impact
@@ -70,6 +66,7 @@ public:
   const static int Fatal   = 4;  // Program gonna die
   const static int Local   = -1; // Write to local (file) log only
 
+  virtual int Initialize() {return RotateLogFile();}
   int Entry(int priority, std::string, ...);
   void SetRunId(const int runid) {fRunId = runid;}
 
@@ -77,8 +74,9 @@ protected:
   void Flusher();
   std::string FormatTime(struct tm*);
   int Today(struct tm*);
-  virtual int RotateLogFile();
+  int RotateLogFile();
   virtual std::string LogFileName(struct tm*);
+  virtual std::experimental::filesystem::path OutputDirectory(struct tm*);
 
   std::shared_ptr<mongocxx::pool> fPool;
   mongocxx::pool::entry fClient;
@@ -106,7 +104,6 @@ public:
   virtual ~MongoLog_nT();
 
 protected:
-  virtual int RotateLogFile();
-  std::experimental::filesystem::path OutputDir(struct tm*);
+  virtual std::experimental::filesystem::path OutputDirectory(struct tm*);
 };
 #endif
