@@ -64,7 +64,7 @@ int MongoLog::RotateLogFile() {
   if (fOutfile.is_open()) fOutfile.close();
   auto t = std::time(0);
   auto today = *std::gmtime(&t);
-  auto filename = LogFileName(&today);
+  auto filename = LogFilePath(&today);
   std::cout<<"Logging to " << filename << std::endl;
   auto pp = filename.parent_path();
   if (!fs::exists(pp) && !fs::create_directories(pp)) {
