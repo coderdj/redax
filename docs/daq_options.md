@@ -109,17 +109,18 @@ Electronics are defined in the 'boards' field as follows:
   ]
 ```
 
-This is an example that might be used for reading out 3 boards and defining one crate controller with V1495 in the electronics 
-setup given in the [previous chapter](installation.md). Each subdocument contains the following:
+This is an example that might be used for reading out 3 boards and defining one crate controller with V1495 in the electronics setup given in the [previous chapter](installation.md).
+Each subdocument contains the following:
 
 | Option | Description |
-| ----- | ---------  |
+| ----- | --------- |
 | board | A unique identifier for this board. The best thing is to just use the digitizer serial number. |
 | crate | The 'crate' as defined in CAEN lingo. Namely, if multiple boards are connected to one optical link they get crate numbers zero to seven (max) defining their order in the daisy chain. The first board in the daisy chain is zero. The order is defined by the direction of the optical link propagation, which you can deduce by the little lights on the board that light when they receive an input. |
 | vme_address | It is planned to support readout via a V2718 crate controller over the VME backplane. In this case board addressing is via VME address only and crate would refer to the location of the crate controller in the daisy chain. This feature is not yet implemented so the option is placeholder (but must be included). |
 | link | Defines the optical link index this board is connected to. This is simple in case of one optical link, though like plugging in USB-A there's always a 50-50 chance to guesss it backwards. It becomes a bit more complicated when you include multiple A3818s on one server. There's a good diagram in CAEN's A3818 documentation. |
 | host | This is the DAQ name of the process that should control the board. Multiple processes cannot share one optical link (but one process can control one optical link). |
 | type | Either V1724, V1724_MV, or V1730 for digitizers, V2718 for crate controllers, or V1495 for the FGPA. If more board types are supported they will be added. |
+
 Note that the "crate" and "link" fields for the V1495 don't have meaning and can take any value, but its host should match that of the V2718.
 
 ## Register Definitions
@@ -193,6 +194,7 @@ Various options that tell redax how to run.
     "baseline_reference_run": 1976,
     "baseline_value": 16000,
     "baseline_fixed_value": 4000,
+    "baseline_fallback_mode": "fail",
     "processing_threads": {
       "reader0_reader_0": 2,
       "reader1_reader_1": 6,
@@ -208,7 +210,8 @@ Various options that tell redax how to run.
 | -------- | ---------- |
 | run_start | Tells the DAQ whether to start the run via register or S-in. 0 for register, 1 for S-in. Note that starting by register means that the digitizer clocks will not be synchronized. This can be fine if you run with an external trigger and use the trigger time as synchronization signal. If running in triggerless mode you need to run with '1' and have your hardware set up accordingly. |
 | baseline_dac_mode | cached/fixed/fit. This defines how the DAC-offset values per channel are set. If set to "cached" the program will load cached baselines from the run specified in *baseline_reference_run*. If it can't find that run it will fall back to the value in *baseline_fixed_value*. If set to "fixed" it will use *baseline_fixed_value* in any case. If set to 'fit' it will attempt to adjust the DAC offset values until the baseline for each channel matches the value in *baseline_value*. If using negative voltage signals the default value of 16000 is a good one. Baselines for each run are cached in the *dac_values* collection of the daq database. |
-| baseline_reference_run | Int. If 'baseline_dac_mode' is set to 'cached' it will use the values from the run number defined here. |
+| baseline_fallback_mode | cached/fixed/fail. Sometimes the baseline fitting routine doesn't converge. This option determines what happens in this case (only the non-converging channels are affected). Default is 'fail'. |
+| baseline_reference_run | Int. If either 'baseline_dac_mode' or 'baseline_fallback_mode' are set to 'cached' it will use the values from the run number defined here. |
 | baseline_value | Int. If 'baseline_dac_mode' is set to 'fit' it will attempt to adjust the baselines until they hit the decimal value defined here, which must lie between 0 and 16385 for a 14-bit ADC. Default 16000. |
 | baseline_fixed_value | Int. Use this to set the DAC offset register directly with this value. See CAEN documentation for more details. Default 4000. |
 | processing_threads | Dict. The number of threads working on converting data between CAEN and strax format. Should be larger for processes responsible for more boards and can be smaller for processes only reading a few boards. For example, 24 threads will very easily handle a data flow of 200 MB/s (uncompressed) through that instance, but if you aren't expecting that much data then smaller values are fine. The default value is 8, but not specifying this could cause issues with processing. |
@@ -225,7 +228,8 @@ There are various configuration options for the strax output that must be set.
   "strax_chunk_length": 5.0,
   "strax_fragment_payload_bytes": 220,
   "strax_buffer_num_chunks": 2,
-  "srax_chunk_phase_limit": 1
+  "strax_chunk_phase_limit": 1,
+  "compressor": "lz4"
 }
 ```
 
@@ -235,8 +239,9 @@ There are various configuration options for the strax output that must be set.
 | strax_chunk_length | Float. Length of each strax chunk in seconds. There's some balance required here. It should be short enough that strax can process reasonably online, as it waits for each chunk to finish then loads it at once (the size should be digestable). But it shouldn't be so short that it needlessly micro-segments the data. Order of 5-15 seconds seems reasonable at the time of writing. Default 5. |
 | strax_fragment_payload_bytes | Int. How long are the fragments? In general this should be long enough that it definitely covers the vast majority of your SPE pulses. Our SPE pulses are ~100 samples, so the default value of 220 bytes (2 bytes per sample) provides a small amount of overhead. Undefined behavior if the value is odd, possibly undefined if it isn't a multiple of 4. |
 | strax_output_path | String. Where should we write data? This must be a locally mounted data store. Redax will handle sub-directories so just provide the top-level directory where all the live data should go (e.g. `/data/live`). |
-| strax_buffer_num_chunks | Int. How many full chunks should get buffered? Setting this at 1 or lower may cause data loss, and greater than 2 usually means you need more memory in your readout machine. For instance, if 5 and 6 are buffered, as soon as something in chunk 7 shows up, chunk 5 is dumped to disk. |
+| strax_buffer_num_chunks | Int. How many full chunks should get buffered? Setting this at 1 or lower may cause data loss, and greater than 2 usually means you need more memory in your readout machine. A value of 2 means that if chunks 5 and 6 are buffered, as soon as something in chunk 7 shows up, chunk 5 is dumped to disk. |
 | strax_chunk_phase_limit | Int. Sometimes pulses will show up at the processing stage late (or somehow behind the rest of them). If a pulse is this many chunks behind (or out of phase with) the chunks currently being buffered, log a warning to the database. |
+| compressor | lz4/blosc. Which algorithm to use in compressing the chunks. Both have comparable squeeziness, but blosc is slightly faster. Blosc does have an issue where the size must fit into 31 bits, but you have to be running long and hard to hit this. Default lz4 |
 
 ## Channel Map
 
@@ -284,8 +289,7 @@ Redax accepts a variety of options that control various low-level operations. Th
 
 | Option | Description |
 | ---- | ---- |
-| baseline_max_iterations | Int. The maximum number of overall iterations to go through when fitting baselines. Baselining runs until either this number of iterations are completed, or the baselines converge, whichever happens first. Default 2. |
-| baseline_max_steps | Int. The maximum number of steps per iteration during baselining. Steps involve measuring the baseline and trying to adjust it towards the target value. Default 20. |
+| baseline_max_steps | Int. The maximum number of steps during baselining. Steps involve measuring the baseline and trying to adjust it towards the target value. Default 20. |
 | baseline_adjustment_threshold | Int. How close the measured baseline must be to the target baseline in ADC units. If the absolute difference is less than this value, a channel is considered to have converged. Default 10. |
 | baselie_convergence_threshold | Int. How many consecutive times a channel must be within the adjustment threshold to be considered stable and finished. Default 3. |
 | baseline_min_adjustment | Int. The minimum change to the DAC value, given in DAC units. Note that the DAC is 16-bit while the digitizer is only 14-bit, so a conversion of approximately 0.25 does apply. Default 10. |
@@ -294,8 +298,8 @@ Redax accepts a variety of options that control various low-level operations. Th
 | baseline_fraction_around_max | Float. What fraction of total samples in the pulse must be around the mode for the pulse to be accepted. Default 0.8. |
 | baseline_triggers_per_step | Int. How many software triggers to send for each baseline step. Default 3. |
 | baseline_ms_between_triggers | Int. How long between software triggers. Default 10. |
-| blt_size | Int. How many bytes to read from the digitizer during each BLT readout. Default 0x80000. |
+| blt_size | Int. How many bytes to read from the digitizer during each BLT readout. This should be rather larger than your expected event sizes. Default 0x80000. |
 | blt_safety_factor | Float. Sometimes the digitizer returns more bytes during a BLT readout than you ask for (it depends on the number and size of events in the digitizer's memory). This value is how much extra memory to allocate so you don't overrun the readout buffer. Default 1.5. |
 | do_sn_check | 0/1. Whether or not to have each board check its serial number during initialization. Default 0. |
-| us_between_reads | Int. How many microseconds to sleep between polling digitizers for data. This has a major performance impact that will matter when under extremely high loads (ie, the bleeding edge of what your server(s) are capable of), but otherwise shouldn't matter much. Default 10. |
+| us_between_reads | Int. How many microseconds to sleep between polling digitizers for data. This has a major performance impact that will matter when under extremely high loads (ie, the bleeding edge of what your server(s) and boards are capable of), but otherwise shouldn't matter much. Default 10. |
 

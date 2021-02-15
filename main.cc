@@ -20,6 +20,14 @@
 #include <mongocxx/client.hpp>
 #include <mongocxx/pool.hpp>
 
+#ifndef REDAX_BUILD_BRANCH
+#define REDAX_BUILD_BRANCH "unknown"
+#endif
+
+#ifndef REDAX_BUILD_DATE
+#define REDAX_BUILD_DATE "unknown"
+#endif
+
 std::atomic_bool b_run = true;
 std::string hostname = "";
 
@@ -57,11 +65,17 @@ int PrintUsage() {
     << "--logdir <directory>: where to write the logs, default pwd\n"
     << "--reader: this instance is a reader\n"
     << "--cc: this instance is a crate controller\n"
-    << "--arm-delay <delay>: ms to wait between the ARM command and the arming sequence, default 5000\n"
-    << "--log-retention <value>: how many days to keep logfiles, default 7\n"
+    << "--arm-delay <delay>: ms to wait between the ARM command and the arming sequence, default 0\n"
+    << "--log-retention <value>: how many days to keep logfiles, default 7, 0 = forever\n"
     << "--help: print this message\n"
+    << "--version: print version information and return\n"
     << "\n";
   return 1;
+}
+
+int PrintVersion() {
+  std::cout << "Redax branch " << REDAX_BUILD_BRANCH << " built on " << REDAX_BUILD_DATE << "\n";
+  return 0;
 }
 
 int main(int argc, char** argv){
@@ -75,7 +89,7 @@ int main(int argc, char** argv){
   std::string current_run_id="none", log_dir = "";
   std::string dbname = "daq", suri = "", sid = "";
   bool reader = false, cc = false;
-  int log_retention = 7; // days
+  int log_retention = 7; // days, 0 = someone else's problem
   int c(0), opt_index, delay(0);
   struct option longopts[] = {
     {"id", required_argument, 0, c++},
@@ -86,7 +100,8 @@ int main(int argc, char** argv){
     {"cc", no_argument, 0, c++},
     {"arm-delay", required_argument, 0, c++},
     {"log-retention", required_argument, 0, c++},
-    {"help", no_argument, 0, c++}
+    {"help", no_argument, 0, c++},
+    {"version", no_argument, 0, c++}
   };
   while ((c = getopt_long(argc, argv, "", longopts, &opt_index)) != -1) {
     switch(c) {
@@ -107,6 +122,9 @@ int main(int argc, char** argv){
       case 7:
         log_retention = std::stoi(optarg); break;
       case 8:
+        return PrintUsage();
+      case 9:
+        return PrintVersion();
       default:
         std::cout<<"Received unknown arg\n";
         return PrintUsage();
@@ -124,6 +142,7 @@ int main(int argc, char** argv){
   gethostname(chostname, HOST_NAME_MAX);
   hostname=chostname;
   hostname+= (reader ? "_reader_" : "_controller_") + sid;
+  PrintVersion();
   std::cout<<"Reader starting with ID: "<<hostname<<std::endl;
 
   // MongoDB Connectivity for control database. Bonus for later:

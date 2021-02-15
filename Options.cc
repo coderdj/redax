@@ -2,8 +2,6 @@
 #include "DAXHelpers.hh"
 #include "MongoLog.hh"
 
-#include <cmath>
-
 #include <bsoncxx/array/view.hpp>
 #include <bsoncxx/types.hpp>
 #include <bsoncxx/json.hpp>
@@ -18,12 +16,15 @@ Options::Options(std::shared_ptr<MongoLog>& log, std::string options_name, std::
   bson_value = NULL;
   if(Load(options_name, opts_collection, override_opts)!=0)
     throw std::runtime_error("Can't initialize options class");
-  //fPool = pool;
-  //fClient = pool->acquire();
   fDB = (*fClient)[dbname];
   fDAC_collection = fDB["dac_calibration"];
   int ref = GetInt("baseline_reference_run", -1);
-  if ((GetString("baseline_dac_mode", "") == "cached") && (ref != -1)) {
+  bool load_ref = GetString("baseline_dac_mode", "") == "cached" || GetString("baseline_fallback_mode", "") == "cached";
+  if (load_ref && (ref == -1)) {
+    fLog->Entry(MongoLog::Error, "Please specify a reference run to use cached baselines");
+    throw std::runtime_error("Config invalid");
+  }
+  if (load_ref && (ref != -1)) {
     auto doc = fDAC_collection.find_one(bsoncxx::builder::stream::document{} << "run" << ref << bsoncxx::builder::stream::finalize);
     if (doc) fDAC_cache = *doc;
     else {
@@ -159,6 +160,8 @@ std::vector<BoardType> Options::GetBoards(std::string type){
   std::vector <std::string> types;
   if(type == "V17XX")
     types = {"V1724", "V1730", "V1724_MV", "f1724"};
+  else if (type == "V27XX")
+    types = {"V2718", "f2718"};
   else if (type == "V1495")
     types = {"V1495", "V1495_TPC"};
   else
@@ -333,13 +336,23 @@ std::vector<uint16_t> Options::GetDAC(int bid, int num_chan, uint16_t default_va
   return ret;
 }
 
+uint16_t Options::GetSingleDAC(int bid, int ch, uint16_t default_value) {
+  auto doc = fDAC_cache.view();
+  if (doc.find(std::to_string(bid)) == doc.end()) {
+    fLog->Entry(MongoLog::Message, "No cached baselines for board %i, using default %04x",
+        bid, default_value);
+    return default_value;
+  }
+  return doc[std::to_string(bid)][ch].get_int32().value;
+}
+
 void Options::UpdateDAC(std::map<int, std::vector<uint16_t>>& all_dacs){
   using namespace bsoncxx::builder::stream;
   int run_id = GetInt("number", -1);
   fLog->Entry(MongoLog::Local, "Saving DAC calibration");
   auto search_doc = document{} << "run" << run_id << finalize;
   auto update_doc = document{};
-  update_doc<< "$set" << open_document << "run" << run_id;
+  update_doc << "$set" << open_document << "run" << run_id;
   for (auto& bid_map : all_dacs) { // (bid, vector)
     update_doc << std::to_string(bid_map.first) << open_array <<
       [&](array_context<> arr){
@@ -347,7 +360,7 @@ void Options::UpdateDAC(std::map<int, std::vector<uint16_t>>& all_dacs){
       } << close_array;
   }
   update_doc << close_document;
-  auto write_doc = update_doc<<finalize;
+  auto write_doc = update_doc << finalize;
   mongocxx::options::update options;
   options.upsert(true);
   fDAC_collection.update_one(std::move(search_doc), std::move(write_doc), options);

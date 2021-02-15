@@ -9,17 +9,21 @@ V2718::V2718(std::shared_ptr<MongoLog>& log, CrateOptions c_opts, int link, int 
   fCrate = crate;
   fLink = link;
   fCopts = c_opts;
+  int ret;
 
   // Initialising the V2718 module via the specified optical link
-  int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
-  if(a != cvSuccess){
-    fLog->Entry(MongoLog::Error, "Failed to init V2718 with CAEN error: %i", a);
+  if((ret = Init()) != cvSuccess){
+    fLog->Entry(MongoLog::Error, "Failed to init V2718 with CAEN error: %i", ret);
     throw std::runtime_error("Could not init CC");
   }
   SendStopSignal(false);
 }
 
 V2718::~V2718(){
+}
+
+int V2718::Init() {
+  return CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
 }
 
 int V2718::SendStartSignal(){
