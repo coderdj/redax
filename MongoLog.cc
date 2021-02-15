@@ -48,9 +48,12 @@ int MongoLog::Today(struct tm* date) {
   return (date->tm_year+1900)*10000 + (date->tm_mon+1)*100 + (date->tm_mday);
 }
 
-fs::path MongoLog::LogFileName(struct tm* date) {
-  std::string fname = std::to_string(Today(date)) + "_" + fHostname + ".log";
-  return OutputDirectory(date)/fname;
+std::string MongoLog::LogFileName(struct tm* date) {
+  return std::to_string(Today(date)) + "_" + fHostname + ".log";
+}
+
+fs::path MongoLog::LogFilePath(struct tm* date) {
+  return OutputDirectory(date)/LogFileName(date);
 }
 
 fs::path MongoLog::OutputDirectory(struct tm*) {
@@ -146,3 +149,6 @@ fs::path MongoLog_nT::OutputDirectory(struct tm* date) {
   return fOutputDir / std::to_string(date->tm_year+1900) / std::string(temp);
 }
 
+std::string MongoLog_nT::LogFileName(struct tm* date) {
+  return fHostname + ".log";
+}

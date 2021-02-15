@@ -75,8 +75,10 @@ protected:
   int RotateLogFile();
   virtual std::string FormatTime(struct tm*);
   virtual int Today(struct tm*);
-  virtual std::experimental::filesystem::path LogFileName(struct tm*);
+  virtual std::string LogFileName(struct tm*);
   virtual std::experimental::filesystem::path OutputDirectory(struct tm*);
+  virtual std::experimental::filesystem::path LogFilePath(struct tm*);
+
 
   std::shared_ptr<mongocxx::pool> fPool;
   mongocxx::pool::entry fClient;
@@ -101,10 +103,11 @@ class MongoLog_nT : public MongoLog {
 public:
   // subclass to support the managed logging
   MongoLog_nT(std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string host) :
-    MongoLog(0, pool, dbname, "/live_data/redax_logs", host) {}
+    MongoLog(0, pool, dbname, "/daq_common/logs", host) {}
   virtual ~MongoLog_nT() {}
 
 protected:
+  virtual std::string LogFileName(struct tm*);
   virtual std::experimental::filesystem::path OutputDirectory(struct tm*);
 };
 #endif
