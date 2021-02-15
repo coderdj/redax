@@ -11,7 +11,7 @@
 #include <bsoncxx/builder/stream/document.hpp>
 
 CControl_Handler::CControl_Handler(std::shared_ptr<MongoLog>& log, std::string procname) : DAQController(log, procname){
-  fCurrentRun = fBID = fBoardHandle = -1;
+  fCurrentRun = -1;
   fV2718 = nullptr;
   fV1495 = nullptr;
 #ifdef HASDDC10
@@ -26,7 +26,7 @@ CControl_Handler::~CControl_Handler(){
 
 // Initialising various devices namely; V2718 crate controller, V1495, DDC10...
 int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
-
+  int ret = 0, cc_handle = -1;
   fStatus = DAXHelpers::Arming;
 
   // Just in case clear out any remaining objects from previous runs
@@ -59,15 +59,19 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
   BoardType cc = bv[0];
   try{
     if (cc.type == "f2718")
-      fV2718 = std::make_unique<f2718>(fLog, copts, cc.link, cc.crate);
+      fV2718 = std::make_unique<f2718>(fLog, copts);
     else
-      fV2718 = std::make_unique<V2718>(fLog, copts, cc.link, cc.crate);
+      fV2718 = std::make_unique<V2718>(fLog, copts);
+    if((ret = fV2718->Init(cc.link, cc.crate)) != cvSuccess){
+      fLog->Entry(MongoLog::Error, "Failed to init V2718 with CAEN error: %i", ret);
+      throw std::runtime_error("Could not init CC");
+    }
   }catch(std::exception& e){
     fLog->Entry(MongoLog::Error, "Failed to initialize V2718 crate controller: %s", e.what());
     fStatus = DAXHelpers::Idle;
     return -1;
   }
-  fBoardHandle = fV2718->GetHandle();
+  cc_handle = fV2718->GetHandle();
   fLog->Entry(MongoLog::Local, "V2718 Initialized");
 
 #ifdef HASDDC10
@@ -94,11 +98,10 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
   std::vector<BoardType> boards = fOptions->GetBoards("V1495");
   if (boards.size() == 1){
     BoardType v1495 = boards[0];
-    fBID = v1495.board;
     if (v1495.type == "V1495_TPC")
-      fV1495 = std::make_unique<V1495_TPC>(fLog, fOptions, fBID, fBoardHandle, v1495.vme_address);
+      fV1495 = std::make_unique<V1495_TPC>(fLog, fOptions, v1495.board, cc_handle, v1495.vme_address);
     else
-      fV1495 = std::make_unique<V1495>(fLog, fOptions, fBID, fBoardHandle, v1495.vme_address);
+      fV1495 = std::make_unique<V1495>(fLog, fOptions, v1495.board, cc_handle, v1495.vme_address);
 
     std::map<std::string, int> opts;
     if (fOptions->GetV1495Opts(opts) < 0) {
@@ -107,6 +110,7 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
       fLog->Entry(MongoLog::Warning, "Could not initialize V1495");
     }
   }else{
+    // no V1495
   }
   fStatus = DAXHelpers::Armed;
   return 0;

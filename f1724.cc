@@ -48,7 +48,7 @@ f1724::pmt_pos_t f1724::PMTiToXY(int i) {
   return ret;
 }
 
-f1724::f1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int, int, int bid, unsigned) : V1724(log, opts, 0, 0, bid, 0){
+f1724::f1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int bid, unsigned) : V1724(log, opts, bid, 0){
   //fLog->Entry(MongoLog::Warning, "Initializing fax digitizer");
   fSPEtemplate = {0.0, 0.0, 0.0, 2.81e-2, 7.4, 6.07e1, 3.26e1, 1.33e1, 7.60, 5.71,
     7.75, 4.46, 3.68, 3.31, 2.97, 2.74, 2.66, 2.48, 2.27, 2.15, 2.03, 1.93, 1.70,

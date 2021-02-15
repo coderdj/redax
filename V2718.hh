@@ -7,9 +7,10 @@ class MongoLog;
 
 class V2718{
 public:
-  V2718(std::shared_ptr<MongoLog>&, CrateOptions, int, int);
+  V2718(std::shared_ptr<MongoLog>&, CrateOptions);
   virtual ~V2718();
 
+  virtual int Init(int, int);
   virtual int SendStartSignal();
   virtual int SendStopSignal(bool end=true);
 
@@ -17,7 +18,6 @@ public:
   int GetHandle(){return fBoardHandle;};
 
 protected:
-  virtual int Init();
   int fBoardHandle;
   CrateOptions fCopts;
   int fCrate, fLink;

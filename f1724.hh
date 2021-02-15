@@ -11,9 +11,10 @@
 
 class f1724 : public V1724 {
 public:
-  f1724(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, int, unsigned);
+  f1724(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, unsigned);
   virtual ~f1724();
 
+  virtual int Init(int, int, std::shared_ptr<Options>&);
   virtual int Read(std::unique_ptr<data_packet>&);
   virtual int WriteRegister(unsigned, unsigned);
   virtual unsigned ReadRegister(unsigned);
@@ -66,7 +67,6 @@ protected:
   static std::condition_variable sCV;
   static std::shared_ptr<MongoLog> sLog;
 
-  virtual int Init(int, int, std::shared_ptr<Options>&);
   void Run();
   virtual int GetClockCounter(uint32_t);
   void MakeWaveform(std::vector<hit_t>&, long);
