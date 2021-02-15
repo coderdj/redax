@@ -67,15 +67,15 @@ public:
   const static int Local   = -1; // Write to local (file) log only
 
   virtual int Initialize() {return RotateLogFile();}
-  int Entry(int priority, std::string, ...);
+  virtual int Entry(int priority, std::string, ...);
   void SetRunId(const int runid) {fRunId = runid;}
 
 protected:
   void Flusher();
-  std::string FormatTime(struct tm*);
-  int Today(struct tm*);
   int RotateLogFile();
-  virtual std::string LogFileName(struct tm*);
+  virtual std::string FormatTime(struct tm*);
+  virtual int Today(struct tm*);
+  virtual std::experimental::filesystem::path LogFileName(struct tm*);
   virtual std::experimental::filesystem::path OutputDirectory(struct tm*);
 
   std::shared_ptr<mongocxx::pool> fPool;
@@ -100,8 +100,9 @@ protected:
 class MongoLog_nT : public MongoLog {
 public:
   // subclass to support the managed logging
-  MongoLog_nT(std::shared_ptr<mongocxx::pool>&, std::string, std::string);
-  virtual ~MongoLog_nT();
+  MongoLog_nT(std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string host) :
+    MongoLog(0, pool, dbname, "/live_data/redax_logs", host) {}
+  virtual ~MongoLog_nT() {}
 
 protected:
   virtual std::experimental::filesystem::path OutputDirectory(struct tm*);

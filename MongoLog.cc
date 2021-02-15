@@ -63,7 +63,7 @@ int MongoLog::RotateLogFile() {
   auto today = *std::gmtime(&t);
   auto filename = LogFileName(&today);
   std::cout<<"Logging to " << filename << std::endl;
-  auto pp = filname.parent_path();
+  auto pp = filename.parent_path();
   if (!fs::exists(pp) && !fs::create_directories(pp)) {
     std::cout << "Could not create output directories for logging!" << std::endl;
     return -1;
@@ -139,10 +139,6 @@ int MongoLog::Entry(int priority, std::string message, ...){
   return 0;
 }
 
-
-MongoLog_nT::MongoLog_nT(std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string host) : MongoLog(0, pool, dbname, "/live_data/redax_logs", host) {}
-
-MongoLog_nT::~MongoLog_nT() {}
 
 fs::path MongoLog_nT::OutputDirectory(struct tm* date) {
   char temp[6];
