@@ -149,6 +149,6 @@ fs::path MongoLog_nT::OutputDirectory(struct tm* date) {
   return fOutputDir / std::to_string(date->tm_year+1900) / std::string(temp);
 }
 
-std::string MongoLog_nT::LogFileName(struct tm* date) {
+std::string MongoLog_nT::LogFileName(struct tm*) {
   return fHostname + ".log";
 }

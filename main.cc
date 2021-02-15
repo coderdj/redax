@@ -150,6 +150,10 @@ int main(int argc, char** argv){
     fLog = std::make_shared<MongoLog_nT>(pool, dbname, hostname);
   else
     fLog = std::make_shared<MongoLog>(log_retention, pool, dbname, log_dir, hostname);
+  if (fLog->Initialize()) {
+    std::cout<<"Could not initialize logs!\n";
+    exit(-1);
+  }
 
   //Options
   std::shared_ptr<Options> fOptions;
