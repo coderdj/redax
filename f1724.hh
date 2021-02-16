@@ -28,7 +28,7 @@ public:
   virtual bool EnsureReady(int, int) {return sRun || sReady;}
   virtual bool EnsureStarted(int, int) {return sRun == true;}
   virtual bool EnsureStopped(int, int) {return sRun == false;}
-  virtual int CheckErrors() {return 0;}
+  virtual int CheckErrors() {return fError ? 1 : 0;}
   virtual uint32_t GetAcquisitionStatus();
 
 protected:
@@ -93,6 +93,8 @@ protected:
   std::thread fGeneratorThread;
 
   bool fSeenUnder5, fSeenOver15;
+  bool fSimulateCrashes;
+  double fFailProb, fCrashProb;
 };
 
 #endif // _F1724_HH_ defined
