@@ -92,12 +92,15 @@ class MongoConnect():
         #                 }
         #  }
         self.latest_status = {}
-        dc = json.loads(config['DEFAULT']['MasterDAQConfig'])
-        for detector in dc.keys():
+        
+        # Cache the detector configuration
+        self.dc = json.loads(config['DEFAULT']['MasterDAQConfig'])
+        
+        for detector in self.dc.keys():
             self.latest_status[detector] = {'readers': {}, 'controller': {}}
-            for reader in dc[detector]['readers']:
+            for reader in self.dc[detector]['readers']:
                 self.latest_status[detector]['readers'][reader] = {}
-            for controller in dc[detector]['controller']:
+            for controller in self.dc[detector]['controller']:
                 if controller == "":
                     continue
                 self.latest_status[detector]['controller'][controller] = {}
