@@ -100,17 +100,24 @@ def main():
     sh = SignalHandler()
 
     while(sh.event.is_set() == False):
-        # Get most recent check-in from all connected hosts
-        if MongoConnector.GetUpdate():
-            continue
-        latest_status = MongoConnector.latest_status
-
+        
         # Get most recent goal state from database. Users will update this from the website.
         goal_state = MongoConnector.GetWantedState()
         if goal_state is None:
             continue
+            
+        # Get the Super-Detector configuration
+        current_config = MongoConnector.GetSuperDetector(goal_state)
+        
+        # Get most recent check-in from all connected hosts
+        if MongoConnector.GetUpdate(current_config):
+            continue
+        latest_status = MongoConnector.latest_status
 
+        # TODO: Hypervisor here? 
+        
         # Print an update
+        # TODO: print the current_config and the latest_status 
         for detector in latest_status.keys():
             logger.debug("Detector %s should be %sACTIVE and is %s"%(
                     detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
