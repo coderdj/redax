@@ -53,7 +53,7 @@ V1724::~V1724(){
   fLog->Entry(MongoLog::Local, msg.str());
 }
 
-int V1724::Init(int link, int crate, std::shared_ptr<Options>&) {
+int V1724::Init(int link, int crate, std::shared_ptr<Options>& opts) {
   int a = CAENVME_Init(cvV2718, link, crate, &fBoardHandle);
   if(a != cvSuccess){
     fLog->Entry(MongoLog::Warning, "Board %i failed to init, error %i handle %i link %i bdnum %i",

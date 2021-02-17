@@ -62,7 +62,7 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
       fV2718 = std::make_unique<f2718>(fLog, copts);
     else
       fV2718 = std::make_unique<V2718>(fLog, copts);
-    if((ret = fV2718->Init(cc.link, cc.crate)) != cvSuccess){
+    if((ret = fV2718->Init(cc.link, cc.crate)) != 0){
       fLog->Entry(MongoLog::Error, "Failed to init V2718 with CAEN error: %i", ret);
       throw std::runtime_error("Could not init CC");
     }
