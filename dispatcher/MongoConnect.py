@@ -411,7 +411,7 @@ class MongoConnect():
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
         number = None
-        if command == 'stop' and not self.StopWasAckd(detector):
+        if command == 'stop' and not self.CommandWasAckd(detector, 'stop'):
             self.log.error(f"{detector} hasn't ack'd its last stop, let's not flog a dead horse")
             if not force:
                 return 0
@@ -472,13 +472,15 @@ class MongoConnect():
             self.event.wait(dt)
             self.event.clear()
 
-    def CommandWasAckd(self, detector):
-        if (oid := self.command_oid[detector]['stop']) is None:
+    def CommandWasAckd(self, detector, command='stop'):
+        if (oid := self.command_oid[detector][command]) is None:
             return True
         if (doc := self.collections['outoing_commands'].find_one({'_id': oid})) is None:
             self.log.error('No previous command found?')
             return True
         for h in doc['host']:
+            # loop over doc['host'] because the 'acknowledged' field sometimes
+            # contains extra entries (such as the GPS trigger)
             if doc['acknowledged'][h] == 0:
                 return False
         return True
