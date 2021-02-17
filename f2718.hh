@@ -5,7 +5,7 @@
 
 class f2718 : public V2718 {
   public:
-    f2718(std::shared_ptr<MongoLog>& log, CrateOptions opt, int l, int c);
+    f2718(std::shared_ptr<MongoLog>& log, CrateOptions opt);
     virtual ~f2718();
 
     virtual int SendStartSignal() {return 0;}
