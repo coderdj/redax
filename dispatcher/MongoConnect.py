@@ -328,7 +328,7 @@ class MongoConnect():
                 {'$project': {'_id': 0, 'description': 0, 'includes': 0, 'subconfig': 0}},
                 ]))[0]
         except Exception as e:
-            self.log.error("Got a %s exception in doc pulling: %s" % (type(E), E))
+            self.log.error("Got a %s exception in doc pulling: %s" % (type(e), e))
         return None
 
     def GetHostsForMode(self, mode):
@@ -414,7 +414,7 @@ class MongoConnect():
         if command == 'stop' and not self.CommandWasAckd(detector, 'stop'):
             self.log.error(f"{detector} hasn't ack'd its last stop, let's not flog a dead horse")
             if not force:
-                return 0
+                return 1
         try:
             if command == 'arm':
                 number = self.GetNextRunNumber()
