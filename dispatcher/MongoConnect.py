@@ -123,16 +123,16 @@ class MongoConnect():
     def __del__(self):
         self.Quit()
 
-    def GetUpdate(self):
-
-        latest = {}
+    def GetUpdate(self, detector_config):
+      
+        self.latest_status = {}
         try:
-            for detector in self.latest_status.keys():
-                for host in self.latest_status[detector]['readers'].keys():
+            for detector in detector_config.keys():
+                for host in detector_config[detector]['readers'].keys():
                     doc = self.collections['node_status'].find_one({'host': host},
                                                                    sort=[('_id', -1)])
                     self.latest_status[detector]['readers'][host] = doc
-                for host in self.latest_status[detector]['controller'].keys():
+                for host in detector_config[detector]['controller'].keys():
                     doc = self.collections['node_status'].find_one({'host': host},
                                                                     sort=[('_id', -1)])
                     self.latest_status[detector]['controller'][host] = doc
