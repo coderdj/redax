@@ -71,6 +71,9 @@ class MongoConnect():
         # Timeout (in seconds). How long must a node not report to be considered timing out
         self.timeout = int(config['DEFAULT']['ClientTimeout'])
 
+        # Which control keys do we look for?
+        self.control_keys = config['DEFAULT']['ControlKeys'].split()
+
         # We will store the latest status from each reader here
         # Format:
         # {
@@ -256,33 +259,21 @@ class MongoConnect():
     def GetWantedState(self):
         # Aggregate the wanted state per detector from the DB and return a dict
         try:
-            for doc in self.collections['incoming_commands'].aggregate([
-                {'$sort': {'_id': -1}},
-                {'$group': {
-                    '_id': '$key',
-                    'value': {'$first': '$value'},
-                    'user': {'$first': '$user'},
-                    'time': {'$first': '$time'},
-                    'detector': {'$first': '$detector'},
-                    'field': {'$first': '$field'}
-                    }},
-                {'$group': {
-                    '_id': '$detector',
-                    'fields': {'$push': '$field'},
-                    'values': {'$push': '$value'},
-                    'users': {'$push': '$user'},
-                    'times': {'$push': '$time'}
-                    }},
-                {'$project': {
-                    'detector': '$_id',
-                    '_id': 0,
-                    'state': {'$arrayToObject': {'$zip': {'inputs': ['$fields', '$values']}}},
-                    'user': {'$arrayElemAt': ['$users', {'$indexOfArray': ['$times', {'$max': '$times'}]}]}
-                    }}
-                ]):
-                doc.update(doc['state'])
-                del doc['state']
-                self.latest_settings[doc['detector']]=doc
+            latest_settings = {}
+            for detector in 'tpc muon_veto neutron_veto'.split():
+                latest = None
+                latest_settings[detector] = {}
+                for key in self.control_keys:
+                    doc = self.collections['incoming_commands'].find_one(
+                            {'key': f'{detector}.{key}'}, sort=[('_id', -1)])
+                    if doc is None:
+                        self.log.error('No key %s for %s???' % (key, detector))
+                        return None
+                    latest_settings[detector][doc['field']] = doc['value']
+                    if latest is None or doc['time'] > latest:
+                        latest = doc['time']
+                        latest_settings[detector]['user'] = doc['user']
+            self.latest_settings = latest_settings
             return self.latest_settings
         except:
             return None

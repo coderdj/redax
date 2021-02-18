@@ -51,6 +51,8 @@ class DAQController():
         self.time_between_commands = int(config['DEFAULT']['TimeBetweenCommands'])
         self.can_force_stop={k:True for k in detectors}
         
+        self.one_detector_arming = False
+
     def SolveProblem(self, latest_status, goal_state):
         '''
         This is sort of the whole thing that all the other code is supporting
@@ -75,11 +77,14 @@ class DAQController():
         # cache these so other functions can see them
         self.goal_state = goal_state
         self.latest_status = latest_status
+        self.one_detector_arming = False
 
         for det in latest_status.keys():
             if latest_status[det]['status'] == STATUS.IDLE:
                 self.can_force_stop[det] = True
                 self.error_stop_count[det] = 0
+            if latest_status[det]['status'] in [STATUS.ARMING, STATUS.ARMED]:
+                self.one_detector_arming = True
 
         '''
         CASE 1: DETECTORS ARE INACTIVE (IDLE)
@@ -178,7 +183,7 @@ class DAQController():
                 # Running normally (not arming, error, timeout, etc)
                 self.latest_status[detector]['status'] == STATUS.RUNNING and
                 # We were asked to wait for the current run to stop
-                self.goal_state[detector].get('finish_run_on_stop', 'false') == 'true'):
+                self.goal_state[detector].get('softstop', 'false') == 'true'):
             self.CheckRunTurnover(detector)
         else:
             self.ControlDetector(detector=detector, command='stop')
@@ -204,19 +209,29 @@ class DAQController():
         if (dt > self.timeouts[command] and dt_last > self.time_between_commands) or force:
             run_mode = self.goal_state[detector]['mode']
             if command == 'arm':
+                if self.one_detector_arming:
+                    self.log.info('Another detector already arming, can\'t arm %s' % detector)
+                    # this leads to run number overlaps
+                    return
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
                 hosts = (cc, readers)
                 delay = 0
+                self.one_detector_arming = True
             elif command == 'start':
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
                 hosts = (readers, cc) # we want the cc to delay by 1s
-                delay = 1
+                # we can safely short the logic here and buy an extra logic cycle
+                self.one_detector_arming = False
+                delay = 0
             else: # stop
                 readers, cc = self.mongo.GetConfiguredNodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
                 hosts = (cc, readers)
                 delay = 5 if not force else 0
                 # TODO smart delay?
+                if self.latest_status[detector]['status'] in [STATUS.ARMING, STATUS.ARMED]:
+                    # this was the arming detector
+                    self.one_detector_arming = False
             self.log.debug('Sending %s to %s' % (command.upper(), detector))
             if self.mongo.SendCommand(command, hosts, self.goal_state[detector]['user'],
                     detector, self.goal_state[detector]['mode'], delay):
