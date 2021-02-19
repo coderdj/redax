@@ -20,7 +20,6 @@ public:
 protected:
   int fBoardHandle;
   CrateOptions fCopts;
-  int fCrate, fLink;
   std::shared_ptr<MongoLog> fLog;
 
 };

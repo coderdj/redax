@@ -93,7 +93,7 @@ int V2718::SendStopSignal(bool end){
     return 0;
 
   // Stop the pulser if it's running
-  CAENVME_StopPulser(fCrate, cvPulserB);
+  CAENVME_StopPulser(fBoardHandle, cvPulserB);
   usleep(1000);
 
   // Line 0 : S-IN.
