@@ -32,7 +32,7 @@ def main():
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config)
-    logger = get_daq_logger('dispatcher', level=getattr(logging, args.log))
+    logger = get_daq_logger('dispatcher', level = getattr(logging, args.log))
     # Declare database object
     MongoConnector = MongoConnect(config, logger)
 

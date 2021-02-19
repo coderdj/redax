@@ -45,22 +45,24 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
 
   // Initialize digitizers
   fStatus = DAXHelpers::Arming;
-  std::vector<int> BIDs;
-  for(auto d : fOptions->GetBoards("V17XX")){
+  int num_boards = 0;
+  for(auto& d : fOptions->GetBoards("V17XX")){
     fLog->Entry(MongoLog::Local, "Arming new digitizer %i", d.board);
 
     std::shared_ptr<V1724> digi;
     try{
       if(d.type == "V1724_MV")
-        digi = std::make_shared<V1724_MV>(fLog, fOptions, d.link, d.crate, d.board, d.vme_address);
+        digi = std::make_shared<V1724_MV>(fLog, fOptions, d.board, d.vme_address);
       else if(d.type == "V1730")
-        digi = std::make_shared<V1730>(fLog, fOptions, d.link, d.crate, d.board, d.vme_address);
+        digi = std::make_shared<V1730>(fLog, fOptions, d.board, d.vme_address);
       else if(d.type == "f1724")
-        digi = std::make_shared<f1724>(fLog, fOptions, d.link, d.crate, d.board, 0);
+        digi = std::make_shared<f1724>(fLog, fOptions, d.board, 0);
       else
-        digi = std::make_shared<V1724>(fLog, fOptions, d.link, d.crate, d.board, d.vme_address);
+        digi = std::make_shared<V1724>(fLog, fOptions, d.board, d.vme_address);
+      if (digi->Init(d.link, d.crate, fOptions))
+        throw std::runtime_error("Board init failed");
       fDigitizers[d.link].emplace_back(digi);
-      BIDs.push_back(digi->bid());
+      num_boards++;
     }catch(const std::exception& e) {
       fLog->Entry(MongoLog::Warning, "Failed to initialize digitizer %i: %s", d.board,
           e.what());
@@ -68,7 +70,7 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
       return -1;
     }
   }
-  fLog->Entry(MongoLog::Local, "This host has %i boards", BIDs.size());
+  fLog->Entry(MongoLog::Local, "This host has %i boards", num_boards);
   fLog->Entry(MongoLog::Local, "Sleeping for two seconds");
   // For the sake of sanity and sleeping through the night,
   // do not remove this statement.

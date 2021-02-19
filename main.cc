@@ -155,7 +155,15 @@ int main(int argc, char** argv){
   mongocxx::collection opts_collection = db["options"];
 
   // Logging
-  auto fLog = std::make_shared<MongoLog>(log_retention, pool, dbname, log_dir, hostname);
+  std::shared_ptr<MongoLog> fLog;
+  if (log_dir == "nT")
+    fLog = std::make_shared<MongoLog_nT>(pool, dbname, hostname);
+  else
+    fLog = std::make_shared<MongoLog>(log_retention, pool, dbname, log_dir, hostname);
+  if (fLog->Initialize()) {
+    std::cout<<"Could not initialize logs!\n";
+    exit(-1);
+  }
 
   //Options
   std::shared_ptr<Options> fOptions;
