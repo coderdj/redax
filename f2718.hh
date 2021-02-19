@@ -12,7 +12,7 @@ class f2718 : public V2718 {
     virtual int SendStopSignal(bool) {return 0;}
 
   protected:
-    virtual int Init() {return 0;}
+    virtual int Init(int, int) {return 0;}
 };
 
 #endif // _F2718_HH_ defined
