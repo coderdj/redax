@@ -251,6 +251,7 @@ class MongoConnect():
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
             self.latest_status[detector]['buffer'] = buff
+            self.latest_status[detector]['number'] = run_num
 
 
     def GetWantedState(self):
