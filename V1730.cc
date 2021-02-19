@@ -2,8 +2,8 @@
 #include "MongoLog.hh"
 #include "Options.hh"
 
-V1730::V1730(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& options, int link, int crate, int bid, unsigned address)
-  :V1724(log, options, link, crate, bid, address){
+V1730::V1730(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& options, int bid, unsigned address)
+  :V1724(log, options, bid, address){
   fNChannels = 16;
   fSampleWidth = 2;
   fClockCycle = 2;
