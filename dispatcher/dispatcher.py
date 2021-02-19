@@ -1,6 +1,7 @@
 #!/daq_common/miniconda3/bin/python3
 import configparser
 import argparse
+import logging
 import threading
 import signal
 import datetime
@@ -55,9 +56,12 @@ def main():
 
         # Print an update
         for detector in latest_status.keys():
-            logger.debug("Detector %s should be %sACTIVE and is %s"%(
-                    detector, '' if goal_state[detector]['active'] == 'true' else 'IN',
-                    latest_status[detector]['status'].name))
+            state = 'ACTIVE' if goal_state[detector]['active'] == 'true' else 'INACTIVE'
+            msg = (f'The {detector} should be {state} and is '
+                    f'{latest_status[detector]["status"].name}')
+            if latest_status[detector]['number'] != -1:
+                msg += f' ({latest_status[detector]["number"]})'
+            logger.debug(msg)
 
         # Decision time. Are we actually in our goal state? If not what should we do?
         DAQControl.SolveProblem(latest_status, goal_state)
