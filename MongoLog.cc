@@ -75,7 +75,7 @@ fs::path MongoLog::OutputDirectory(struct tm*) {
 
 int MongoLog::RotateLogFile() {
   if (fOutfile.is_open()) fOutfile.close();
-  auto [today, std::ignore] = Now();
+  auto [today, ms] = Now();
   auto filename = LogFilePath(&today);
   std::cout<<"Logging to " << filename << std::endl;
   auto pp = filename.parent_path();
@@ -88,7 +88,7 @@ int MongoLog::RotateLogFile() {
     std::cout << "Could not rotate logfile!\n";
     return -1;
   }
-  fOutfile << FormatTime(&today) << " [INIT]: logfile initialized: commit " << REDAX_BUILD_COMMIT << "\n";
+  fOutfile << FormatTime(&today, ms) << " [INIT]: logfile initialized: commit " << REDAX_BUILD_COMMIT << "\n";
   fToday = Today(&today);
   if (fDeleteAfterDays == 0) return 0;
   std::vector<int> days_per_month = {31,28,31,30,31,30,31,31,30,31,30,31};
@@ -105,10 +105,10 @@ int MongoLog::RotateLogFile() {
   }
   auto p = LogFileName(&last_week);
   if (std::experimental::filesystem::exists(p)) {
-    fOutfile << FormatTime(&today) << " [INIT]: Deleting " << p << '\n';
+    fOutfile << FormatTime(&today, ms) << " [INIT]: Deleting " << p << '\n';
     std::experimental::filesystem::remove(p);
   } else {
-    fOutfile << FormatTime(&today) << " [INIT]: No older logfile to delete :(\n";
+    fOutfile << FormatTime(&today, ms) << " [INIT]: No older logfile to delete :(\n";
   }
   return 0;
 }
