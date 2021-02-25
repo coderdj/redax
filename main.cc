@@ -20,12 +20,8 @@
 #include <mongocxx/client.hpp>
 #include <mongocxx/pool.hpp>
 
-#ifndef REDAX_BUILD_BRANCH
-#define REDAX_BUILD_BRANCH "unknown"
-#endif
-
-#ifndef REDAX_BUILD_DATE
-#define REDAX_BUILD_DATE "unknown"
+#ifndef REDAX_BUILD_COMMIT
+#define REDAX_BUILD_COMMIT "unknown"
 #endif
 
 std::atomic_bool b_run = true;
@@ -74,7 +70,7 @@ int PrintUsage() {
 }
 
 int PrintVersion() {
-  std::cout << "Redax branch " << REDAX_BUILD_BRANCH << " built on " << REDAX_BUILD_DATE << "\n";
+  std::cout << "Redax commit " << REDAX_BUILD_COMMIT << "\n";
   return 0;
 }
 

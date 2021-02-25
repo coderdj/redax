@@ -1,7 +1,10 @@
 #include "MongoLog.hh"
 #include <iostream>
-#include <chrono>
 #include <bsoncxx/builder/stream/document.hpp>
+
+#ifndef REDAX_BUILD_COMMIT
+#define REDAX_BUILD_COMMIT "UNKNOWN"
+#endif
 
 namespace fs=std::experimental::filesystem;
 
@@ -29,6 +32,14 @@ MongoLog::~MongoLog(){
   fOutfile.close();
 }
 
+std::tuple<struct tm, int> MongoLog::Now() {
+  using namespace std::chrono;
+  auto now = system_clock::now();
+  auto t = system_clock::to_time_t(now);
+  int ms = duration_cast<milliseconds>(now.time_since_epoch()).count() % 1000;
+  return {*std::gmtime(&t), ms};
+}
+
 void MongoLog::Flusher() {
   while (fFlush == true) {
     std::this_thread::sleep_for(std::chrono::seconds(fFlushPeriod));
@@ -38,10 +49,12 @@ void MongoLog::Flusher() {
   }
 }
 
-std::string MongoLog::FormatTime(struct tm* date) {
-  std::stringstream s;
-  s <<std::put_time(date, "%F %T");
-  return s.str();
+std::string MongoLog::FormatTime(struct tm* date, int ms) {
+  std::string out("YYYY-MM-DD HH:mm:SS.SSS");
+  // this step is technically illegal: "Modifying the character array accessed through the const overload of data has undefined behavior." but I can't c++20 and it worked when tested, so :shrug:
+  sprintf((char*)out.data(), "%04i-%02i-%02i %02i:%02i:%02i.%03i", date->tm_year+1900,
+      date->tm_mon+1, date->tm_mday, date->tm_hour, date->tm_min, date->tm_sec, ms);
+  return out;
 }
 
 int MongoLog::Today(struct tm* date) {
@@ -62,8 +75,7 @@ fs::path MongoLog::OutputDirectory(struct tm*) {
 
 int MongoLog::RotateLogFile() {
   if (fOutfile.is_open()) fOutfile.close();
-  auto t = std::time(0);
-  auto today = *std::gmtime(&t);
+  auto [today, std::ignore] = Now();
   auto filename = LogFilePath(&today);
   std::cout<<"Logging to " << filename << std::endl;
   auto pp = filename.parent_path();
@@ -76,7 +88,7 @@ int MongoLog::RotateLogFile() {
     std::cout << "Could not rotate logfile!\n";
     return -1;
   }
-  fOutfile << FormatTime(&today) << " [INIT]: logfile initialized\n";
+  fOutfile << FormatTime(&today) << " [INIT]: logfile initialized: commit " << REDAX_BUILD_COMMIT << "\n";
   fToday = Today(&today);
   if (fDeleteAfterDays == 0) return 0;
   std::vector<int> days_per_month = {31,28,31,30,31,30,31,31,30,31,30,31};
@@ -102,6 +114,7 @@ int MongoLog::RotateLogFile() {
 }
 
 int MongoLog::Entry(int priority, std::string message, ...){
+  auto [today, ms] = Now();
 
   // Thanks Martin
   // http://www.martinbroadhurst.com/string-formatting-in-c.html
@@ -115,13 +128,11 @@ int MongoLog::Entry(int priority, std::string message, ...){
   va_end (args);
   message = &vec[0];
 
-  auto t = std::time(nullptr);
-  auto tm = *std::gmtime(&t);
   std::stringstream msg;
-  msg<<FormatTime(&tm)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
+  msg<<FormatTime(&today, ms)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
   std::unique_lock<std::mutex> lg(fMutex);
   std::cout << msg.str();
-  if (Today(&tm) != fToday) RotateLogFile();
+  if (Today(&today) != fToday) RotateLogFile();
   fOutfile<<msg.str();
   if(priority >= fLogLevel){
     try{
