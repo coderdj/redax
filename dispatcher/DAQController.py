@@ -94,28 +94,28 @@ class DAQController():
 
         for det in latest_status.keys():
             # The detector should be INACTIVE
-            if goal_state['tpc']['active'] == 'false':
+            if goal_state[det]['active'] == 'false':
 
-            # The detector is not in IDLE, ERROR or TIMEOUT: it needs to be stopped
-            if latest_status[det]['status'] in active_states:
-                # Check before if the status is UNKNOWN and it is maybe timing out
-                if latest_status[det]['status'] == STATUS.UNKNOWN:
-                    self.log.info("The status of %s is unknown, check timeouts", det)
-                    self.log.debug("Checking %s timeouts", det)
-                    self.CheckTimeouts(detector=det, command='')
-                # Otherwise stop the detector
-                else:
-                    self.log.info("Stopping the %s", det)
-                    self.StopDetectorGently(detector=det)
+                # The detector is not in IDLE, ERROR or TIMEOUT: it needs to be stopped
+                if latest_status[det]['status'] in active_states:
+                    # Check before if the status is UNKNOWN and it is maybe timing out
+                    if latest_status[det]['status'] == STATUS.UNKNOWN:
+                        self.log.info(f"The status of {det} is unknown, check timeouts")
+                        self.log.debug("Checking %s timeouts", det)
+                        self.CheckTimeouts(detector=det, command='')
+                    # Otherwise stop the detector
+                    else:
+                        self.log.info(f"Sending stop command to {det}")
+                        self.StopDetectorGently(detector=det)
                     
                # Deal separately with the TIMEOUT and ERROR statuses, by stopping the detector if needed
                elif latest_status[det]['status'] == STATUS.TIMEOUT:
-                    self.log.info("%s is in timeout, check timeouts", det)
+                    self.log.info(f"The {det} is in timeout, check timeouts")
                     self.log.debug("Checking %s timeouts", det)
                     self.HandleTimeout(detector=det)
 
                elif latest_status[det]['status'] == STATUS.ERROR:
-                   self.log.info("%s has error, sending stop command", det)
+                   self.log.info(f"The {det} has error, sending stop command")
                    self.ControlDetector(command='stop', detector=det, force=self.can_force_stop[det])
                    self.can_force_stop[det]=False
                     
@@ -128,38 +128,38 @@ class DAQController():
             4. the detectors are in some failed state (ERROR) or in TIMEOUT, we need to stop them
         '''
             # The detector should be ACTIVE (RUNNING)
-            if goal_state['tpc']['active'] == 'true':
+            if goal_state[det]['active'] == 'true':
                 if latest_status[det]['status'] == STATUS.RUNNING:
-                    self.log.info("%s is running", det)
+                    self.log.info(f"The {det} is running")
                     self.CheckRunTurnover(detector=det)
                 # ARMED, start the run
                 elif latest_status[det]['status'] == STATUS.ARMED:
-                    self.log.info("The %s is armed, sending start command" det)
+                    self.log.info(f"The {det} is armed, sending start command")
                     self.ControlDetector(command='start', detector=det)
                 # ARMING, check if it is timing out
                 elif latest_status[det]['status'] == STATUS.ARMING:
-                    self.log.info("The %s is arming, check timeouts", det)
+                    self.log.info(f"The {det} is arming, check timeouts")
                     self.log.debug("Checking %s timeouts", det)
                     self.CheckTimeouts(detector=det, command='arm')
                 # UNKNOWN, check if it is timing out
                 elif latest_status[det]['status'] == STATUS.UNKNOWN:
-                    self.log.info("The status of %s is unknown, check timeouts", det)
+                    self.log.info(f"The status of {det} is unknown, check timeouts")
                     self.log.debug("Checking %s timeouts", det)
                     self.CheckTimeouts(detector=det, command='')
                     
                 # Maybe the detector is IDLE, we should arm a run
                 elif latest_status[det]['status'] == STATUS.IDLE:
-                    self.log.info("The %s is idle, sending arm command", det)
+                    self.log.info(f"The {det} is in idle, sending arm command")
                     self.ControlDetector(command='arm', detector=det)
 
                 # Deal separately with the TIMEOUT and ERROR statuses, by stopping the detector if needed
                 elif latest_status[det]['status'] == STATUS.TIMEOUT:
-                    self.log.info("%s is in timeout, check timeouts", det)
+                    self.log.info(f"The {det} is in timeout, check timeouts")
                     self.log.debug("Checking %s timeouts", det)
                     self.HandleTimeout(detector=det)
                 
                 elif latest_status[det]['status'] == STATUS.ERROR:
-                    self.log.info("%s has error, sending stop command", det)
+                    self.log.info(f"The {det} has error, sending stop command")
                     self.ControlDetector(command='stop', detector=det, force=self.can_force_stop[det])
                     self.can_force_stop[det]=False
                     
@@ -222,7 +222,7 @@ class DAQController():
                 hosts = (readers, cc) # we want the cc to delay by 1s
                 # we can safely short the logic here and buy an extra logic cycle
                 self.one_detector_arming = False
-                delay = 0
+                delay = 1
             else: # stop
                 readers, cc = self.mongo.GetConfiguredNodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
