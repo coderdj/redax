@@ -95,7 +95,6 @@ class DAQController():
         for det in latest_status.keys():
             # The detector should be INACTIVE
             if goal_state[det]['active'] == 'false':
-
                 # The detector is not in IDLE, ERROR or TIMEOUT: it needs to be stopped
                 if latest_status[det]['status'] in active_states:
                     # Check before if the status is UNKNOWN and it is maybe timing out
@@ -107,26 +106,24 @@ class DAQController():
                     else:
                         self.log.info(f"Sending stop command to {det}")
                         self.StopDetectorGently(detector=det)
-                    
                # Deal separately with the TIMEOUT and ERROR statuses, by stopping the detector if needed
-               elif latest_status[det]['status'] == STATUS.TIMEOUT:
+                elif latest_status[det]['status'] == STATUS.TIMEOUT:
                     self.log.info(f"The {det} is in timeout, check timeouts")
                     self.log.debug("Checking %s timeouts", det)
                     self.HandleTimeout(detector=det)
 
-               elif latest_status[det]['status'] == STATUS.ERROR:
+                elif latest_status[det]['status'] == STATUS.ERROR:
                    self.log.info(f"The {det} has error, sending stop command")
                    self.ControlDetector(command='stop', detector=det, force=self.can_force_stop[det])
                    self.can_force_stop[det]=False
-                    
-        '''
-        CASE 2: DETECTORS ARE ACTIVE (RUNNING)
-        There are now 4 possibilities:
-            1. the detectors are already running, we check if the run needs to be reset, otherwise do nothing
-            2. the detectors are in some in-between state (i.e. ARMING, UNKNOWN), we check if they are timing out and wait for some seconds to allow time for the thing to sort itself out
-            3. the detector are not running (IDLE), we need to start them
-            4. the detectors are in some failed state (ERROR) or in TIMEOUT, we need to stop them
-        '''
+            '''
+                CASE 2: DETECTORS ARE ACTIVE (RUNNING)
+                There are now 4 possibilities:
+            	1. the detectors are already running, we check if the run needs to be reset, otherwise do nothing
+            	2. the detectors are in some in-between state (i.e. ARMING, UNKNOWN), we check if they are timing out and wait for some seconds to allow time for the thing to sort itself out
+            	3. the detector are not running (IDLE), we need to start them
+            	4. the detectors are in some failed state (ERROR) or in TIMEOUT, we need to stop them
+            '''
             # The detector should be ACTIVE (RUNNING)
             if goal_state[det]['active'] == 'true':
                 if latest_status[det]['status'] == STATUS.RUNNING:
