@@ -219,7 +219,7 @@ class DAQController():
                 hosts = (readers, cc) # we want the cc to delay by 1s
                 # we can safely short the logic here and buy an extra logic cycle
                 self.one_detector_arming = False
-                delay = 1
+                delay = 1.5
             else: # stop
                 readers, cc = self.mongo.GetConfiguredNodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
