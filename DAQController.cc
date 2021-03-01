@@ -341,7 +341,7 @@ void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
       fLog->Entry(MongoLog::Warning, "Errors during baseline fitting");
       return;
     } else if (ret > 0) {
-      fLog->Entry(MongoLog::Warning, "Baselines didn't converge so we'll use Plan B");
+      fLog->Entry(MongoLog::Message, "Baselines didn't converge so we'll use Plan B");
     }
   }
 
