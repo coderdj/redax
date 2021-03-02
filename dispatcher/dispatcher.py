@@ -26,7 +26,7 @@ def main():
     # Parse command line
     parser = argparse.ArgumentParser(description='Manage the DAQ')
     parser.add_argument('--config', type=str, help='Path to your configuration file',
-            default='config.ini')
+            default='config_test.ini')
     parser.add_argument('--log', type=str, help='Logging level', default='DEBUG',
             choices=['DEBUG','INFO','WARNING','ERROR','CRITICAL'])
     args = parser.parse_args()
@@ -44,15 +44,12 @@ def main():
     sh = SignalHandler()
 
     while(sh.event.is_set() == False):
-        
         # Get most recent goal state from database. Users will update this from the website.
         goal_state = MongoConnector.GetWantedState()
         if goal_state is None:
             continue
-            
         # Get the Super-Detector configuration
         current_config = MongoConnector.GetSuperDetector(goal_state)
-        
         # Get most recent check-in from all connected hosts
         if MongoConnector.GetUpdate(current_config):
             continue

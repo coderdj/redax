@@ -127,8 +127,11 @@ class MongoConnect():
         self.Quit()
 
     def GetUpdate(self, detector_config):
-      
-        self.latest_status = {}
+        self.latest_status = {
+		'tpc':{'controller': {}, 'readers':{}},
+		'muon_veto': {'controller':{}, 'readers':{}},
+		'neutron_veto' : {'controller':{}, 'readers':{}}
+	}
         try:
             for detector in detector_config.keys():
                 for host in detector_config[detector]['readers'].keys():
@@ -423,9 +426,9 @@ class MongoConnect():
         cc = []
         hostlist = []
         for b in doc['boards']:
-            if 'V17' in b['type'] and b['host'] not in hostlist:
+            if 'f17' in b['type'] and b['host'] not in hostlist:
                 hostlist.append(b['host'])
-            elif b['type'] == 'V2718' and b['host'] not in cc:
+            elif b['type'] == 'f2718' and b['host'] not in cc:
                 cc.append(b['host'])
         return hostlist, cc
 
