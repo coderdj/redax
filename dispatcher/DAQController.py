@@ -100,8 +100,8 @@ class DAQController():
                     # Check before if the status is UNKNOWN and it is maybe timing out
                     if latest_status[det]['status'] == STATUS.UNKNOWN:
                         self.log.info(f"The status of {det} is unknown, check timeouts")
-                        self.log.debug("Checking %s timeouts", det)
-                        self.CheckTimeouts(detector=det, command='')
+                        self.log.debug(f"Checking the {det} timeouts")
+                        self.CheckTimeouts(detector=det)
                     # Otherwise stop the detector
                     else:
                         self.log.info(f"Sending stop command to {det}")
@@ -109,7 +109,7 @@ class DAQController():
                # Deal separately with the TIMEOUT and ERROR statuses, by stopping the detector if needed
                 elif latest_status[det]['status'] == STATUS.TIMEOUT:
                     self.log.info(f"The {det} is in timeout, check timeouts")
-                    self.log.debug("Checking %s timeouts", det)
+                    self.log.debug(f"Checking the {det} timeouts")
                     self.HandleTimeout(detector=det)
 
                 elif latest_status[det]['status'] == STATUS.ERROR:
@@ -136,13 +136,13 @@ class DAQController():
                 # ARMING, check if it is timing out
                 elif latest_status[det]['status'] == STATUS.ARMING:
                     self.log.info(f"The {det} is arming, check timeouts")
-                    self.log.debug("Checking %s timeouts", det)
+                    self.log.debug(f"Checking the {det} timeouts")
                     self.CheckTimeouts(detector=det, command='arm')
                 # UNKNOWN, check if it is timing out
                 elif latest_status[det]['status'] == STATUS.UNKNOWN:
                     self.log.info(f"The status of {det} is unknown, check timeouts")
-                    self.log.debug("Checking %s timeouts", det)
-                    self.CheckTimeouts(detector=det, command='')
+                    self.log.debug(f"Checking the {det} timeouts")
+                    self.CheckTimeouts(detector=det)
                     
                 # Maybe the detector is IDLE, we should arm a run
                 elif latest_status[det]['status'] == STATUS.IDLE:
