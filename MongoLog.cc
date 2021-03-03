@@ -51,8 +51,8 @@ void MongoLog::Flusher() {
 
 std::string MongoLog::FormatTime(struct tm* date, int ms) {
   std::string out("YYYY-MM-DD HH:mm:SS.SSS");
-  // this step is technically illegal: "Modifying the character array accessed through the const overload of data has undefined behavior." but I can't c++20 and it worked when tested, so :shrug:
-  sprintf((char*)out.data(), "%04i-%02i-%02i %02i:%02i:%02i.%03i", date->tm_year+1900,
+  // this is kinda awkward but we can't use c++20's time-formatting gubbins so :(
+  sprintf(out.data(), "%04i-%02i-%02i %02i:%02i:%02i.%03i", date->tm_year+1900,
       date->tm_mon+1, date->tm_mday, date->tm_hour, date->tm_min, date->tm_sec, ms);
   return out;
 }
