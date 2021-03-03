@@ -503,7 +503,7 @@ class MongoConnect():
             doc = self.collections['run'].find_one({"number": number}, {"start": 1})
         except Exception as e:
             self.log.error('Database is having a moment. Dumping traceback to the logs.')
-            self.log.log.warning(f'Ran into {e}', exc_info=e)
+            self.log.info(f'Ran into {e}', exc_info=e)
             return None
         if doc is not None and 'start' in doc:
             return doc['start']
