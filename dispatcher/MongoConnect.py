@@ -55,7 +55,7 @@ class MongoConnect():
             'log': self.dax_db['log'],
             'options': self.dax_db['options'],
             'run': self.runs_db[config['DEFAULT']['RunsDatabaseCollection']],
-            'command_queue' : self.dax_db['dispatcher_queue'],
+            'command_queue': self.dax_db['dispatcher_queue'],
         }
 
         self.error_sent = {}
@@ -330,7 +330,7 @@ class MongoConnect():
                 {'$project': {'_id': 0, 'description': 0, 'includes': 0, 'subconfig': 0}},
                 ]))[0]
         except Exception as e:
-            self.log.error("Got a %s exception in doc pulling: %s" % (type(E), E))
+            self.log.error("Got a %s exception in doc pulling: %s" % (type(e), e))
         return None
 
     def GetHostsForMode(self, mode):
@@ -374,11 +374,11 @@ class MongoConnect():
             endtime = self.GetAckTime(detectors, 'stop')
             if endtime is None:
                 endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
-            query = {"number" : int(number), "end" : None, 'detectors': detectors}
-            updates = {"$set" : {"end" : endtime}}
+            query = {"number": int(number), "end": None, 'detectors': detectors}
+            updates = {"$set": {"end": endtime}}
             if force:
-                updates["$push"] = {"tags" : {"name" : "messy", "user" : "daq",
-                    "date" : datetime.datetime.utcnow()}}
+                updates["$push"] = {"tags": {"name": "messy", "user": "daq",
+                    "date": datetime.datetime.utcnow()}}
             if self.collections['run'].update_one(query, updates).modified_count == 1:
                 rate = {}
                 for doc in self.collections['aggregate_status'].aggregate([
@@ -400,19 +400,23 @@ class MongoConnect():
         Finds the time when specified detector's crate controller ack'd the specified command
         '''
         cc = list(self.latest_status[detector]['controller'].keys())[0]
-        query = {'acknowledged.%s' % cc: {'$ne' : 0},
-                 '_id' : self.command_oid[detector][command]}
+        query = {'acknowledged.%s' % cc: {'$ne': 0},
+                 '_id': self.command_oid[detector][command]}
         doc = self.collections['outgoing_commands'].find_one(query)
         if doc is not None and not isinstance(doc['acknowledged'][cc], int):
             return doc['acknowledged'][cc]
         self.log.debug('No ACK time for %s-%s' % (detector, command))
         return None
 
-    def SendCommand(self, command, hosts, user, detector, mode="", delay=0):
+    def SendCommand(self, command, hosts, user, detector, mode="", delay=0, force=False):
         '''
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
         number = None
+        if command == 'stop' and not self.CommandWasAckd(detector, 'stop'):
+            self.log.error(f"{detector} hasn't ack'd its last stop, let's not flog a dead horse")
+            if not force:
+                return 1
         try:
             if command == 'arm':
                 number = self.GetNextRunNumber()
@@ -424,9 +428,10 @@ class MongoConnect():
                 "user": user,
                 "detector": detector,
                 "mode": mode,
-                "options_override": {"number": number},
                 "createdAt": datetime.datetime.utcnow()
             }
+            if command == 'arm':
+                doc_base['options_override'] = {'number': number}
             if delay == 0:
                 docs = doc_base
                 docs['host'] = hosts[0]+hosts[1] if isinstance(hosts, tuple) else hosts
@@ -459,16 +464,28 @@ class MongoConnect():
                 else:
                     dt = (next_cmd['createdAt'] - datetime.datetime.utcnow()).total_seconds()
                 if dt < 0.01:
-                    oid = next_cmd['_id']
-                    del next_cmd['_id']
+                    oid = next_cmd.pop('_id')
                     ret = self.collections['outgoing_commands'].insert_one(next_cmd)
-                    self.collections['command_queue'].delete_one({'_id' : oid})
+                    self.collections['command_queue'].delete_one({'_id': oid})
                     self.command_oid[next_cmd['detector']][next_cmd['command']] = ret.inserted_id
             except Exception as e:
                 dt = 10
                 self.log.error("DB down? %s" % e)
             self.event.wait(dt)
             self.event.clear()
+
+    def CommandWasAckd(self, detector, command='stop'):
+        if (oid := self.command_oid[detector][command]) is None:
+            return True
+        if (doc := self.collections['outoing_commands'].find_one({'_id': oid})) is None:
+            self.log.error('No previous command found?')
+            return True
+        for h in doc['host']:
+            # loop over doc['host'] because the 'acknowledged' field sometimes
+            # contains extra entries (such as the GPS trigger)
+            if doc['acknowledged'][h] == 0:
+                return False
+        return True
 
     def LogError(self, message, priority, etype):
 
