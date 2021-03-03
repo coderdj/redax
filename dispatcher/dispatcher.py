@@ -1,7 +1,6 @@
 #!/daq_common/miniconda3/bin/python3
 import configparser
 import argparse
-import logging
 import threading
 import signal
 import datetime
@@ -32,7 +31,7 @@ def main():
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config)
-    logger = get_daq_logger('dispatcher', level = getattr(logging, args.log))
+    logger = get_daq_logger(config['DEFAULT']['LogName'], level = args.log)
     # Declare database object
     MongoConnector = MongoConnect(config, logger)
 
@@ -55,10 +54,7 @@ def main():
             continue
         latest_status = MongoConnector.latest_status
 
-        # TODO: Hypervisor here? 
-        
         # Print an update
-        # TODO: print the current_config and the latest_status 
         for detector in latest_status.keys():
             state = 'ACTIVE' if goal_state[detector]['active'] == 'true' else 'INACTIVE'
             msg = (f'The {detector} should be {state} and is '
