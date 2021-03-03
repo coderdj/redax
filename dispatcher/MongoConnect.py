@@ -1,7 +1,5 @@
 from pymongo import MongoClient
 import datetime
-import os
-import json
 from daqnt import DAQ_STATUS
 import threading
 import time
@@ -37,8 +35,8 @@ class MongoConnect():
     def __init__(self, config, log, control_mc, runs_mc, hypervisor):
 
         # Define DB connectivity. Log is separate to make it easier to split off if needed
-        dbn = config['DEFAULT']['ControlDatabaseName']
-        rdbn = config['DEFAULT']['RunsDatabaseName']
+        dbn = config['ControlDatabaseName']
+        rdbn = config['RunsDatabaseName']
         self.dax_db = control_mc[dbn]
         self.runs_db = runs_mc[rdbn]
         self.hypervisor = hypervisor
@@ -55,7 +53,7 @@ class MongoConnect():
             'outgoing_commands': self.dax_db['control'],
             'log': self.dax_db['log'],
             'options': self.dax_db['options'],
-            'run': self.runs_db[config['DEFAULT']['RunsDatabaseCollection']],
+            'run': self.runs_db[config['RunsDatabaseCollection']],
             'command_queue': self.dax_db['dispatcher_queue'],
         }
 
@@ -68,13 +66,13 @@ class MongoConnect():
             "STOP_TIMEOUT": 3600/4 # 15 minutes
         }
         # Timeout (in seconds). How long must a node not report to be considered timing out
-        self.timeout = int(config['DEFAULT']['ClientTimeout'])
+        self.timeout = int(config['ClientTimeout'])
 
         # How long a node can be timing out before it gets fixed (TPC only)
-        self.timeout_take_action = int(config['DEFAULT']['TimeoutActionThreshold'])
+        self.timeout_take_action = int(config['TimeoutActionThreshold'])
 
         # Which control keys do we look for?
-        self.control_keys = config['DEFAULT']['ControlKeys'].split()
+        self.control_keys = config['ControlKeys'].split()
 
         # We will store the latest status from each reader here
         # Format:
@@ -97,15 +95,18 @@ class MongoConnect():
         #                 }
         #  }
         self.latest_status = {}
-        dc = json.loads(config['DEFAULT']['MasterDAQConfig'])
+        self.host_config = {}
+        self.dc = config['MasterDAQConfig']
         for detector in dc.keys():
             self.latest_status[detector] = {'readers': {}, 'controller': {}}
             for reader in dc[detector]['readers']:
                 self.latest_status[detector]['readers'][reader] = {}
+                self.host_config[reader] = detector
             for controller in dc[detector]['controller']:
                 if controller == "":
                     continue
                 self.latest_status[detector]['controller'][controller] = {}
+                self.host_config[reader] = controller
 
         self.command_oid = {k:{c:None} for c in ['start','stop','arm'] for k in self.latest_status.keys()}
         self.log = log

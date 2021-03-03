@@ -6,6 +6,7 @@ import signal
 import datetime
 import os
 import daqnt
+import json
 
 from MongoConnect import MongoConnect
 from DAQController import DAQController
@@ -28,23 +29,25 @@ def main():
             default='config.ini')
     parser.add_argument('--log', type=str, help='Logging level', default='DEBUG',
             choices=['DEBUG','INFO','WARNING','ERROR','CRITICAL'])
+    parser.add_argument('--test', action=store_true, help='Are you testing?')
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config)
-    cfg = config['DEFAULT']
-    control_uri = cfg['ControlDatabaseURI']%os.environ['MONGO_PASSWORD']
+    config = config['DEFAULT' if not args.test else "TESTING"]
+    config['MasterDAQConfig'] = json.loads(config['MasterDAQConfig'])
+    control_uri = config['ControlDatabaseURI']%os.environ['MONGO_PASSWORD']
     control_mc = pymongo.MongoClient(control_uri)
-    runs_uri = cfg['RunsDatabaseURI']%os.environ['RUNS_MONGO_PASSWORD']
+    runs_uri = config['RunsDatabaseURI']%os.environ['RUNS_MONGO_PASSWORD']
     runs_mc = pymongo.MongoClient(runs_uri)
-    logger = daqnt.get_daq_logger('dispatcher', level=args.log, mc=control_mc)
+    logger = daqnt.get_daq_logger(config['LogName'], level=args.log, mc=control_mc)
 
     # Declare necessary classes
     sh = SignalHandler()
-    Hypervisor = daqnt.Hypervisor(control_mc[cfg['ControlDatabaseName']], logger, sh)
+    Hypervisor = daqnt.Hypervisor(control_mc[config['ControlDatabaseName']], logger, sh)
     MongoConnector = MongoConnect(config, logger, control_mc, runs_mc, Hypervisor)
     DAQControl = DAQController(config, MongoConnector, logger, Hypervisor)
 
-    sleep_period = int(cfg['PollFrequency'])
+    sleep_period = int(config['PollFrequency'])
 
     while(sh.event.is_set() == False):
         sh.event.wait(sleep_period)

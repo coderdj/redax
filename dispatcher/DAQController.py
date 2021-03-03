@@ -1,5 +1,4 @@
 import datetime
-import os
 import json
 import enum
 '''
@@ -34,7 +33,7 @@ class DAQController():
 
         # Timeouts. There are a few things that we want to wait for that might take time.
         # The keys for these dicts will be detector identifiers.
-        detectors = list(json.loads(config['DEFAULT']['MasterDAQConfig']).keys())
+        detectors = list(config['MasterDAQConfig'].keys())
         self.last_command = {}
         for k in ['arm', 'start', 'stop']:
             self.last_command[k] = {}
@@ -44,12 +43,12 @@ class DAQController():
 
         # Timeout properties come from config
         self.timeouts = {
-                k.lower() : int(config['DEFAULT']['%sCommandTimeout' % k])
+                k.lower() : int(config['%sCommandTimeout' % k])
                 for k in ['Arm','Start','Stop']}
-        self.stop_retries = int(config['DEFAULT']['RetryReset'])
+        self.stop_retries = int(config['RetryReset'])
 
         self.log = log
-        self.time_between_commands = int(config['DEFAULT']['TimeBetweenCommands'])
+        self.time_between_commands = int(config['TimeBetweenCommands'])
         self.can_force_stop={k:True for k in detectors}
         self.one_detector_arming = False
 
