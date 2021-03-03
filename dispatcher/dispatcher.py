@@ -40,9 +40,9 @@ def main():
 
     # Declare necessary classes
     sh = SignalHandler()
-    MongoConnector = MongoConnect(config, logger, control_mc, runs_mc)
-    DAQControl = DAQController(config, MongoConnector, logger)
     Hypervisor = daqnt.Hypervisor(control_mc[cfg['ControlDatabaseName']], logger, sh)
+    MongoConnector = MongoConnect(config, logger, control_mc, runs_mc, Hypervisor)
+    DAQControl = DAQController(config, MongoConnector, logger, Hypervisor)
 
     sleep_period = int(cfg['PollFrequency'])
 
@@ -54,10 +54,8 @@ def main():
         latest_status = MongoConnector.latest_status
 
         # Get most recent goal state from database. Users will update this from the website.
-        goal_state = MongoConnector.GetWantedState()
-        if goal_state is None:
+        if (goal_state := MongoConnector.GetWantedState()) is None:
             continue
-
 
         # Print an update
         for detector in latest_status.keys():

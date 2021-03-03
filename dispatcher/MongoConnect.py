@@ -34,13 +34,14 @@ def _all(values, target):
 
 class MongoConnect():
 
-    def __init__(self, config, log, control_mc, runs_mc):
+    def __init__(self, config, log, control_mc, runs_mc, hypervisor):
 
         # Define DB connectivity. Log is separate to make it easier to split off if needed
         dbn = config['DEFAULT']['ControlDatabaseName']
         rdbn = config['DEFAULT']['RunsDatabaseName']
         self.dax_db = control_mc[dbn]
         self.runs_db = runs_mc[rdbn]
+        self.hypervisor = hypervisor
 
         self.latest_settings = {}
 
@@ -126,7 +127,6 @@ class MongoConnect():
 
     def GetUpdate(self):
 
-        latest = {}
         try:
             for detector in self.latest_status.keys():
                 for host in self.latest_status[detector]['readers'].keys():
@@ -138,11 +138,11 @@ class MongoConnect():
                                                                     sort=[('_id', -1)])
                     self.latest_status[detector]['controller'][host] = doc
         except Exception as e:
-            print(type(e), e)
-            return -1
+            self.log.error(f'Got error while getting update: {type(e)}: {e}')
+            return True
 
         # Now compute aggregate status
-        self.AggregateStatus()
+        return self.AggregateStatus() is not None
 
     def ClearErrorTimeouts(self):
         self.error_sent = {}
@@ -206,11 +206,13 @@ class MongoConnect():
                     if dt > self.timeout:
                         self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = DAQ_STATUS.TIMEOUT
-                    if ((dt > self.timeout_take_action or not self.CommandWasAckd(doc['host']))
-                            and self.host_config[doc['host']] == 'tpc'):
-                        self.log.info(f'{doc["host"] is getting restarted')
-                        self.hypervisor.HandleTimeout(doc['host'])
-                        ret = 1
+                        if self.host_config[doc['host']] == 'tpc':
+                            if (dt > self.timeout_take_action or
+                                    ((ts := self.HostAckdCommand(doc['host'])) is not None and
+                                     ts-now > self.timeout)):
+                                self.log.info(f'{doc["host"] is getting restarted')
+                                self.hypervisor.HandleTimeout(doc['host'])
+                                ret = 1
                 except Exception as e:
                     status = DAQ_STATUS.UNKNOWN
 
@@ -413,7 +415,7 @@ class MongoConnect():
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
         number = None
-        if command == 'stop' and not self.CommandWasAckd(detector, 'stop'):
+        if command == 'stop' and not self.DetectorAckdCommand(detector, 'stop'):
             self.log.error(f"{detector} hasn't ack'd its last stop, let's not flog a dead horse")
             if not force:
                 return 1
@@ -474,7 +476,21 @@ class MongoConnect():
             self.event.wait(dt)
             self.event.clear()
 
-    def CommandWasAckd(self, detector, command='stop'):
+    def HostAckdCommand(self, host):
+        """
+        Finds the timestamp of the most recent unacknowledged command send to the specified host
+        :param host: str, the process name to check
+        :returns: float, the timestamp of the last unack'd command, or None if none exist
+        """
+        q = {f'acknowledged.{host}': 0}
+        if (doc := self.collections['outgoing_commands'].find_one(q, sort=[('_id', 1)])) is None:
+            return None
+        return doc['createdAt'].timestamp()
+
+    def DetectorAckdCommand(self, detector, command=None):
+        """
+        Finds when the specified/most recent command was ack'd
+        """
         if (oid := self.command_oid[detector][command]) is None:
             return True
         if (doc := self.collections['outoing_commands'].find_one({'_id': oid})) is None:

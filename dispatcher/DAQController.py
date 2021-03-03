@@ -25,9 +25,10 @@ class STATUS(enum.Enum):
 
 class DAQController():
 
-    def __init__(self, config, mongo_connector, log):
+    def __init__(self, config, mongo_connector, log, hypervisor):
 
         self.mongo = mongo_connector
+        self.hypervisor = hyperisor
         self.goal_state = {}
         self.latest_status = {}
 
@@ -361,6 +362,8 @@ class DAQController():
                                          "can't solve"),
                                         'ERROR',
                                         "STOP_TIMEOUT")
+                    # also invoke the nuclear option
+                    self.hypervisor.TacticalNuclearOption()
                     self.error_stop_count[detector] = 0
                 else:
                     self.ControlDetector(detector=detector, command='stop')
