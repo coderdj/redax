@@ -2,7 +2,7 @@ from pymongo import MongoClient
 import datetime
 import os
 import json
-from DAQController import STATUS
+from daqnt import DAQ_STATUS
 import threading
 import time
 
@@ -34,15 +34,13 @@ def _all(values, target):
 
 class MongoConnect():
 
-    def __init__(self, config, log):
+    def __init__(self, config, log, control_mc, runs_mc):
 
         # Define DB connectivity. Log is separate to make it easier to split off if needed
         dbn = config['DEFAULT']['ControlDatabaseName']
         rdbn = config['DEFAULT']['RunsDatabaseName']
-        self.dax_db = MongoClient(
-            config['DEFAULT']['ControlDatabaseURI']%os.environ['MONGO_PASSWORD'])[dbn]
-        self.runs_db = MongoClient(
-            config['DEFAULT']['RunsDatabaseURI']%os.environ['RUNS_MONGO_PASSWORD'])[rdbn]
+        self.dax_db = control_mc[dbn]
+        self.runs_db = runs_mc[rdbn]
 
         self.latest_settings = {}
 
@@ -70,6 +68,9 @@ class MongoConnect():
         }
         # Timeout (in seconds). How long must a node not report to be considered timing out
         self.timeout = int(config['DEFAULT']['ClientTimeout'])
+
+        # How long a node can be timing out before it gets fixed (TPC only)
+        self.timeout_take_action = int(config['DEFAULT']['TimeoutActionThreshold'])
 
         # Which control keys do we look for?
         self.control_keys = config['DEFAULT']['ControlKeys'].split()
@@ -184,6 +185,7 @@ class MongoConnect():
         #  - If any single node times out then the whole thing is in timeout
 
         now = time.time()
+        ret = None
         for detector in self.latest_status.keys():
             statuses = {}
             status = None
@@ -199,13 +201,18 @@ class MongoConnect():
                     pass
 
                 try:
-                    status = STATUS(doc['status'])
+                    status = DAQ_STATUS(doc['status'])
                     dt = (now - int(str(doc['_id'])[:8], 16))
                     if dt > self.timeout:
                         self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
-                        status = STATUS.TIMEOUT
+                        status = DAQ_STATUS.TIMEOUT
+                    if ((dt > self.timeout_take_action or not self.CommandWasAckd(doc['host']))
+                            and self.host_config[doc['host']] == 'tpc'):
+                        self.log.info(f'{doc["host"] is getting restarted')
+                        self.hypervisor.HandleTimeout(doc['host'])
+                        ret = 1
                 except Exception as e:
-                    status = STATUS.UNKNOWN
+                    status = DAQ_STATUS.UNKNOWN
 
                 statuses[doc['host']] = status
 
@@ -214,14 +221,15 @@ class MongoConnect():
                 # Copy above. I guess it would be possible to have no readers
                 try:
                     mode = doc['mode']
-                    status = STATUS(doc['status'])
+                    status = DAQ_STATUS(doc['status'])
 
                     dt = (now - int(str(doc['_id'])[:8], 16))
+                    doc['last_checkin'] = dt
                     if dt > self.timeout:
                         self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
-                        status = STATUS.TIMEOUT
+                        status = DAQ_STATUS.TIMEOUT
                 except:
-                    status = STATUS.UNKNOWN
+                    status = DAQ_STATUS.UNKNOWN
 
                 statuses[doc['host']] = status
                 mode = doc.get('mode', 'none')
@@ -236,22 +244,24 @@ class MongoConnect():
 
             # Now we aggregate the statuses
             for stat in ['ARMING','ERROR','TIMEOUT','UNKNOWN']:
-                if STATUS[stat] in status_list:
-                    status = STATUS[stat]
+                if DAQ_STATUS[stat] in status_list:
+                    status = DAQ_STATUS[stat]
                     break
             else:
                 for stat in ['IDLE','ARMED','RUNNING']:
-                    if _all(status_list, STATUS[stat]):
-                        status = STATUS[stat]
+                    if _all(status_list, DAQ_STATUS[stat]):
+                        status = DAQ_STATUS[stat]
                         break
                 else:
-                    status = STATUS['UNKNOWN']
+                    status = DAQ_STATUS.UNKNOWN
 
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
             self.latest_status[detector]['buffer'] = buff
             self.latest_status[detector]['number'] = run_num
+
+        return ret
 
 
     def GetWantedState(self):

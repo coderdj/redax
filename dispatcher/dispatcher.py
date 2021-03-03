@@ -1,15 +1,14 @@
 #!/daq_common/miniconda3/bin/python3
 import configparser
 import argparse
-import logging
 import threading
 import signal
 import datetime
 import os
-from daqnt import get_daq_logger
+import daqnt
 
 from MongoConnect import MongoConnect
-from DAQController import DAQController, STATUS
+from DAQController import DAQController
 
 
 class SignalHandler(object):
@@ -32,18 +31,23 @@ def main():
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config)
-    logger = get_daq_logger('dispatcher', level = getattr(logging, args.log))
-    # Declare database object
-    MongoConnector = MongoConnect(config, logger)
+    cfg = config['DEFAULT']
+    control_uri = cfg['ControlDatabaseURI']%os.environ['MONGO_PASSWORD']
+    control_mc = pymongo.MongoClient(control_uri)
+    runs_uri = cfg['RunsDatabaseURI']%os.environ['RUNS_MONGO_PASSWORD']
+    runs_mc = pymongo.MongoClient(runs_uri)
+    logger = daqnt.get_daq_logger('dispatcher', level=args.log, mc=control_mc)
 
-    # Declare a 'brain' object. This will cache info about the DAQ state in order to
-    # solve the want/have decisions. The deciding functions also go here. It needs a
-    # mongo connector because it has to pull options files
-    DAQControl = DAQController(config, MongoConnector, logger)
-    sleep_period = int(config['DEFAULT']['PollFrequency'])
+    # Declare necessary classes
     sh = SignalHandler()
+    MongoConnector = MongoConnect(config, logger, control_mc, runs_mc)
+    DAQControl = DAQController(config, MongoConnector, logger)
+    Hypervisor = daqnt.Hypervisor(control_mc[cfg['ControlDatabaseName']], logger, sh)
+
+    sleep_period = int(cfg['PollFrequency'])
 
     while(sh.event.is_set() == False):
+        sh.event.wait(sleep_period)
         # Get most recent check-in from all connected hosts
         if MongoConnector.GetUpdate():
             continue
@@ -53,6 +57,7 @@ def main():
         goal_state = MongoConnector.GetWantedState()
         if goal_state is None:
             continue
+
 
         # Print an update
         for detector in latest_status.keys():
@@ -69,7 +74,6 @@ def main():
         # Time to report back
         MongoConnector.UpdateAggregateStatus()
 
-        sh.event.wait(sleep_period)
     MongoConnector.Quit()
     return
 
