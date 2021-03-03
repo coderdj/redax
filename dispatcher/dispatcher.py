@@ -44,7 +44,7 @@ def main():
     # Declare necessary classes
     sh = SignalHandler()
     Hypervisor = daqnt.Hypervisor(control_mc[config['ControlDatabaseName']], logger, sh)
-    MongoConnector = MongoConnect(config, logger, control_mc, runs_mc, Hypervisor)
+    MongoConnector = MongoConnect(config, logger, control_mc, runs_mc, Hypervisor, args.test)
     DAQControl = DAQController(config, MongoConnector, logger, Hypervisor)
 
     sleep_period = int(config['PollFrequency'])

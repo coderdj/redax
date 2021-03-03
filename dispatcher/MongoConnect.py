@@ -32,7 +32,7 @@ def _all(values, target):
 
 class MongoConnect():
 
-    def __init__(self, config, log, control_mc, runs_mc, hypervisor):
+    def __init__(self, config, log, control_mc, runs_mc, hypervisor, testing=False):
 
         # Define DB connectivity. Log is separate to make it easier to split off if needed
         dbn = config['ControlDatabaseName']
@@ -74,6 +74,9 @@ class MongoConnect():
         # Which control keys do we look for?
         self.control_keys = config['ControlKeys'].split()
 
+        self.digi_type = 'V17' if not testing else 'f17'
+        self.cc_type = 'V2718' if not testing else 'f2718'
+
         # We will store the latest status from each reader here
         # Format:
         # {
@@ -103,12 +106,10 @@ class MongoConnect():
                 self.latest_status[detector]['readers'][reader] = {}
                 self.host_config[reader] = detector
             for controller in dc[detector]['controller']:
-                if controller == "":
-                    continue
                 self.latest_status[detector]['controller'][controller] = {}
-                self.host_config[reader] = controller
+                self.host_config[controller] = detector
 
-        self.command_oid = {k:{c:None} for c in ['start','stop','arm'] for k in self.latest_status.keys()}
+        self.command_oid = {d:{c:None} for c in ['start','stop','arm'] for k in self.dc.keys()}
         self.log = log
         self.run = True
         self.event = threading.Event()
@@ -350,9 +351,9 @@ class MongoConnect():
         cc = []
         hostlist = []
         for b in doc['boards']:
-            if 'V17' in b['type'] and b['host'] not in hostlist:
+            if self.digi_type in b['type'] and b['host'] not in hostlist:
                 hostlist.append(b['host'])
-            elif b['type'] == 'V2718' and b['host'] not in cc:
+            elif b['type'] == self.cc_type and b['host'] not in cc:
                 cc.append(b['host'])
         return hostlist, cc
 
