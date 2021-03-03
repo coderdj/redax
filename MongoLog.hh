@@ -15,6 +15,7 @@
 #include <thread>
 #include <experimental/filesystem>
 #include <memory>
+#include <tuple>
 
 #include <mongocxx/pool.hpp>
 #include <mongocxx/client.hpp>
@@ -71,9 +72,10 @@ public:
   void SetRunId(const int runid) {fRunId = runid;}
 
 protected:
+  std::tuple<struct tm, int> Now();
   void Flusher();
   int RotateLogFile();
-  virtual std::string FormatTime(struct tm*);
+  virtual std::string FormatTime(struct tm*, int);
   virtual int Today(struct tm*);
   virtual std::string LogFileName(struct tm*);
   virtual std::experimental::filesystem::path OutputDirectory(struct tm*);

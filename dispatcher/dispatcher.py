@@ -43,6 +43,8 @@ def main():
     sleep_period = int(config['DEFAULT']['PollFrequency'])
     sh = SignalHandler()
 
+    logger.info('Dispatcher starting up')
+
     while(sh.event.is_set() == False):
         # Get most recent check-in from all connected hosts
         if MongoConnector.GetUpdate():
