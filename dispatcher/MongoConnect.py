@@ -138,6 +138,7 @@ class MongoConnect():
                     self.latest_status[detector]['controller'][host] = doc
         except Exception as e:
             print(type(e), e)
+            self.log.debug(f'GetUpdate ran into: {type(e)}, {e}')
             return -1
 
         # Now compute aggregate status
@@ -166,8 +167,9 @@ class MongoConnect():
                 doc['number'] = None
             try:
                 self.collections['aggregate_status'].insert(doc)
-            except:
+            except Exception as e:
                 self.log.error('RunsDB snafu')
+                self.log.debug(f'That snafu was {type(e)} {str(e)}')
                 return
 
     def AggregateStatus(self):
@@ -195,7 +197,10 @@ class MongoConnect():
                 try:
                     rate += doc['rate']
                     buff += doc['buffer_size']
-                except:
+                except Exception as e:
+                    # This is not really important it's nice if we have
+                    # it but not essential.
+                    self.log.debug(f'Rate calculation ran into {type(e)}')
                     pass
 
                 try:
@@ -205,6 +210,7 @@ class MongoConnect():
                         self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
                 except Exception as e:
+                    self.log.debug(f'Setting status to unknown because of {type(e)} {e}')
                     status = STATUS.UNKNOWN
 
                 statuses[doc['host']] = status
@@ -221,6 +227,7 @@ class MongoConnect():
                         self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
                         status = STATUS.TIMEOUT
                 except:
+                    self.log.debug(f'Setting status to unknown because of {type(e)} {e}')
                     status = STATUS.UNKNOWN
 
                 statuses[doc['host']] = status
@@ -273,7 +280,8 @@ class MongoConnect():
                         latest_settings[detector]['user'] = doc['user']
             self.latest_settings = latest_settings
             return self.latest_settings
-        except:
+        except Exception as e:
+            self.log.debug(f'get_wanted_state failed due to {type(e)} {e}')
             return None
 
     def GetConfiguredNodes(self, detector, link_mv, link_nv):
@@ -346,8 +354,9 @@ class MongoConnect():
     def GetNextRunNumber(self):
         try:
             cursor = self.collections["run"].find({},{'number': 1}).sort("number", -1).limit(1)
-        except:
+        except Exception as e:
             self.log.error('Database is having a moment?')
+            self.log.debug(f'Ran into {type(e)} {e}')
             return -1
         if cursor.count() == 0:
             self.log.info("wtf, first run?")
@@ -436,6 +445,7 @@ class MongoConnect():
         except Exception as e:
             self.log.info('Database issue, dropping command %s to %s' % (command, detector))
             print(type(e), e)
+            self.log.debug(f'SendCommand ran into {type(e)}, {e})')
             return -1
         else:
             self.log.debug('Queued %s for %s' % (command, detector))
@@ -460,7 +470,8 @@ class MongoConnect():
                     self.command_oid[next_cmd['detector']][next_cmd['command']] = ret.inserted_id
             except Exception as e:
                 dt = 10
-                self.log.error("DB down? %s" % e)
+                self.log.error("DB down? %s" % type(e))
+                self.log.debug(f"Traceback {e}")
             self.event.wait(dt)
             self.event.clear()
 
@@ -501,8 +512,9 @@ class MongoConnect():
     def GetRunStart(self, number):
         try:
             doc = self.collections['run'].find_one({"number": number}, {"start": 1})
-        except:
-            self.log.error('Database is having a moment')
+        except Exception as e:
+            self.log.error('Database is having a moment. Dumping traceback to the logs.')
+            self.log.info(f'Ran into {type(e)}, {e}')
             return None
         if doc is not None and 'start' in doc:
             return doc['start']
@@ -564,6 +576,6 @@ class MongoConnect():
 
             self.collections['run'].insert_one(run_doc)
         except Exception as e:
-            self.log.error('Database having a moment (%s)' % type(e))
+            self.log.error(f'Database having a moment {type(e)} {str(e)}')
             return -1
         return number
