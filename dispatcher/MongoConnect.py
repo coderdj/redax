@@ -198,7 +198,9 @@ class MongoConnect():
                     rate += doc['rate']
                     buff += doc['buffer_size']
                 except Exception as e:
-                    self.log.debug(f'Rate calculation ran into {type(e)} {e}')
+                    # This is not really important it's nice if we have
+                    # it but not essential.
+                    self.log.debug(f'Rate calculation ran into {type(e)}')
                     pass
 
                 try:
@@ -279,7 +281,7 @@ class MongoConnect():
             self.latest_settings = latest_settings
             return self.latest_settings
         except Exception as e:
-            self.log.debug(f'GetWantedState failed of {type(e)} {e}')
+            self.log.debug(f'get_wanted_state failed due to {type(e)} {e}')
             return None
 
     def GetConfiguredNodes(self, detector, link_mv, link_nv):
@@ -468,7 +470,7 @@ class MongoConnect():
                     self.command_oid[next_cmd['detector']][next_cmd['command']] = ret.inserted_id
             except Exception as e:
                 dt = 10
-                self.log.error("DB down? %s" % e)
+                self.log.error("DB down? %s" % type(e))
                 self.log.debug(f"Traceback {e}")
             self.event.wait(dt)
             self.event.clear()
