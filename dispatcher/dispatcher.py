@@ -7,6 +7,7 @@ import datetime
 import os
 import daqnt
 import json
+from pymongo import MongoClient
 
 from MongoConnect import MongoConnect
 from DAQController import DAQController
@@ -29,7 +30,7 @@ def main():
             default='config.ini')
     parser.add_argument('--log', type=str, help='Logging level', default='DEBUG',
             choices=['DEBUG','INFO','WARNING','ERROR','CRITICAL'])
-    parser.add_argument('--test', action=store_true, help='Are you testing?')
+    parser.add_argument('--test', action='store_true', help='Are you testing?')
     args = parser.parse_args()
     config = configparser.ConfigParser()
     config.read(args.config)
@@ -52,12 +53,12 @@ def main():
     while(sh.event.is_set() == False):
         sh.event.wait(sleep_period)
         # Get most recent check-in from all connected hosts
-        if MongoConnector.GetUpdate():
+        if MongoConnector.get_update():
             continue
         latest_status = MongoConnector.latest_status
 
         # Get most recent goal state from database. Users will update this from the website.
-        if (goal_state := MongoConnector.GetWantedState()) is None:
+        if (goal_state := MongoConnector.get_wanted_state()) is None:
             continue
 
         # Print an update
@@ -70,12 +71,12 @@ def main():
             logger.debug(msg)
 
         # Decision time. Are we actually in our goal state? If not what should we do?
-        DAQControl.SolveProblem(latest_status, goal_state)
+        DAQControl.solve_problem(latest_status, goal_state)
 
         # Time to report back
-        MongoConnector.UpdateAggregateStatus()
+        MongoConnector.update_aggregate_status()
 
-    MongoConnector.Quit()
+    MongoConnector.quit()
     return
 
 

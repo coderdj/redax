@@ -1,6 +1,7 @@
 import datetime
 import json
 import enum
+from daqnt import DAQ_STATUS
 '''
 DAQ Controller Brain Class
 D. Coderre, 12. Mar. 2019
@@ -12,22 +13,13 @@ any action needs to be taken to get the DAQ into the target state. It also handl
 resetting of runs (the ~hourly stop/start) during normal operations.
 '''
 
-class STATUS(enum.Enum):
-    IDLE = 0
-    ARMING = 1
-    ARMED = 2
-    RUNNING = 3
-    ERROR = 4
-    TIMEOUT = 5
-    UNKNOWN = 6
-
 
 class DAQController():
 
     def __init__(self, config, mongo_connector, log, hypervisor):
 
         self.mongo = mongo_connector
-        self.hypervisor = hyperisor
+        self.hypervisor = hypervisor
         self.goal_state = {}
         self.latest_status = {}
 
@@ -52,7 +44,7 @@ class DAQController():
         self.can_force_stop={k:True for k in detectors}
         self.one_detector_arming = False
 
-    def SolveProblem(self, latest_status, goal_state):
+    def solve_problem(self, latest_status, goal_state):
         '''
         This is sort of the whole thing that all the other code is supporting
         We get the status from the DAQ and the command from the user
@@ -82,10 +74,10 @@ class DAQController():
         self.one_detector_arming = False
 
         for det in latest_status.keys():
-            if latest_status[det]['status'] == STATUS.IDLE:
+            if latest_status[det]['status'] == DAQ_STATUS.IDLE:
                 self.can_force_stop[det] = True
                 self.error_stop_count[det] = 0
-            if latest_status[det]['status'] in [STATUS.ARMING, STATUS.ARMED]:
+            if latest_status[det]['status'] in [DAQ_STATUS.ARMING, DAQ_STATUS.ARMED]:
                 self.one_detector_arming = True
 
         '''
@@ -97,8 +89,8 @@ class DAQController():
         if we try to activate it.
         '''
         # 1a - deal with TPC and also with MV and NV, but only if they're linked
-        active_states = [STATUS.ARMING, STATUS.ARMED, STATUS.RUNNING,
-                         STATUS.ERROR, STATUS.UNKNOWN]
+        active_states = [DAQ_STATUS.ARMING, DAQ_STATUS.ARMED, DAQ_STATUS.RUNNING,
+                         DAQ_STATUS.ERROR, DAQ_STATUS.UNKNOWN]
         if goal_state['tpc']['active'] == 'false':
 
             # Send stop command if we have to
@@ -112,22 +104,22 @@ class DAQController():
                     (latest_status['neutron_veto']['status']  in active_states and
                      goal_state['tpc']['link_nv'] == 'true')
             ):
-                self.StopDetectorGently(detector='tpc')
-            elif latest_status['tpc']['status'] == STATUS.TIMEOUT:
-                self.CheckTimeouts('tpc')
+                self.stop_detector_gently(detector='tpc')
+            elif latest_status['tpc']['status'] == DAQ_STATUS.TIMEOUT:
+                self.check_timeouts('tpc')
 
         # 1b - deal with MV but only if MV not linked to TPC
         if goal_state['tpc']['link_mv'] == 'false' and goal_state['muon_veto']['active'] == 'false':
             if latest_status['muon_veto']['status'] in active_states:
-                self.StopDetectorGently(detector='muon_veto')
-            elif latest_status['muon_veto']['status'] == STATUS.TIMEOUT:
-                self.CheckTimeouts('muon_veto')
+                self.stop_detector_gently(detector='muon_veto')
+            elif latest_status['muon_veto']['status'] == DAQ_STATUS.TIMEOUT:
+                self.check_timeouts('muon_veto')
         # 1c - deal with NV but only if NV not linked to TPC
         if goal_state['tpc']['link_nv'] == 'false' and goal_state['neutron_veto']['active'] == 'false':
             if latest_status['neutron_veto']['status'] in active_states:
-                self.StopDetectorGently(detector='neutron_veto')
-            elif latest_status['neutron_veto']['status'] == STATUS.TIMEOUT:
-                self.CheckTimeouts('neutron_veto')
+                self.stop_detector_gently(detector='neutron_veto')
+            elif latest_status['neutron_veto']['status'] == DAQ_STATUS.TIMEOUT:
+                self.check_timeouts('neutron_veto')
 
         '''
         CASE 2: DETECTORS ARE ACTIVE
@@ -148,64 +140,64 @@ class DAQController():
             # Maybe we have nothing to do except check the run turnover
             if (
                     # TPC running!
-                    (latest_status['tpc']['status'] == STATUS.RUNNING) and
+                    (latest_status['tpc']['status'] == DAQ_STATUS.RUNNING) and
                     # MV either unlinked or running
-                    (latest_status['muon_veto']['status'] == STATUS.RUNNING or
+                    (latest_status['muon_veto']['status'] == DAQ_STATUS.RUNNING or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV either unlinked or running
-                    (latest_status['neutron_veto']['status'] == STATUS.RUNNING or
+                    (latest_status['neutron_veto']['status'] == DAQ_STATUS.RUNNING or
                      goal_state['tpc']['link_nv'] == 'false')
             ):
-                self.CheckRunTurnover('tpc')
+                self.check_run_turnover('tpc')
 
             # Maybe we're already ARMED and should start a run
             elif (
                     # TPC ARMED
-                    (latest_status['tpc']['status'] == STATUS.ARMED) and
+                    (latest_status['tpc']['status'] == DAQ_STATUS.ARMED) and
                     # MV ARMED or UNLINKED
-                    (latest_status['muon_veto']['status'] == STATUS.ARMED or
+                    (latest_status['muon_veto']['status'] == DAQ_STATUS.ARMED or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV ARMED or UNLINKED
-                    (latest_status['neutron_veto']['status'] == STATUS.ARMED or
+                    (latest_status['neutron_veto']['status'] == DAQ_STATUS.ARMED or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.log.info("Starting TPC")
-                self.ControlDetector(command='start', detector='tpc')
+                self.control_detector(command='start', detector='tpc')
 
             # Maybe we're IDLE and should arm a run
             elif (
                     # TPC IDLE
-                    (latest_status['tpc']['status'] == STATUS.IDLE) and
+                    (latest_status['tpc']['status'] == DAQ_STATUS.IDLE) and
                     # MV IDLE or UNLINKED
-                    (latest_status['muon_veto']['status'] == STATUS.IDLE or
+                    (latest_status['muon_veto']['status'] == DAQ_STATUS.IDLE or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV IDLE or UNLINKED
-                    (latest_status['neutron_veto']['status'] == STATUS.IDLE or
+                    (latest_status['neutron_veto']['status'] == DAQ_STATUS.IDLE or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.log.info("Arming TPC")
-                self.ControlDetector(command='arm', detector='tpc')
+                self.control_detector(command='arm', detector='tpc')
 
             elif (
                     # TPC ARMING
-                    (latest_status['tpc']['status'] == STATUS.ARMING) and
+                    (latest_status['tpc']['status'] == DAQ_STATUS.ARMING) and
                     # MV ARMING or UNLINKED
-                    (latest_status['muon_veto']['status'] == STATUS.ARMING or
+                    (latest_status['muon_veto']['status'] == DAQ_STATUS.ARMING or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV ARMING or UNLINKED
-                    (latest_status['neutron_veto']['status'] == STATUS.ARMING or
+                    (latest_status['neutron_veto']['status'] == DAQ_STATUS.ARMING or
                      goal_state['tpc']['link_nv'] == 'false')):
-                self.CheckTimeouts(detector='tpc', command='arm')
+                self.check_timeouts(detector='tpc', command='arm')
 
             elif (
                     # TPC ERROR
-                    (latest_status['tpc']['status'] == STATUS.ERROR) and
+                    (latest_status['tpc']['status'] == DAQ_STATUS.ERROR) and
                     # MV ERROR or UNLINKED
-                    (latest_status['muon_veto']['status'] == STATUS.ERROR or
+                    (latest_status['muon_veto']['status'] == DAQ_STATUS.ERROR or
                      goal_state['tpc']['link_mv'] == 'false') and
                     # NV ERROR or UNLINKED
-                    (latest_status['neutron_veto']['status'] == STATUS.ERROR or
+                    (latest_status['neutron_veto']['status'] == DAQ_STATUS.ERROR or
                      goal_state['tpc']['link_nv'] == 'false')):
                 self.log.info("TPC has error!")
-                self.ControlDetector(command='stop', detector='tpc',
+                self.control_detector(command='stop', detector='tpc',
                         force=self.can_force_stop['tpc'])
                 self.can_force_stop['tpc']=False
 
@@ -216,7 +208,7 @@ class DAQController():
             # big deal
             else:
                 self.log.debug("Checking TPC timeouts")
-                self.CheckTimeouts('tpc')
+                self.check_timeouts('tpc')
 
         # 2b, 2c. In case the MV and/or NV are UNLINKED and ACTIVE we can treat them
         # in basically the same way.
@@ -229,36 +221,36 @@ class DAQController():
             if (goal_state[detector]['active'] == 'true' and linked == 'false'):
 
                 # Same logic as before but simpler cause we don't have to check for links
-                if latest_status[detector]['status'] == STATUS.RUNNING:
-                    self.CheckRunTurnover(detector)
-                elif latest_status[detector]['status'] == STATUS.ARMED:
-                    self.ControlDetector(command='start', detector=detector)
-                elif latest_status[detector]['status'] == STATUS.IDLE:
-                    self.ControlDetector(command='arm', detector=detector)
-                elif latest_status[detector]['status'] == STATUS.ERROR:
-                    self.ControlDetector(command='stop', detector=detector,
+                if latest_status[detector]['status'] == DAQ_STATUS.RUNNING:
+                    self.check_run_turnover(detector)
+                elif latest_status[detector]['status'] == DAQ_STATUS.ARMED:
+                    self.control_detector(command='start', detector=detector)
+                elif latest_status[detector]['status'] == DAQ_STATUS.IDLE:
+                    self.control_detector(command='arm', detector=detector)
+                elif latest_status[detector]['status'] == DAQ_STATUS.ERROR:
+                    self.control_detector(command='stop', detector=detector,
                             force=self.can_force_stop[detector])
                     self.can_force_stop[detector] = False
                 else:
-                    self.CheckTimeouts(detector)
+                    self.check_timeouts(detector)
 
         return
 
-    def StopDetectorGently(self, detector):
+    def stop_detector_gently(self, detector):
         '''
         Stops the detector, unless we're told to wait for the current
         run to end
         '''
         if (
                 # Running normally (not arming, error, timeout, etc)
-                self.latest_status[detector]['status'] == STATUS.RUNNING and
+                self.latest_status[detector]['status'] == DAQ_STATUS.RUNNING and
                 # We were asked to wait for the current run to stop
                 self.goal_state[detector].get('softstop', 'false') == 'true'):
-            self.CheckRunTurnover(detector)
+            self.check_run_turnover(detector)
         else:
-            self.ControlDetector(detector=detector, command='stop')
+            self.control_detector(detector=detector, command='stop')
 
-    def ControlDetector(self, command, detector, force=False):
+    def control_detector(self, command, detector, force=False):
         '''
         Issues the command to the detector if allowed by the timeout
         '''
@@ -283,39 +275,39 @@ class DAQController():
                     self.log.info('Another detector already arming, can\'t arm %s' % detector)
                     # this leads to run number overlaps
                     return
-                readers, cc = self.mongo.GetHostsForMode(run_mode)
+                readers, cc = self.mongo.get_hosts_for_mode(run_mode)
                 hosts = (cc, readers)
                 delay = 0
                 self.one_detector_arming = True
             elif command == 'start':
-                readers, cc = self.mongo.GetHostsForMode(run_mode)
+                readers, cc = self.mongo.get_hosts_for_mode(run_mode)
                 hosts = (readers, cc) # we want the cc to delay by 1s
                 # we can safely short the logic here and buy an extra logic cycle
                 self.one_detector_arming = False
                 delay = 1.5
             else: # stop
-                readers, cc = self.mongo.GetConfiguredNodes(detector,
+                readers, cc = self.mongo.get_configured_nodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
                 hosts = (cc, readers)
-                if force or self.latest_status[detector]['status'] not in [STATUS.RUNNING]:
+                if force or self.latest_status[detector]['status'] not in [DAQ_STATUS.RUNNING]:
                     delay = 0
                 else:
                     delay = 5
                 # TODO smart delay?
-                if self.latest_status[detector]['status'] in [STATUS.ARMING, STATUS.ARMED]:
+                if self.latest_status[detector]['status'] in [DAQ_STATUS.ARMING, DAQ_STATUS.ARMED]:
                     # this was the arming detector
                     self.one_detector_arming = False
             self.log.debug('Sending %s to %s' % (command.upper(), detector))
-            if self.mongo.SendCommand(command, hosts, self.goal_state[detector]['user'],
+            if self.mongo.send_command(command, hosts, self.goal_state[detector]['user'],
                     detector, self.goal_state[detector]['mode'], delay, force):
                 # failed
                 return
             self.last_command[command][detector] = now
-            if command == 'start' and self.mongo.InsertRunDoc(detector, self.goal_state):
+            if command == 'start' and self.mongo.insert_run_doc(detector, self.goal_state):
                 # db having a moment
                 return
             if (command == 'stop' and 'number' in self.latest_status[detector] and 
-                    self.mongo.SetStopTime(self.latest_status[detector]['number'], detector, force)):
+                    self.mongo.set_stop_time(self.latest_status[detector]['number'], detector, force)):
                 # db having a moment
                 return
 
@@ -323,7 +315,7 @@ class DAQController():
             self.log.debug('Can\'t send %s to %s, timeout at %i/%i' % (
                 command, detector, dt, self.timeouts[command]))
 
-    def CheckTimeouts(self, detector, command = None):
+    def check_timeouts(self, detector, command = None):
         ''' 
         This one is invoked if we think we need to change states. Either a stop command needs
         to be sent, or we've detected an anomaly and want to decide what to do. 
@@ -339,9 +331,9 @@ class DAQController():
         if command is None: # not specified, we figure out it here
             command_times = [(cmd,doc[detector]) for cmd,doc in self.last_command.items()]
             command = sorted(command_times, key=lambda x : x[1])[-1][0]
-            self.log.debug('Most recent command for %s is %s' % (detector, command))
+            self.log.debug(f'Most recent command for {detector} is {command}')
         else:
-            self.log.debug('Checking %s timeout for %s' % (command, detector))
+            self.log.debug(f'Checking {command} timeout for {detector}')
 
         dt = (nowtime - self.last_command[command][detector]).total_seconds()
 
@@ -356,39 +348,39 @@ class DAQController():
             if command == 'stop':
                 if self.error_stop_count[detector] >= self.stop_retries:
                     # failed too many times, issue error
-                    self.mongo.LogError(
+                    self.mongo.log_error(
                                         ("Dispatcher control loop detects a timeout that STOP " +
                                          "can't solve"),
                                         'ERROR',
                                         "STOP_TIMEOUT")
                     # also invoke the nuclear option
-                    self.hypervisor.TacticalNuclearOption()
+                    self.hypervisor.tactical_nuclear_option()
                     self.error_stop_count[detector] = 0
                 else:
-                    self.ControlDetector(detector=detector, command='stop')
-                    self.log.debug('Working on a stop counter for %s' % detector)
+                    self.control_detector(detector=detector, command='stop')
+                    self.log.debug(f'Working on a stop counter for {detector}')
                     self.error_stop_count[detector] += 1
             else:
-                self.mongo.LogError(
+                self.mongo.log_error(
                         ('%s took more than %i seconds to %s, indicating a possible timeout or error' %
                             (detector, self.timeouts[command], command)),
                         'ERROR',
                         '%s_TIMEOUT' % command.upper())
-                self.ControlDetector(detector=detector, command='stop')
+                self.control_detector(detector=detector, command='stop')
 
         return
 
 
-    def ThrowError(self):
+    def throw_error(self):
         '''
         Throw a general error that the DAQ is stuck
         '''
-        self.mongo.LogError(
+        self.mongo.log_error(
                             "Dispatcher control loop can't get DAQ out of stuck state",
                             'ERROR',
                             "GENERAL_ERROR")
 
-    def CheckRunTurnover(self, detector):
+    def check_run_turnover(self, detector):
         '''
         During normal operation we want to run for a certain number of minutes, then
         automatically stop and restart the run. No biggie. We check the time here
@@ -398,17 +390,17 @@ class DAQController():
         try:
             _ = int(self.goal_state[detector]['stop_after'])
         except Exception as e:
-            self.log.info('No run duration specified for %s? (%s)' % (detector, e))
+            self.log.info(f'No run duration specified for {detector}? {type(e)}, {e}')
             return
 
         try:
             number = self.latest_status[detector]['number']
         except:
             # dirty workaround just in case there was a dispatcher crash
-            number = self.latest_status[detector]['number'] = self.mongo.GetNextRunNumber() - 1
+            number = self.latest_status[detector]['number'] = self.mongo.get_next_run_number() - 1
             if number == -2:  # db issue
                 return
-        start_time = self.mongo.GetRunStart(number)
+        start_time = self.mongo.get_run_start(number)
         if start_time is None:
             return
         nowtime = datetime.datetime.utcnow()
@@ -417,5 +409,5 @@ class DAQController():
         self.log.debug('Checking run turnover for %s: %i/%i' % (detector, run_duration, run_length))
         if run_duration > run_length:
             self.log.info('Stopping run for %s' % detector)
-            self.ControlDetector(detector=detector, command='stop')
+            self.control_detector(detector=detector, command='stop')
 
