@@ -247,7 +247,7 @@ class MongoConnect():
                 run_num = doc.get('number', -1)
 
             if mode != 'none': # readout is "active":
-                a,b = self.GetHostsForMode(mode)
+                a,b = self.get_hosts_for_mode(mode)
                 active = a + b
                 status_list = [v for k,v in statuses.items() if k in active]
             else:
@@ -345,7 +345,7 @@ class MongoConnect():
             self.log.error("Got a %s exception in doc pulling: %s" % (type(e), e))
         return None
 
-    def GetHostsForMode(self, mode):
+    def get_hosts_for_mode(self, mode):
         '''
         Get the nodes we need from the run mode
         '''
@@ -393,6 +393,7 @@ class MongoConnect():
                 updates["$push"] = {"tags": {"name": "messy", "user": "daq",
                     "date": datetime.datetime.utcnow()}}
             if self.collections['run'].update_one(query, updates).modified_count == 1:
+                self.log.debug('Update successful')
                 rate = {}
                 for doc in self.collections['aggregate_status'].aggregate([
                     {'$match': {'number': number}},
@@ -403,7 +404,8 @@ class MongoConnect():
                     rate[doc['_id']] = {'avg': doc['avg'], 'max': doc['max']}
                 self.collections['run'].update_one({'number': int(number)},
                                                    {'$set': {'rate': rate}})
-            self.log.debug('Update successful')
+            else:
+                self.log.debug('No run updated?')
         except Exception as e:
             self.log.error(f"Database having a moment, hope this doesn't crash. {type(e)}, {e}")
         return
