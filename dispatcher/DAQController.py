@@ -401,7 +401,8 @@ class DAQController():
 
         try:
             number = self.latest_status[detector]['number']
-        except:
+        except Exception as e:
+            self.log.debug(f'Could not get number (type(e)), let\'s resort to workaround. {e}')
             # dirty workaround just in case there was a dispatcher crash
             number = self.latest_status[detector]['number'] = self.mongo.GetNextRunNumber() - 1
             if number == -2:  # db issue
