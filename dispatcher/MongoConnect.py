@@ -375,10 +375,10 @@ class MongoConnect():
         retcc = list(self.latest_status[detector]['controller'].keys())
         if detector == 'tpc' and link_nv == 'true':
             retnodes += list(self.latest_status['neutron_veto']['readers'].keys())
-            retcc += list(self.latest_status['neutron_veto']['controllers'].keys())
+            retcc += list(self.latest_status['neutron_veto']['controller'].keys())
         if detector == 'tpc' and link_mv == 'true':
             retnodes += list(self.latest_status['muon_veto']['readers'].keys())
-            retcc += list(self.latest_status['muon_veto']['controllers'].keys())
+            retcc += list(self.latest_status['muon_veto']['controller'].keys())
         return retnodes, retcc
 
     def GetRunMode(self, mode):

@@ -106,7 +106,7 @@ class DAQController():
                     else:
                         self.log.info(f"Sending stop command to {det}")
                         self.StopDetectorGently(detector=det)
-               # Deal separately with the TIMEOUT and ERROR statuses, by stopping the detector if needed
+                # Deal separately with the TIMEOUT and ERROR statuses, by stopping the detector if needed
                 elif latest_status[det]['status'] == STATUS.TIMEOUT:
                     self.log.info(f"The {det} is in timeout, check timeouts")
                     self.log.debug(f"Checking the {det} timeouts")
