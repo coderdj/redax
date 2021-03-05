@@ -57,7 +57,7 @@ class MongoConnect():
             'log': self.dax_db['log'],
             'options': self.dax_db['options'],
             'run': self.runs_db[config['DEFAULT']['RunsDatabaseCollection']],
-            'command_queue' : self.dax_db['dispatcher_queue'],
+            'command_queue': self.dax_db['dispatcher_queue'],
         }
 
         self.error_sent = {}
@@ -70,6 +70,9 @@ class MongoConnect():
         }
         # Timeout (in seconds). How long must a node not report to be considered timing out
         self.timeout = int(config['DEFAULT']['ClientTimeout'])
+
+        # Which control keys do we look for?
+        self.control_keys = config['DEFAULT']['ControlKeys'].split()
 
         # We will store the latest status from each reader here
         # Format:
@@ -244,45 +247,31 @@ class MongoConnect():
                 else:
                     status = STATUS['UNKNOWN']
 
-            if detector == 'neutron_veto':
-                status = STATUS.IDLE
-
             self.latest_status[detector]['status'] = status
             self.latest_status[detector]['rate'] = rate
             self.latest_status[detector]['mode'] = mode
             self.latest_status[detector]['buffer'] = buff
+            self.latest_status[detector]['number'] = run_num
 
 
     def GetWantedState(self):
         # Aggregate the wanted state per detector from the DB and return a dict
         try:
-            for doc in self.collections['incoming_commands'].aggregate([
-                {'$sort': {'_id': -1}},
-                {'$group': {
-                    '_id': {'$concat': ['$detector', '.', '$field']},
-                    'value': {'$first': '$value'},
-                    'user': {'$first': '$user'},
-                    'time': {'$first': '$time'},
-                    'detector': {'$first': '$detector'},
-                    'key': {'$first': '$field'}
-                    }},
-                {'$group': {
-                    '_id': '$detector',
-                    'keys': {'$push': '$key'},
-                    'values': {'$push': '$value'},
-                    'users': {'$push': '$user'},
-                    'times': {'$push': '$time'}
-                    }},
-                {'$project': {
-                    'detector': '$_id',
-                    '_id': 0,
-                    'state': {'$arrayToObject': {'$zip': {'inputs': ['$keys', '$values']}}},
-                    'user': {'$arrayElemAt': ['$users', {'$indexOfArray': ['$times', {'$max': '$times'}]}]}
-                    }}
-                ]):
-                doc.update(doc['state'])
-                del doc['state']
-                self.latest_settings[doc['detector']]=doc
+            latest_settings = {}
+            for detector in 'tpc muon_veto neutron_veto'.split():
+                latest = None
+                latest_settings[detector] = {}
+                for key in self.control_keys:
+                    doc = self.collections['incoming_commands'].find_one(
+                            {'key': f'{detector}.{key}'}, sort=[('_id', -1)])
+                    if doc is None:
+                        self.log.error('No key %s for %s???' % (key, detector))
+                        return None
+                    latest_settings[detector][doc['field']] = doc['value']
+                    if latest is None or doc['time'] > latest:
+                        latest = doc['time']
+                        latest_settings[detector]['user'] = doc['user']
+            self.latest_settings = latest_settings
             return self.latest_settings
         except:
             return None
@@ -331,7 +320,7 @@ class MongoConnect():
                 {'$project': {'_id': 0, 'description': 0, 'includes': 0, 'subconfig': 0}},
                 ]))[0]
         except Exception as e:
-            self.log.error("Got a %s exception in doc pulling: %s" % (type(E), E))
+            self.log.error("Got a %s exception in doc pulling: %s" % (type(e), e))
         return None
 
     def GetHostsForMode(self, mode):
@@ -365,22 +354,33 @@ class MongoConnect():
             return 0
         return list(cursor)[0]['number']+1
 
-    def SetStopTime(self, number, detector, force):
+    def SetStopTime(self, number, detectors, force):
         '''
         Sets the 'end' field of the run doc to the time when the STOP command was ack'd
         '''
-        self.log.info("Updating run %i with end time"%number)
+        self.log.info("Updating run %i with end time (%s)" %(number, detectors))
         try:
-            time.sleep(2) # this number depends on the delay between CC and reader stop
-            endtime = self.GetAckTime(detector, 'stop')
+            time.sleep(0.5) # this number depends on the CC command polling time
+            endtime = self.GetAckTime(detectors, 'stop')
             if endtime is None:
                 endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
-            query = {"number" : int(number), "end" : None, 'detector': detector}
-            updates = {"$set" : {"end" : endtime}}
+            query = {"number": int(number), "end": None, 'detectors': detectors}
+            updates = {"$set": {"end": endtime}}
             if force:
-                updates["$push"] = {"tags" : {"name" : "messy", "user" : "daq",
-                    "date" : datetime.datetime.utcnow()}}
-            self.collections['run'].update_one(query, updates)
+                updates["$push"] = {"tags": {"name": "messy", "user": "daq",
+                    "date": datetime.datetime.utcnow()}}
+            if self.collections['run'].update_one(query, updates).modified_count == 1:
+                rate = {}
+                for doc in self.collections['aggregate_status'].aggregate([
+                    {'$match': {'number': number}},
+                    {'$group': {'_id': '$detector',
+                                'avg': {'$avg': '$rate'},
+                                'max': {'$max': '$rate'}}}
+                    ]):
+                    rate[doc['_id']] = {'avg': doc['avg'], 'max': doc['max']}
+                self.collections['run'].update_one({'number': int(number)},
+                                                   {'$set': {'rate': rate}})
+            self.log.debug('Update successful')
         except Exception as e:
             self.log.error("Database having a moment, hope this doesn't crash (%s)" % type(e))
         return
@@ -390,35 +390,38 @@ class MongoConnect():
         Finds the time when specified detector's crate controller ack'd the specified command
         '''
         cc = list(self.latest_status[detector]['controller'].keys())[0]
-        query = {'acknowledged.%s' % cc: {'$ne' : 0},
-                 '_id' : self.command_oid[detector][command]}
+        query = {'acknowledged.%s' % cc: {'$ne': 0},
+                 '_id': self.command_oid[detector][command]}
         doc = self.collections['outgoing_commands'].find_one(query)
         if doc is not None and not isinstance(doc['acknowledged'][cc], int):
             return doc['acknowledged'][cc]
         self.log.debug('No ACK time for %s-%s' % (detector, command))
         return None
 
-    def SendCommand(self, command, hosts, user, detector, mode="", delay=0):
+    def SendCommand(self, command, hosts, user, detector, mode="", delay=0, force=False):
         '''
         Send this command to these hosts. If delay is set then wait that amount of time
         '''
         number = None
-        n_id = None
+        if command == 'stop' and not self.CommandWasAckd(detector, 'stop'):
+            self.log.error(f"{detector} hasn't ack'd its last stop, let's not flog a dead horse")
+            if not force:
+                return 1
         try:
             if command == 'arm':
                 number = self.GetNextRunNumber()
                 if number == -1:
                     return -1
-                n_id = '%06i' % number
                 self.latest_status[detector]['number'] = number
             doc_base = {
                 "command": command,
                 "user": user,
                 "detector": detector,
                 "mode": mode,
-                "options_override": {"number": number},
                 "createdAt": datetime.datetime.utcnow()
             }
+            if command == 'arm':
+                doc_base['options_override'] = {'number': number}
             if delay == 0:
                 docs = doc_base
                 docs['host'] = hosts[0]+hosts[1] if isinstance(hosts, tuple) else hosts
@@ -451,16 +454,28 @@ class MongoConnect():
                 else:
                     dt = (next_cmd['createdAt'] - datetime.datetime.utcnow()).total_seconds()
                 if dt < 0.01:
-                    oid = next_cmd['_id']
-                    del next_cmd['_id']
+                    oid = next_cmd.pop('_id')
                     ret = self.collections['outgoing_commands'].insert_one(next_cmd)
-                    self.collections['command_queue'].delete_one({'_id' : oid})
+                    self.collections['command_queue'].delete_one({'_id': oid})
                     self.command_oid[next_cmd['detector']][next_cmd['command']] = ret.inserted_id
             except Exception as e:
                 dt = 10
                 self.log.error("DB down? %s" % e)
             self.event.wait(dt)
             self.event.clear()
+
+    def CommandWasAckd(self, detector, command='stop'):
+        if (oid := self.command_oid[detector][command]) is None:
+            return True
+        if (doc := self.collections['outoing_commands'].find_one({'_id': oid})) is None:
+            self.log.error('No previous command found?')
+            return True
+        for h in doc['host']:
+            # loop over doc['host'] because the 'acknowledged' field sometimes
+            # contains extra entries (such as the GPS trigger)
+            if doc['acknowledged'][h] == 0:
+                return False
+        return True
 
     def LogError(self, message, priority, etype):
 
@@ -513,7 +528,8 @@ class MongoConnect():
             'detectors': detectors,
             'user': goal_state[detector]['user'],
             'mode': goal_state[detector]['mode'],
-            #'bootstrax': {'state': None}, # SOON (TM)
+            'bootstrax': {'state': None},
+            'end': None
         }
 
         # If there's a source add the source. Also add the complete ini file.
@@ -543,8 +559,8 @@ class MongoConnect():
             start_time = self.GetAckTime(detector, 'start')
             if start_time is None:
                 start_time = datetime.datetime.utcnow()-datetime.timedelta(seconds=2)
+                run_doc['tags'] = [{'name': 'messy', 'user': 'daq', 'date': start_time}]
             run_doc['start'] = start_time
-            run_doc['end'] = None
 
             self.collections['run'].insert_one(run_doc)
         except Exception as e:

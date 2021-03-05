@@ -2,24 +2,20 @@
 #include "MongoLog.hh"
 #include <CAENVMElib.h>
 
-V2718::V2718(std::shared_ptr<MongoLog>& log, CrateOptions c_opts, int link, int crate){
+V2718::V2718(std::shared_ptr<MongoLog>& log, CrateOptions c_opts){
   fLog = log;
   fBoardHandle=-1;
 
-  fCrate = crate;
-  fLink = link;
   fCopts = c_opts;
-
-  // Initialising the V2718 module via the specified optical link
-  int a = CAENVME_Init(cvV2718, fLink, fCrate, &fBoardHandle);
-  if(a != cvSuccess){
-    fLog->Entry(MongoLog::Error, "Failed to init V2718 with CAEN error: %i", a);
-    throw std::runtime_error("Could not init CC");
-  }
-  SendStopSignal(false);
 }
 
 V2718::~V2718(){
+}
+
+int V2718::Init(int link, int crate) {
+  if (CAENVME_Init(cvV2718, link, crate, &fBoardHandle))
+    return -1;
+  return SendStopSignal(false);
 }
 
 int V2718::SendStartSignal(){
@@ -27,15 +23,15 @@ int V2718::SendStartSignal(){
   // Straight copy from: https://github.com/coderdj/kodiaq
 
   // Line 0 : S-IN.
-  CAENVME_SetOutputConf(fCrate, cvOutput0, cvDirect, cvActiveHigh, cvManualSW);
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput0, cvDirect, cvActiveHigh, cvManualSW);
   // Line 1 : MV S-IN Logic
-  CAENVME_SetOutputConf(fCrate, cvOutput1, cvDirect, cvActiveHigh, cvManualSW);
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput1, cvDirect, cvActiveHigh, cvManualSW);
   // Line 2 : LED Logic
-  CAENVME_SetOutputConf(fCrate, cvOutput2, cvDirect, cvActiveHigh, cvManualSW);
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput2, cvDirect, cvActiveHigh, cvManualSW);
   // Line 3 : LED Pulser
-  CAENVME_SetOutputConf(fCrate, cvOutput3, cvDirect, cvActiveHigh, cvMiscSignals);
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput3, cvDirect, cvActiveHigh, cvMiscSignals);
   // Line 4 : NV S-IN Logic
-  CAENVME_SetOutputConf(fCrate, cvOutput4, cvDirect, cvActiveHigh, cvMiscSignals); // soonTM
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput4, cvDirect, cvActiveHigh, cvMiscSignals); // soonTM
 
 
   // Set the output register
@@ -50,7 +46,7 @@ int V2718::SendStartSignal(){
     data+=cvOut0Bit;
 
   // S-IN and logic signals 
-  if(CAENVME_SetOutputRegister(fCrate,data)!=0){
+  if(CAENVME_SetOutputRegister(fBoardHandle,data)!=0){
     fLog->Entry(MongoLog::Error, "Couldn't set output register to crate controller");
     return -1;
   }
@@ -80,9 +76,9 @@ int V2718::SendStartSignal(){
       }
     }
     // Set pulser
-    int ret = CAENVME_SetPulserConf(fCrate, cvPulserB, period, width, tu, 0,
+    int ret = CAENVME_SetPulserConf(fBoardHandle, cvPulserB, period, width, tu, 0,
                                     cvManualSW, cvManualSW);
-    ret *= CAENVME_StartPulser(fCrate,cvPulserB);
+    ret *= CAENVME_StartPulser(fBoardHandle,cvPulserB);
     if(ret != cvSuccess){
       fLog->Entry(MongoLog::Warning, "Failed to activate LED pulser");
       return -1;
@@ -93,34 +89,34 @@ int V2718::SendStartSignal(){
 
 int V2718::SendStopSignal(bool end){
 
-  if(fCrate == -1)
+  if(fBoardHandle == -1)
     return 0;
 
   // Stop the pulser if it's running
-  CAENVME_StopPulser(fCrate, cvPulserB);
+  CAENVME_StopPulser(fBoardHandle, cvPulserB);
   usleep(1000);
 
   // Line 0 : S-IN.
-  CAENVME_SetOutputConf(fCrate, cvOutput0, cvDirect, cvActiveHigh, cvManualSW);
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput0, cvDirect, cvActiveHigh, cvManualSW);
   // Line 1 : MV S-IN Logic
-  CAENVME_SetOutputConf(fCrate, cvOutput1, cvDirect, cvActiveHigh, cvManualSW);
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput1, cvDirect, cvActiveHigh, cvManualSW);
   // Line 2 : LED Logic
-  CAENVME_SetOutputConf(fCrate, cvOutput2, cvDirect, cvActiveHigh, cvManualSW);
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput2, cvDirect, cvActiveHigh, cvManualSW);
   // Line 3 : LED Pulser
-  CAENVME_SetOutputConf(fCrate, cvOutput3, cvDirect, cvActiveHigh, cvMiscSignals);
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput3, cvDirect, cvActiveHigh, cvMiscSignals);
   // Line 4 : NV S-IN Logic
-  CAENVME_SetOutputConf(fCrate, cvOutput4, cvDirect, cvActiveHigh, cvManualSW);
+  CAENVME_SetOutputConf(fBoardHandle, cvOutput4, cvDirect, cvActiveHigh, cvManualSW);
 
 
   // Set the output register
   unsigned int data = 0x0;
-  CAENVME_SetOutputRegister(fCrate,data);
+  CAENVME_SetOutputRegister(fBoardHandle, data);
 
   if(end){
-    if(CAENVME_End(fCrate)!= cvSuccess){
+    if(CAENVME_End(fBoardHandle)!= cvSuccess){
       fLog->Entry(MongoLog::Warning, "Failed to end crate");
     }
-    fBoardHandle=fLink=fCrate=-1;
+    fBoardHandle=-1;
   }
   return 0;
 }

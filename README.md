@@ -1,7 +1,7 @@
 # REDAX
 D. Coderre, 2018, D. Masson, 2020. Please see license in LICENSE file.
 
-See documentation here: [link](https://coderdj.github.io/redax)
+See documentation here: [link](https://axfoundation.github.io/redax)
 ## Prerequisites
 
 * mongodb cxx driver
