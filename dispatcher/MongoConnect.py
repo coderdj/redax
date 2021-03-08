@@ -127,11 +127,7 @@ class MongoConnect():
         self.Quit()
 
     def GetUpdate(self, detector_config):
-        self.latest_status = {
-		'tpc':{'controller': {}, 'readers':{}},
-		'muon_veto': {'controller':{}, 'readers':{}},
-		'neutron_veto' : {'controller':{}, 'readers':{}}
-	}
+        self.latest_status = { det : {'controller':{}, 'readers':{}} for det in detector_config }
         try:
             for detector in detector_config.keys():
                 for host in detector_config[detector]['readers'].keys():
