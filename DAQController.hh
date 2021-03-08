@@ -58,7 +58,7 @@ private:
   // For reporting to frontend
   std::atomic_int fDataRate;
   std::atomic_long fCounter;
-  std::atomic_bool fPLL;
+  std::atomic_int fPLL;
 };
 
 #endif
