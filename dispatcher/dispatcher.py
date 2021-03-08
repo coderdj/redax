@@ -50,6 +50,8 @@ def main():
 
     sleep_period = int(config['PollFrequency'])
 
+    logger.info('Dispatcher starting up')
+
     while(sh.event.is_set() == False):
         sh.event.wait(sleep_period)
         # Get most recent check-in from all connected hosts

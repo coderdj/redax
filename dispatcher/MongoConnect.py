@@ -168,8 +168,9 @@ class MongoConnect():
                 doc['number'] = None
             try:
                 self.collections['aggregate_status'].insert(doc)
-            except:
+            except Exception as e:
                 self.log.error('RunsDB snafu')
+                self.log.debug(f'That snafu was {type(e)} {str(e)}')
                 return
 
     def aggregate_status(self):
@@ -198,7 +199,10 @@ class MongoConnect():
                 try:
                     rate += doc['rate']
                     buff += doc['buffer_size']
-                except:
+                except Exception as e:
+                    # This is not really important it's nice if we have
+                    # it but not essential.
+                    self.log.debug(f'Rate calculation ran into {type(e)}')
                     pass
 
                 try:
@@ -239,7 +243,7 @@ class MongoConnect():
                                 self.hypervisor.handle_timeout(doc['host'])
                                 ret = 1
                 except Exception as e:
-                    self.log.debug(f'Caught a {type(e)}: {e}')
+                    self.log.debug(f'Setting status to unknown because of {type(e)}: {e}')
                     status = DAQ_STATUS.UNKNOWN
 
                 statuses[doc['host']] = status
@@ -295,7 +299,7 @@ class MongoConnect():
             self.latest_settings = latest_settings
             return self.latest_settings
         except Exception as e:
-            self.log.error(f'Caught a {type(e)}: {e}')
+            self.log.debug(f'get_wanted_state failed due to {type(e)} {e}')
             return None
 
     def get_configured_nodes(self, detector, link_mv, link_nv):
@@ -460,7 +464,7 @@ class MongoConnect():
             self.collections['command_queue'].insert(docs)
         except Exception as e:
             self.log.info(f'Database issue, dropping command {command} to {detector}')
-            self.log.debug(f'{type(e)}, {e}')
+            self.log.debug(f'SendCommand ran into {type(e)}, {e})')
             return -1
         else:
             self.log.debug(f'Queued {command} for {detector}')

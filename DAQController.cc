@@ -30,6 +30,7 @@ DAQController::DAQController(std::shared_ptr<MongoLog>& log, std::string hostnam
   fNProcessingThreads=8;
   fDataRate=0.;
   fHostname = hostname;
+  fPLL = 0;
 }
 
 DAQController::~DAQController(){
@@ -44,6 +45,7 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
 	      fNProcessingThreads);
 
   // Initialize digitizers
+  fPLL = 0;
   fStatus = DAXHelpers::Arming;
   int num_boards = 0;
   for(auto& d : fOptions->GetBoards("V17XX")){
@@ -224,8 +226,10 @@ void DAQController::ReadData(int link){
 
         } else {
           fStatus = DAXHelpers::Error; // stop command will be issued soon
-          if (err_val & 0x1) fLog->Entry(MongoLog::Local, "Board %i has PLL unlock",
-                                         digi->bid());
+          if (err_val & 0x1) {
+            fLog->Entry(MongoLog::Local, "Board %i has PLL unlock", digi->bid());
+            fPLL++;
+          }
           if (err_val & 0x2) fLog->Entry(MongoLog::Local, "Board %i has VME bus error",
                                          digi->bid());
         }
@@ -322,6 +326,7 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
     "buffer_size" << (buf.first + buf.second)/1e6 <<
     "mode" << (fOptions ? fOptions->GetString("name", "none") : "none") <<
     "number" << (fOptions ? fOptions->GetInt("number", -1) : -1) <<
+    "pll" << fPLL.load() <<
     "channels" << open_document <<
       [&](key_context<> doc){
       for( auto const& pair : retmap)
