@@ -57,8 +57,21 @@ def main():
         # Print an update
         for detector in latest_status.keys():
             state = 'ACTIVE' if goal_state[detector]['active'] == 'true' else 'INACTIVE'
+            #linked_mode = 'ALL_LINKED' if goal_state['tpc']['link_mv'] == 'true' and goal_state['tpc']['link_nv'] == 'true' else 'NOLINK'
+            if goal_state['tpc']['link_mv'] == 'true' and goal_state['tpc']['link_nv'] == 'true':
+                linked_mode = 'ALL_LINKED'
+            elif goal_state['tpc']['link_mv'] == 'false' and goal_state['tpc']['link_nv'] == 'false':
+                linked_mode = 'NO_LINK'
+            elif goal_state['tpc']['link_mv'] == 'true' and goal_state['tpc']['link_nv'] == 'false':
+                linked_mode = 'MV_TPC_LINKED'
+            elif goal_state['tpc']['link_mv'] == 'false' and goal_state['tpc']['link_nv'] == 'true':
+                linked_mode = 'NV_TPC_LINKED'
+            else:
+                linked_mode = 'unclear'
+
             msg = (f'The {detector} should be {state} and is '
-                   f'{latest_status[detector]["status"].name}')
+                   f'{latest_status[detector]["status"].name}'
+                   f' and is in the linked mode {linked_mode}')
             if latest_status[detector]['number'] != -1:
                 msg += f' ({latest_status[detector]["number"]})'
             logger.debug(msg)
