@@ -68,9 +68,10 @@ StraxFormatter::~StraxFormatter(){
   std::stringstream ss;
   ss << std::hex << fThreadId;
   if (fMutexWaitTime.size() > 0) {
-    std::ofstream fout("/live_data/test/mutex_"+fFullHostname, std::ios::binary);
-    fout.write((char*)fMutexWaitTime.data(), sizeof(fMutexWaitTime[0])*fMutexWaitTime.size());
-    fout.close();
+    fLog->Entry(MongoLog::Local, "Thread %lx mutex report: min %i max %i mean %i median %i num %i",
+        fThreadId, fMutexWaitTime.front(), fMutexWaitTime.back(),
+        std::accumulate(fMutexWaitTime.begin(), fMutexWaitTime.end(), 0l)/fMutexWaitTime.size(),
+        fMutexWaitTime[fMutexWaitTime.size()/2], fMutexWaitTime.size());
   }
 }
 
@@ -304,6 +305,7 @@ void StraxFormatter::Process() {
   }
   if (fBytesProcessed > 0)
     End();
+  if (fMutexWaitTime.size() > 0) std::sort(fMutexWaitTime.begin(), fMutexWaitTime.end());
 }
 
 // Can tune here as needed, these are defaults from the LZ4 examples
