@@ -43,8 +43,8 @@ class DAQController():
         self.time_between_commands = int(config['TimeBetweenCommands'])
         self.can_force_stop={k:True for k in detectors}
         self.one_detector_arming = False
-        self.start_cmd_delay = int(config['StartCmdDelay'])
-        self.stop_cmd_delay = int(config['StopCmdDelay'])
+        self.start_cmd_delay = float(config['StartCmdDelay'])
+        self.stop_cmd_delay = float(config['StopCmdDelay'])
 
     def solve_problem(self, latest_status, goal_state):
         '''
