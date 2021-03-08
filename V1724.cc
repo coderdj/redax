@@ -10,8 +10,8 @@
 #include <utility>
 
 
-V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int link, int crate, int bid, unsigned address){
-  fBoardHandle=fBID=-1;
+V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int bid, unsigned address){
+  fBoardHandle = -1;
   fLog = log;
 
   fAqCtrlRegister = 0x8100;
@@ -33,7 +33,7 @@ V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int
   fSampleWidth = 10;
   fClockCycle = 10;
   fBID = bid;
-  fBaseAddress=address;
+  fBaseAddress = address;
   fRolloverCounter = 0;
   fLastClock = 0;
   fBLTSafety = opts->GetDouble("blt_safety_factor", 1.5);
@@ -42,9 +42,6 @@ V1724::V1724(std::shared_ptr<MongoLog>& log, std::shared_ptr<Options>& opts, int
   fClockPeriod = std::chrono::nanoseconds((1l<<31)*fClockCycle);
   fArtificialDeadtimeChannel = 790;
 
-  if (Init(link, crate, opts)) {
-    throw std::runtime_error("Board init failed");
-  }
 }
 
 V1724::~V1724(){
@@ -98,6 +95,8 @@ int V1724::Init(int link, int crate, std::shared_ptr<Options>& opts) {
 
 int V1724::SINStart(){
   fLastClockTime = std::chrono::high_resolution_clock::now();
+  fRolloverCounter = 0;
+  fLastClock = 0;
   return WriteRegister(fAqCtrlRegister,0x105);
 }
 int V1724::SoftwareStart(){

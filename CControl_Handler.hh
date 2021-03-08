@@ -28,8 +28,6 @@ private:
 #endif
 
   int fCurrentRun;
-  int fBID;
-  int fBoardHandle;
 };
 
 #endif // _CCONTROL_HANDLER_HH_ defined

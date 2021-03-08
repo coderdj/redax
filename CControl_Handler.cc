@@ -1,14 +1,17 @@
 #include "CControl_Handler.hh"
 #include "DAXHelpers.hh"
+#include "MongoLog.hh"
 #include "V2718.hh"
+#include "f2718.hh"
 #ifdef HASDDC10
 #include "DDC10.hh"
 #endif
 #include "V1495.hh"
+#include "V1495_tpc.hh"
 #include <bsoncxx/builder/stream/document.hpp>
 
 CControl_Handler::CControl_Handler(std::shared_ptr<MongoLog>& log, std::string procname) : DAQController(log, procname){
-  fCurrentRun = fBID = fBoardHandle = -1;
+  fCurrentRun = -1;
   fV2718 = nullptr;
   fV1495 = nullptr;
 #ifdef HASDDC10
@@ -23,7 +26,7 @@ CControl_Handler::~CControl_Handler(){
 
 // Initialising various devices namely; V2718 crate controller, V1495, DDC10...
 int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
-
+  int ret = 0, cc_handle = -1;
   fStatus = DAXHelpers::Arming;
 
   // Just in case clear out any remaining objects from previous runs
@@ -47,21 +50,28 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
   }
 
   // Getting the link and crate for V2718
-  std::vector<BoardType> bv = fOptions->GetBoards("V2718");
+  std::vector<BoardType> bv = fOptions->GetBoards("V27XX");
   if(bv.size() != 1){
     fLog->Entry(MongoLog::Message, "Require one V2718 to be defined");
     fStatus = DAXHelpers::Idle;
     return -1;
   }
-  BoardType cc_def = bv[0];
+  BoardType cc = bv[0];
   try{
-    fV2718 = std::make_unique<V2718>(fLog, copts, cc_def.link, cc_def.crate);
+    if (cc.type == "f2718")
+      fV2718 = std::make_unique<f2718>(fLog, copts);
+    else
+      fV2718 = std::make_unique<V2718>(fLog, copts);
+    if((ret = fV2718->Init(cc.link, cc.crate)) != 0){
+      fLog->Entry(MongoLog::Error, "Failed to init V2718 with CAEN error: %i", ret);
+      throw std::runtime_error("Could not init CC");
+    }
   }catch(std::exception& e){
     fLog->Entry(MongoLog::Error, "Failed to initialize V2718 crate controller: %s", e.what());
     fStatus = DAXHelpers::Idle;
     return -1;
   }
-  fBoardHandle = fV2718->GetHandle();
+  cc_handle = fV2718->GetHandle();
   fLog->Entry(MongoLog::Local, "V2718 Initialized");
 
 #ifdef HASDDC10
@@ -85,22 +95,22 @@ int CControl_Handler::Arm(std::shared_ptr<Options>& opts){
   }
 #endif // HASDDC10
 
-  std::vector<BoardType> mv = fOptions->GetBoards("V1495");
-  if (mv.size() == 1){
-    BoardType mv_def = mv[0];
-    fBID = mv_def.board;
-    fV1495 = std::make_unique<V1495>(fLog, fOptions, mv_def.board, fBoardHandle, mv_def.vme_address);
-	// Writing registers to the V1495 board
-	for(auto regi : fOptions->GetRegisters(fBID, true)){
-		unsigned int reg = DAXHelpers::StringToHex(regi.reg);
-		unsigned int val = DAXHelpers::StringToHex(regi.val);
-		if(fV1495->WriteReg(reg, val)!=0){
-			fLog->Entry(MongoLog::Error, "Failed to initialise V1495 board");
-			fStatus = DAXHelpers::Idle;
-			return -1;
-		}
+  std::vector<BoardType> boards = fOptions->GetBoards("V1495");
+  if (boards.size() == 1){
+    BoardType v1495 = boards[0];
+    if (v1495.type == "V1495_TPC")
+      fV1495 = std::make_unique<V1495_TPC>(fLog, fOptions, v1495.board, cc_handle, v1495.vme_address);
+    else
+      fV1495 = std::make_unique<V1495>(fLog, fOptions, v1495.board, cc_handle, v1495.vme_address);
+
+    std::map<std::string, int> opts;
+    if (fOptions->GetV1495Opts(opts) < 0) {
+      fLog->Entry(MongoLog::Warning, "Error getting V1495 options");
+    } else if (fV1495->Arm(opts)) {
+      fLog->Entry(MongoLog::Warning, "Could not initialize V1495");
     }
   }else{
+    // no V1495
   }
   fStatus = DAXHelpers::Armed;
   return 0;
@@ -112,8 +122,20 @@ int CControl_Handler::Start(){
     fLog->Entry(MongoLog::Warning, "V2718 attempt to start without arming. Maybe unclean shutdown");
     return 0;
   }
+  if(fV1495 && fV1495->BeforeSINStart()) {
+    fLog->Entry(MongoLog::Error, "Could not start V1495");
+    fStatus = DAXHelpers::Error;
+    return -1;
+  }
+
   if(!fV2718 || fV2718->SendStartSignal()!=0){
     fLog->Entry(MongoLog::Error, "V2718 either failed to start");
+    fStatus = DAXHelpers::Error;
+    return -1;
+  }
+
+  if(fV1495 && fV1495->AfterSINStart()) {
+    fLog->Entry(MongoLog::Error, "Could not start V1495");
     fStatus = DAXHelpers::Error;
     return -1;
   }
@@ -125,12 +147,18 @@ int CControl_Handler::Start(){
 // Stopping the previously started devices; V2718, V1495, DDC10...
 int CControl_Handler::Stop(){
   if(fV2718){
+    if (fV1495 && fV1495->BeforeSINStop()) {
+      fLog->Entry(MongoLog::Warning, "Could not stop V1495");
+    }
     if(fV2718->SendStopSignal() != 0){
       fLog->Entry(MongoLog::Warning, "Failed to stop V2718");
     }
-    fV2718.reset();
+    if (fV1495 && fV1495->AfterSINStop()) {
+      fLog->Entry(MongoLog::Warning, "Could not stop V1495");
+    }
   }
   fV1495.reset();
+  fV2718.reset();
 #ifdef HASDDC10
   // Don't need to stop the DDC10 but just clean up a bit
   fDDC10.reset();
@@ -166,47 +194,4 @@ void CControl_Handler::StatusUpdate(mongocxx::collection* collection){
   auto doc = after_array << finalize;
   collection->insert_one(std::move(doc));
   return;
-  /*
-  // DDC10 parameters might change for future updates of the XENONnT HEV
-  if(fDDC10){
-    auto hev_options = fDDC10->GetHEVOptions();
-    in_array << bsoncxx::builder::stream::open_document
-             << "type" << "DDC10"
-	     << "Address" << hev_options.address
-             << "required" << hev_options.required
-             << "signal_threshold" << hev_options.signal_threshold
-             << "sign" << hev_options.sign
-             << "rise_time_cut" << hev_options.rise_time_cut
-             << "inner_ring_factor" << hev_options.inner_ring_factor
-             << "outer_ring_factor" << hev_options.outer_ring_factor
-             << "integration_threshold" << hev_options.integration_threshold
-             << "parameter_0" << hev_options.parameter_0
-             << "parameter_1" << hev_options.parameter_1
-             << "parameter_2" << hev_options.parameter_2
-             << "parameter_3" << hev_options.parameter_3
-             << "window" << hev_options.window
-             << "prescaling" << hev_options.prescaling
-             << "component_status" << hev_options.component_status
-             << "width_cut" << hev_options.width_cut
-             << "delay" << hev_options.delay
-             << bsoncxx::builder::stream::close_document;
-  }
-  // Write the settings for the Muon Veto V1495 board into status doc 
-  if(fV1495){
-    auto registers = fOptions->GetRegisters(fBID);
-     in_array << bsoncxx::builder::stream::open_document
-	      << "type" << "V1495"
-	      << "Module reset" << registers[0].val
-	      << "Mask A" << registers[1].val
-	      << "Mask B" << registers[2].val
-	      << "Mask D" << registers[3].val
-	      << "Majority Threshold" << registers[4].val
-	      << "Coincidence Window" << registers[5].val
-	      << "NIM/TTL CTRL" << registers[6].val
-	      << bsoncxx::builder::stream::close_document; 
-  }
-  
-  after_array = in_array << bsoncxx::builder::stream::close_array;
-  return after_array << bsoncxx::builder::stream::finalize;
-*/
 }

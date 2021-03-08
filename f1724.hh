@@ -11,9 +11,10 @@
 
 class f1724 : public V1724 {
 public:
-  f1724(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, int, unsigned);
+  f1724(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, unsigned);
   virtual ~f1724();
 
+  virtual int Init(int, int, std::shared_ptr<Options>&);
   virtual int Read(std::unique_ptr<data_packet>&);
   virtual int WriteRegister(unsigned, unsigned);
   virtual unsigned ReadRegister(unsigned);
@@ -27,7 +28,7 @@ public:
   virtual bool EnsureReady(int, int) {return sRun || sReady;}
   virtual bool EnsureStarted(int, int) {return sRun == true;}
   virtual bool EnsureStopped(int, int) {return sRun == false;}
-  virtual int CheckErrors() {return 0;}
+  virtual int CheckErrors() {return fError ? 1 : 0;}
   virtual uint32_t GetAcquisitionStatus();
 
 protected:
@@ -66,7 +67,6 @@ protected:
   static std::condition_variable sCV;
   static std::shared_ptr<MongoLog> sLog;
 
-  virtual int Init(int, int, std::shared_ptr<Options>&);
   void Run();
   virtual int GetClockCounter(uint32_t);
   void MakeWaveform(std::vector<hit_t>&, long);
@@ -93,6 +93,8 @@ protected:
   std::thread fGeneratorThread;
 
   bool fSeenUnder5, fSeenOver15;
+  bool fSimulateCrashes;
+  double fFailProb, fCrashProb;
 };
 
 #endif // _F1724_HH_ defined

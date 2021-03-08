@@ -3,6 +3,8 @@
 #include <chrono>
 #include <bsoncxx/builder/stream/document.hpp>
 
+namespace fs=std::experimental::filesystem;
+
 MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string log_dir, std::string host) : 
   fPool(pool), fClient(pool->acquire()) {
   fLogLevel = 0;
@@ -10,17 +12,13 @@ MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, s
   fDeleteAfterDays = DeleteAfterDays;
   fFlushPeriod = 5; // seconds
   fOutputDir = log_dir;
-  //fPool = pool;
-  //fClient = pool->acquire();
   fDB = (*fClient)[dbname];
   fCollection = fDB["log"];
 
-  std::cout<<"Configured WITH local file logging to " << log_dir << std::endl;
+  std::cout << "Local file logging to " << log_dir << std::endl;;
   fFlush = true;
   fFlushThread = std::thread(&MongoLog::Flusher, this);
   fRunId = -1;
-
-  RotateLogFile();
 
   fLogLevel = 1;
 }
@@ -54,19 +52,33 @@ std::string MongoLog::LogFileName(struct tm* date) {
   return std::to_string(Today(date)) + "_" + fHostname + ".log";
 }
 
+fs::path MongoLog::LogFilePath(struct tm* date) {
+  return OutputDirectory(date)/LogFileName(date);
+}
+
+fs::path MongoLog::OutputDirectory(struct tm*) {
+  return fOutputDir;
+}
+
 int MongoLog::RotateLogFile() {
   if (fOutfile.is_open()) fOutfile.close();
   auto t = std::time(0);
   auto today = *std::gmtime(&t);
-  std::string filename = LogFileName(&today);
-  std::cout<<"Logging to " << fOutputDir/filename<<std::endl;
-  fOutfile.open(fOutputDir / filename, std::ofstream::out | std::ofstream::app);
+  auto filename = LogFilePath(&today);
+  std::cout<<"Logging to " << filename << std::endl;
+  auto pp = filename.parent_path();
+  if (!fs::exists(pp) && !fs::create_directories(pp)) {
+    std::cout << "Could not create output directories for logging!" << std::endl;
+    return -1;
+  }
+  fOutfile.open(filename, std::ofstream::out | std::ofstream::app);
   if (!fOutfile.is_open()) {
     std::cout << "Could not rotate logfile!\n";
     return -1;
   }
   fOutfile << FormatTime(&today) << " [INIT]: logfile initialized\n";
   fToday = Today(&today);
+  if (fDeleteAfterDays == 0) return 0;
   std::vector<int> days_per_month = {31,28,31,30,31,30,31,31,30,31,30,31};
   if (today.tm_year%4 == 0) days_per_month[1] += 1; // the edge-case is SEP
   struct tm last_week = today;
@@ -79,7 +91,7 @@ int MongoLog::RotateLogFile() {
     }
     last_week.tm_mday += days_per_month[last_week.tm_mon]; // off by one error???
   }
-  std::experimental::filesystem::path p = fOutputDir/LogFileName(&last_week);
+  auto p = LogFileName(&last_week);
   if (std::experimental::filesystem::exists(p)) {
     fOutfile << FormatTime(&today) << " [INIT]: Deleting " << p << '\n';
     std::experimental::filesystem::remove(p);
@@ -130,3 +142,13 @@ int MongoLog::Entry(int priority, std::string message, ...){
   return 0;
 }
 
+
+fs::path MongoLog_nT::OutputDirectory(struct tm* date) {
+  char temp[6];
+  std::sprintf(temp, "%02d.%02d", date->tm_mon+1, date->tm_mday);
+  return fOutputDir / std::to_string(date->tm_year+1900) / std::string(temp);
+}
+
+std::string MongoLog_nT::LogFileName(struct tm*) {
+  return fHostname + ".log";
+}
