@@ -161,6 +161,7 @@ class MongoConnect():
                 "time": datetime.datetime.utcnow(),
                 "buff": self.latest_status[detector]['buffer'],
                 "mode": self.latest_status[detector]['mode'],
+                "pll_unlocks": self.latest_status[detector]["pll_unlocks"],
             }
             if 'number' in self.latest_status[detector].keys():
                 doc['number'] = self.latest_status[detector]['number']
@@ -194,11 +195,13 @@ class MongoConnect():
             mode = 'none'
             rate = 0
             buff = 0
+            pll = 0
             run_num = -1
             for doc in self.latest_status[detector]['readers'].values():
                 try:
                     rate += doc['rate']
                     buff += doc['buffer_size']
+                    pll += doc.get('pll', 0)
                 except Exception as e:
                     # This is not really important it's nice if we have
                     # it but not essential.
@@ -275,6 +278,7 @@ class MongoConnect():
             self.latest_status[detector]['mode'] = mode
             self.latest_status[detector]['buffer'] = buff
             self.latest_status[detector]['number'] = run_num
+            self.latest_status[detector]['pll_unlocks'] = pll
 
         return ret
 
