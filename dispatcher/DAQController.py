@@ -43,6 +43,8 @@ class DAQController():
         self.time_between_commands = int(config['TimeBetweenCommands'])
         self.can_force_stop={k:True for k in detectors}
         self.one_detector_arming = False
+        self.start_cmd_delay = float(config['StartCmdDelay'])
+        self.stop_cmd_delay = float(config['StopCmdDelay'])
 
     def solve_problem(self, latest_status, goal_state):
         '''
@@ -284,7 +286,7 @@ class DAQController():
                 hosts = (readers, cc) # we want the cc to delay by 1s
                 # we can safely short the logic here and buy an extra logic cycle
                 self.one_detector_arming = False
-                delay = 1.5
+                delay = self.start_cmd_delay
             else: # stop
                 readers, cc = self.mongo.get_configured_nodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
@@ -292,12 +294,12 @@ class DAQController():
                 if force or self.latest_status[detector]['status'] not in [DAQ_STATUS.RUNNING]:
                     delay = 0
                 else:
-                    delay = 5
+                    delay = self.stop_cmd_delay
                 # TODO smart delay?
                 if self.latest_status[detector]['status'] in [DAQ_STATUS.ARMING, DAQ_STATUS.ARMED]:
                     # this was the arming detector
                     self.one_detector_arming = False
-            self.log.debug('Sending %s to %s' % (command.upper(), detector))
+            self.log.debug(f'Sending {command.upper()} to {detector}')
             if self.mongo.send_command(command, hosts, self.goal_state[detector]['user'],
                     detector, self.goal_state[detector]['mode'], delay, force):
                 # failed
