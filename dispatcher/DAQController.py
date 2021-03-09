@@ -33,8 +33,8 @@ class DAQController():
             for d in detectors:
                 self.last_command[k][d] = datetime.datetime.utcnow()
         self.error_stop_count = {d : 0 for d in detectors}
-        self.max_timeout = config['MaxTimeout']
-        self.timeout_counter=0
+        self.max_timeout = int(config['MaxTimeout'])
+        self.timeout_counter={k:0 for k in config['MasterDAQConfig'].keys()}
 
         # Timeout properties come from config
         self.timeouts = {
@@ -291,7 +291,7 @@ class DAQController():
                 self.one_detector_arming = False
                 delay = self.start_cmd_delay
                 #Reset arming timeout counter 
-                self.timeout_counter=0
+                self.timeout_counter[detector]=0
             else: # stop
                 readers, cc = self.mongo.get_configured_nodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
@@ -339,6 +339,7 @@ class DAQController():
         #  bad happend and we start from scratch again
         if self.timeout_counter >self.max_timeout:
             self.hypervisor.tactical_nuclear_option()
+            return
 
         if command is None: # not specified, we figure out it here
             command_times = [(cmd,doc[detector]) for cmd,doc in self.last_command.items()]
@@ -379,7 +380,7 @@ class DAQController():
                         'ERROR',
                         '%s_TIMEOUT' % command.upper())
                 #Keep track of how often the arming sequence times out
-                self.timeout_counter += 1
+                self.timeout_counter[detector] += 1
                 self.control_detector(detector=detector, command='stop')
 
         return
