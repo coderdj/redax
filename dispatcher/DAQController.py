@@ -337,7 +337,7 @@ class DAQController():
 
         #First check how often we have been timing out, if it happend to often something
         #  bad happend and we start from scratch again
-        if self.missed_arm_cycles >self.max_arm_cycles:
+        if self.missed_arm_cycles[detector]>self.max_arm_cycles and detector=='tpc':
             self.hypervisor.tactical_nuclear_option()
             return
 
