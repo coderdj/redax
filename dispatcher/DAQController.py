@@ -33,7 +33,7 @@ class DAQController():
             for d in detectors:
                 self.last_command[k][d] = datetime.datetime.utcnow()
         self.error_stop_count = {d : 0 for d in detectors}
-        self.max_arm_cycles = int(config['MaxTimeout'])
+        self.max_arm_cycles = int(config['MaxArmCycles'])
         self.missed_arm_cycles={k:0 for k in config['MasterDAQConfig'].keys()}
 
         # Timeout properties come from config
