@@ -23,6 +23,7 @@ class DAQController():
         self.goal_state = {}
         self.latest_status = {}
 
+
         # Timeouts. There are a few things that we want to wait for that might take time.
         # The keys for these dicts will be detector identifiers.
         detectors = list(config['MasterDAQConfig'].keys())
@@ -32,6 +33,8 @@ class DAQController():
             for d in detectors:
                 self.last_command[k][d] = datetime.datetime.utcnow()
         self.error_stop_count = {d : 0 for d in detectors}
+        self.max_timeout = config['MaxTimeout']
+        self.timeout_counter=0
 
         # Timeout properties come from config
         self.timeouts = {
@@ -287,6 +290,8 @@ class DAQController():
                 # we can safely short the logic here and buy an extra logic cycle
                 self.one_detector_arming = False
                 delay = self.start_cmd_delay
+                #Reset arming timeout counter 
+                self.timeout_counter=0
             else: # stop
                 readers, cc = self.mongo.get_configured_nodes(detector,
                     self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
@@ -330,6 +335,11 @@ class DAQController():
         sendstop = False
         nowtime = datetime.datetime.utcnow()
 
+        #First check how often we have been timing out, if it happend to often something
+        #  bad happend and we start from scratch again
+        if self.timeout_counter >self.max_timeout:
+            self.hypervisor.tactical_nuclear_option()
+
         if command is None: # not specified, we figure out it here
             command_times = [(cmd,doc[detector]) for cmd,doc in self.last_command.items()]
             command = sorted(command_times, key=lambda x : x[1])[-1][0]
@@ -368,6 +378,8 @@ class DAQController():
                             (detector, self.timeouts[command], command)),
                         'ERROR',
                         '%s_TIMEOUT' % command.upper())
+                #Keep track of how often the arming sequence times out
+                self.timeout_counter += 1
                 self.control_detector(detector=detector, command='stop')
 
         return
