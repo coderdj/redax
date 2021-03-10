@@ -12,7 +12,6 @@
 #include <chrono>
 #include <cmath>
 #include <numeric>
-#include <fstream>
 
 #include <bsoncxx/builder/stream/document.hpp>
 
@@ -256,10 +255,11 @@ void DAQController::ReadData(int link){
     std::this_thread::sleep_for(sleep_time);
   } // while run
   if (mutex_wait_times.size() > 0) {
-    std::ofstream fout("/live_data/test/mutex_"+fHostname+"_ro"+std::to_string(link),
-        std::ios::binary);
-    fout.write((char*)mutex_wait_times.data(), sizeof(mutex_wait_times[0])*mutex_wait_times.size());
-    fout.close();
+    std::sort(mutex_wait_times.begin(), mutex_wait_times.end());
+    fLog->Entry(MongoLog::Local, "RO thread %i mutex report: min %i max %i mean %i median %i num %i",
+        link, mutex_wait_time.front(), mutex_wait_time.back(),
+        std::accumulate(mutex_wait_time.begin(), mutex_wait_time.end(), 0l)/mutex_wait_time.size(),
+        mutex_wait_time[mutex_wait_time.size()/2], mutex_wait_time.size());
   }
   fRunning[link] = false;
   fLog->Entry(MongoLog::Local, "RO thread %i returning", link);

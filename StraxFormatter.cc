@@ -65,8 +65,6 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
 }
 
 StraxFormatter::~StraxFormatter(){
-  std::stringstream ss;
-  ss << std::hex << fThreadId;
   if (fMutexWaitTime.size() > 0) {
     fLog->Entry(MongoLog::Local, "Thread %lx mutex report: min %i max %i mean %i median %i num %i",
         fThreadId, fMutexWaitTime.front(), fMutexWaitTime.back(),
