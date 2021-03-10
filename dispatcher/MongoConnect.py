@@ -582,12 +582,22 @@ class MongoConnect():
         if number == -1:
             self.log.error("DB having a moment")
             return -1
-        self.latest_status[detector]['number'] = number
         detectors = [detector]
-        if detector == 'tpc' and goal_state['tpc']['link_nv'] == 'true':
+
+        # CASE A
+        if goal_state['tpc']['link_mv'] == 'true' and goal_state['tpc']['link_nv'] == 'true':
+            self.latest_status['tpc']['number'] = number
+        # CASE B
+        if goal_state['tpc']['link_mv'] == 'false' and goal_state['tpc']['link_nv'] == 'false':
+            self.latest_status[detector]['number'] = number
+        # CASE C
+        if goal_state['tpc']['link_mv'] == 'true' and goal_state['tpc']['link_nv'] == 'false':
+            self.latest_status['tpc']['number'] = number
             self.latest_status['neutron_veto']['number'] = number
             detectors.append('neutron_veto')
-        if detector == 'tpc' and goal_state['tpc']['link_mv'] == 'true':
+        # CASE D
+        if goal_state['tpc']['link_mv'] == 'false' and goal_state['tpc']['link_nv'] == 'true':
+            self.latest_status['tpc']['number'] = number
             self.latest_status['muon_veto']['number'] = number
             detectors.append('muon_veto')
 
