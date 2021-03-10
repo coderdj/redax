@@ -210,6 +210,7 @@ class DAQController():
                     self.log.info('Another detector already arming, can\'t arm %s' % detector)
                     # this leads to run number overlaps
                     return
+                self.log.info(f'We call the Hosts for the run mode {run_mode}')
                 readers, cc = self.mongo.GetHostsForMode(run_mode)
                 hosts = (cc, readers)
                 delay = 0
@@ -221,8 +222,10 @@ class DAQController():
                 self.one_detector_arming = False
                 delay = 1.5
             else: # stop
-                readers, cc = self.mongo.GetConfiguredNodes(detector,
-                    self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
+                readers = list(self.latest_status[detector]['readers'].keys())
+                cc = list(self.latest_status[detector]['controller'].keys())
+                #readers, cc = self.mongo.GetConfiguredNodes(detector,
+                    #self.goal_state['tpc']['link_mv'], self.goal_state['tpc']['link_nv'])
                 hosts = (cc, readers)
                 delay = 5 if not force else 0
                 # TODO smart delay?
