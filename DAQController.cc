@@ -259,7 +259,7 @@ void DAQController::ReadData(int link){
     fLog->Entry(MongoLog::Local, "RO thread %i mutex report: min %i max %i mean %i median %i num %i",
         link, mutex_wait_times.front(), mutex_wait_times.back(),
         std::accumulate(mutex_wait_times.begin(), mutex_wait_times.end(), 0l)/mutex_wait_times.size(),
-        mutex_wait_time[mutex_wait_times.size()/2], mutex_wait_times.size());
+        mutex_wait_times[mutex_wait_times.size()/2], mutex_wait_times.size());
   }
   fRunning[link] = false;
   fLog->Entry(MongoLog::Local, "RO thread %i returning", link);
