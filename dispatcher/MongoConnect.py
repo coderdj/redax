@@ -212,13 +212,13 @@ class MongoConnect():
                     status = DAQ_STATUS(doc['status'])
                     dt = (now - int(str(doc['_id'])[:8], 16))
                     if dt > self.timeout:
-                        self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
+                        self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
                         status = DAQ_STATUS.TIMEOUT
                         if self.host_config[doc['host']] == 'tpc':
                             if (dt > self.timeout_take_action or
                                     ((ts := self.host_ackd_command(doc['host'])) is not None and
                                      ts-now > self.timeout)):
-                                self.log.info(f'{doc["host"] is getting restarted')
+                                self.log.info(f'{doc["host"]} is getting restarted')
                                 self.hypervisor.handle_timeout(doc['host'])
                                 ret = 1
                 except Exception as e:
@@ -236,13 +236,13 @@ class MongoConnect():
                     dt = (now - int(str(doc['_id'])[:8], 16))
                     doc['last_checkin'] = dt
                     if dt > self.timeout:
-                        self.log.debug('%s reported %i sec ago' % (doc['host'], int(dt)))
+                        self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
                         status = DAQ_STATUS.TIMEOUT
                         if self.host_config[doc['host']] == 'tpc':
                             if (dt > self.timeout_take_action or
                                     ((ts := self.host_ackd_command(doc['host'])) is not None and
                                      ts-now > self.timeout)):
-                                self.log.info(f'{doc["host"] is getting restarted')
+                                self.log.info(f'{doc["host"]} is getting restarted')
                                 self.hypervisor.handle_timeout(doc['host'])
                                 ret = 1
                 except Exception as e:
