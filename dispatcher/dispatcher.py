@@ -2,25 +2,16 @@
 import configparser
 import argparse
 import threading
-import signal
 import datetime
 import os
 import daqnt
 import json
 from pymongo import MongoClient
+from urllib.parse import quote_plus
 
 from MongoConnect import MongoConnect
 from DAQController import DAQController
 
-
-class SignalHandler(object):
-    def __init__(self):
-        self.event = threading.Event()
-        signal.signal(signal.SIGINT, self.interrupt)
-        signal.signal(signal.SIGTERM, self.interrupt)
-
-    def interrupt(self, *args):
-        self.event.set()
 
 def main():
 
@@ -36,15 +27,17 @@ def main():
     config.read(args.config)
     config = config['DEFAULT' if not args.test else "TESTING"]
     config['MasterDAQConfig'] = json.loads(config['MasterDAQConfig'])
-    control_uri = config['ControlDatabaseURI']%os.environ['MONGO_PASSWORD']
+    control_uri = config['ControlDatabaseURI']%quote_plus(os.environ['MONGO_PASSWORD_DAQ'])
     control_mc = pymongo.MongoClient(control_uri)
-    runs_uri = config['RunsDatabaseURI']%os.environ['RUNS_MONGO_PASSWORD']
+    runs_uri = config['RunsDatabaseURI']%quote_plus(os.environ['MONGO_PASSWORD_RUNS'])
     runs_mc = pymongo.MongoClient(runs_uri)
     logger = daqnt.get_daq_logger(config['LogName'], level=args.log, mc=control_mc)
+    vme_config = json.loads(config['VMEConfig'])
 
     # Declare necessary classes
-    sh = SignalHandler()
-    Hypervisor = daqnt.Hypervisor(control_mc[config['ControlDatabaseName']], logger, sh)
+    sh = daqnt.SignalHandler()
+    Hypervisor = daqnt.Hypervisor(control_mc[config['ControlDatabaseName']], logger,
+            config['MasterDAQConfig']['tpc'], vme_config, sh=sh, testing=args.test)
     MongoConnector = MongoConnect(config, logger, control_mc, runs_mc, Hypervisor, args.test)
     DAQControl = DAQController(config, MongoConnector, logger, Hypervisor)
 
