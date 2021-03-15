@@ -27,10 +27,8 @@ def main():
     config.read(args.config)
     config = config['DEFAULT' if not args.test else "TESTING"]
     config['MasterDAQConfig'] = json.loads(config['MasterDAQConfig'])
-    control_uri = config['ControlDatabaseURI']%quote_plus(os.environ['MONGO_PASSWORD_DAQ'])
-    control_mc = pymongo.MongoClient(control_uri)
-    runs_uri = config['RunsDatabaseURI']%quote_plus(os.environ['MONGO_PASSWORD_RUNS'])
-    runs_mc = pymongo.MongoClient(runs_uri)
+    control_mc = daqnt.get_client('daq')
+    runs_mc = daqnt.get_client('runs')
     logger = daqnt.get_daq_logger(config['LogName'], level=args.log, mc=control_mc)
     vme_config = json.loads(config['VMEConfig'])
 
