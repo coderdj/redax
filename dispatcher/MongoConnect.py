@@ -349,7 +349,7 @@ class MongoConnect():
         # tpc and neutron_veto linked mode
         elif self.IsLinked(goal_state['tpc'], goal_state['neutron_veto'], 'tpc', 'neutron_veto'):
             # Case A, again?
-            if self.IsLinked(goal_state['neutron_veto'], goal_state['muon_veto']):
+            if self.IsLinked(goal_state['neutron_veto'], goal_state['muon_veto'], 'neutron_veto', 'muon_veto'):
                 # The return detector is just the tpc
                 ret = {'tpc': {'controller': {}, 'readers': {}}}
                 # Take the nodes of the detectors
