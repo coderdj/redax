@@ -277,90 +277,141 @@ class MongoConnect():
             return self.latest_settings
         except:
             return None
-          
+
+    def IsLinked(self, goal_state_a, goal_state_b, a, b):
+        '''
+        Check if the detectors are in a compatible linked configuration.
+        '''
+        mode_a = goal_state_a["mode"]
+        mode_b = goal_state_b["mode"]
+        doc_a = self.collections['options'].find_one({'name': mode_a})
+        doc_b = self.collections['options'].find_one({'name': mode_b})
+        detectors_mode_a = doc_a['detector']
+        detectors_mode_b = doc_b['detector']
+
+        # Check if the linked detectors share the same run mode and
+        # if they are both present in the detectors list of that mode
+        if mode_a == mode_b and a in detectors_mode_b and b in detectors_mode_a:
+            return True
+        else:
+            return False
+
+
     def GetSuperDetector(self, goal_state):
-      '''
-      Get the SD configuration on the base
-      of the latest linked goal state:
-      - case A: tpc, mv and nv all linked
-      - case B: tpc, mv and nv all un-linked
-      - case C: tpc and mv linked, nv un-linked
-      - case D: tpc and nv linked, mv un-linked
-      '''
-      ###############################################
-      # The format of ret is similar to latest_status
-      ###############################################
-      ret = {}
-      
-      # Case A
-      if goal_state['tpc']['link_mv'] == 'true' and goal_state['tpc']['link_nv'] == 'true':
-        # Return detector
-        ret = {'tpc': {'controller': {}, 'readers': {}}}
-        # Take the nodes of the detectors
-        for detector in self.dc.keys():
-          for cc in self.dc[detector]['controller']:
-            ret['tpc']['controller'][cc] = {}
-          for reader in self.dc[detector]['readers']:
-            ret['tpc']['readers'][reader] = {}
-        return ret
-      
-      # Case B
-      if goal_state['tpc']['link_mv'] == 'false' and goal_state['tpc']['link_nv'] == 'false':
-        # Return the basic detectors configuration
-        for detector in self.dc.keys():
-          ret[detector] = {'controller': {}, 'readers': {}}
-          for cc in self.dc[detector]['controller']:
-            ret[detector]['controller'][cc] = {}
-          for reader in self.dc[detector]['readers']:
-            ret[detector]['readers'][reader] = {}
-        return ret
-      
-      # Case C
-      if goal_state['tpc']['link_mv'] == 'true' and goal_state['tpc']['link_nv'] == 'false':
-        # Return detector
-        ret = {
-          'tpc': {'controller' : {}, 'readers': {} },
-          'neutron_veto': {'controller' : {}, 'readers' : {} }
-        }
-        # Return detector nodes
-        for cc in self.dc['tpc']['controller']:
-          ret['tpc']['controller'][cc] = {}
-        for reader in self.dc['tpc']['readers']:
-          ret['tpc']['readers'][reader] = {}
-        for cc in self.dc['muon_veto']['controller']:
-          ret['tpc']['controller'][cc] = {}
-        for reader in self.dc['muon_veto']['readers']:
-          ret['tpc']['readers'][reader] = {}
-        # Neutron veto nodes
-        for cc in self.dc['neutron_veto']['controller']:
-           ret['neutron_veto']['controller'][cc] = {}
-        for reader in self.dc['neutron_veto']['readers']:
-           ret['neutron_veto']['readers'][reader] = {}
-        return ret
-      
-      # Case D
-      if goal_state['tpc']['link_mv'] == 'false' and goal_state['tpc']['link_nv'] == 'true':
-        # Return detector
-        ret = {
-          'tpc' : {'controller' : {}, 'readers' : {}},
-          'muon_veto' : {'controller' : {}, 'readers' : {}}
-        }
-        # Return detector nodes
-        for cc in self.dc['tpc']['controller']:
-          ret['tpc']['controller'][cc] = {}
-        for reader in self.dc['tpc']['readers']:
-          ret['tpc']['readers'][reader] = {}
-        for cc in self.dc['neutron_veto']['controller']:
-          ret['tpc']['controller'][cc] = {}
-        for reader in self.dc['neutron_veto']['readers']:
-          ret['tpc']['readers'][reader] = {}
-        # Muon veto nodes
-        for cc in self.dc['muon_veto']['controller']:
-          ret['muon_veto']['controller'][cc] = {}
-        for reader in self.dc['muon_veto']['readers']:
-          ret['muon_veto']['readers'][reader] = {}
-        return ret          
-     
+        '''
+        Get the Super Detector configuration
+        if the detectors are in a compatible linked mode.
+        - case A: tpc, mv and nv all linked
+        - case B: tpc, mv and nv all un-linked
+        - case C: tpc and mv linked, nv un-linked
+        - case D: tpc and nv linked, mv un-linked
+        We will check the compatibility of the linked mode for a pair of detectors per time.
+        '''
+        ###############################################
+        # The format of ret is similar to latest_status
+        ###############################################
+        ret = {}
+
+        # tpc and muon_veto linked mode
+        if self.IsLinked(goal_state['tpc'], goal_state['muon_veto'], 'tpc', 'muon_veto'):
+            # Case A
+            if self.IsLinked(goal_state['muon_veto'], goal_state['neutron_veto'], 'muon_veto', 'neutron_veto'):
+                # The return detector is just the tpc
+                ret = {'tpc': {'controller': {}, 'readers': {}}}
+                # Take the nodes of the detectors
+                for detector in self.dc.keys():
+                    for cc in self.dc[detector]['controller']:
+                        ret['tpc']['controller'][cc] = {}
+                    for reader in self.dc[detector]['readers']:
+                        ret['tpc']['readers'][reader] = {}
+                return ret
+            # Case C
+            else:
+                # Return detectors
+                ret = { 'tpc': {'controller' : {}, 'readers': {} },
+                        'neutron_veto': {'controller' : {}, 'readers' : {} } }
+                # Return detector nodes
+                for cc in self.dc['tpc']['controller']:
+                    ret['tpc']['controller'][cc] = {}
+                for reader in self.dc['tpc']['readers']:
+                    ret['tpc']['readers'][reader] = {}
+                for cc in self.dc['muon_veto']['controller']:
+                    ret['tpc']['controller'][cc] = {}
+                for reader in self.dc['muon_veto']['readers']:
+                    ret['tpc']['readers'][reader] = {}
+                # Neutron veto un-linked nodes
+                for cc in self.dc['neutron_veto']['controller']:
+                    ret['neutron_veto']['controller'][cc] = {}
+                for reader in self.dc['neutron_veto']['readers']:
+                    ret['neutron_veto']['readers'][reader] = {}
+                return ret
+
+        # tpc and neutron_veto linked mode
+        elif self.IsLinked(goal_state['tpc'], goal_state['neutron_veto'], 'tpc', 'neutron_veto'):
+            # Case A, again?
+            if self.IsLinked(goal_state['neutron_veto'], goal_state['muon_veto']):
+                # The return detector is just the tpc
+                ret = {'tpc': {'controller': {}, 'readers': {}}}
+                # Take the nodes of the detectors
+                for detector in self.dc.keys():
+                    for cc in self.dc[detector]['controller']:
+                        ret['tpc']['controller'][cc] = {}
+                    for reader in self.dc[detector]['readers']:
+                        ret['tpc']['readers'][reader] = {}
+                return ret
+            # Case D
+            else:
+                # Return detectors
+                ret = { 'tpc': {'controller' : {}, 'readers': {} },
+                        'muon_veto': {'controller' : {}, 'readers' : {} } }
+                # Return detector nodes
+                for cc in self.dc['tpc']['controller']:
+                    ret['tpc']['controller'][cc] = {}
+                for reader in self.dc['tpc']['readers']:
+                    ret['tpc']['readers'][reader] = {}
+                for cc in self.dc['neutron_veto']['controller']:
+                    ret['tpc']['controller'][cc] = {}
+                for reader in self.dc['neutron_veto']['readers']:
+                    ret['tpc']['readers'][reader] = {}
+                # Muon veto un-linked nodes
+                for cc in self.dc['muon_veto']['controller']:
+                    ret['muon_veto']['controller'][cc] = {}
+                for reader in self.dc['muon_veto']['readers']:
+                    ret['muon_veto']['readers'][reader] = {}
+                return ret
+
+        # Case E
+        elif self.IsLinked(goal_state['muon_veto'], goal_state['neutron_veto'], 'muon_veto', 'neutron_veto'):
+            # Return detectors
+            ret = { 'muon_veto': {'controller' : {}, 'readers': {} }, # Note: I am assuming the muon_veto is the master
+                    'tpc': {'controller' : {}, 'readers' : {} } }
+            # Return detector nodes
+            for cc in self.dc['muon_veto']['controller']:
+                ret['muon_veto']['controller'][cc] = {}
+            for reader in self.dc['muon_veto']['readers']:
+                ret['muon_veto']['readers'][reader] = {}
+            for cc in self.dc['neutron_veto']['controller']:
+                ret['muon_veto']['controller'][cc] = {}
+            for reader in self.dc['neutron_veto']['readers']:
+                ret['muon_veto']['readers'][reader] = {}
+            # tpc un-linked nodes
+            for cc in self.dc['tpc']['controller']:
+                ret['tpc']['controller'][cc] = {}
+            for reader in self.dc['tpc']['readers']:
+                ret['tpc']['readers'][reader] = {}
+            return ret
+
+        # Case B: all un-linked
+        else:
+            # Return the basic single detectors configuration
+            for detector in self.dc.keys():
+                ret[detector] = {'controller': {}, 'readers': {}}
+                for cc in self.dc[detector]['controller']:
+                    ret[detector]['controller'][cc] = {}
+                for reader in self.dc[detector]['readers']:
+                    ret[detector]['readers'][reader] = {}
+            return ret
+
     def GetConfiguredNodes(self, detector, link_mv, link_nv):
         '''
         Get the nodes we want from the config file
