@@ -1,4 +1,4 @@
-import datetime
+iquote_plus(os.environ['MONGO_PASSWORD_DAQ'])mport datetime
 from daqnt import DAQ_STATUS
 import threading
 import time
@@ -398,7 +398,7 @@ class MongoConnect():
             query = {"number": int(number), "end": None, 'detectors': detectors}
             updates = {"$set": {"end": endtime}}
             if force:
-                updates["$push"] = {"tags": {"name": "messy", "user": "daq",
+                updates["$push"] = {"tags": {"name": "_messy", "user": "daq",
                     "date": datetime.datetime.utcnow()}}
             if self.collections['run'].update_one(query, updates).modified_count == 1:
                 self.log.debug('Update successful')
