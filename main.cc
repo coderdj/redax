@@ -20,12 +20,8 @@
 #include <mongocxx/client.hpp>
 #include <mongocxx/pool.hpp>
 
-#ifndef REDAX_BUILD_BRANCH
-#define REDAX_BUILD_BRANCH "unknown"
-#endif
-
-#ifndef REDAX_BUILD_DATE
-#define REDAX_BUILD_DATE "unknown"
+#ifndef REDAX_BUILD_COMMIT
+#define REDAX_BUILD_COMMIT "unknown"
 #endif
 
 std::atomic_bool b_run = true;
@@ -74,7 +70,7 @@ int PrintUsage() {
 }
 
 int PrintVersion() {
-  std::cout << "Redax branch " << REDAX_BUILD_BRANCH << " built on " << REDAX_BUILD_DATE << "\n";
+  std::cout << "Redax commit " << REDAX_BUILD_COMMIT << "\n";
   return 0;
 }
 
@@ -155,7 +151,15 @@ int main(int argc, char** argv){
   mongocxx::collection opts_collection = db["options"];
 
   // Logging
-  auto fLog = std::make_shared<MongoLog>(log_retention, pool, dbname, log_dir, hostname);
+  std::shared_ptr<MongoLog> fLog;
+  if (log_dir == "nT")
+    fLog = std::make_shared<MongoLog_nT>(pool, dbname, hostname);
+  else
+    fLog = std::make_shared<MongoLog>(log_retention, pool, dbname, log_dir, hostname);
+  if (fLog->Initialize()) {
+    std::cout<<"Could not initialize logs!\n";
+    exit(-1);
+  }
 
   //Options
   std::shared_ptr<Options> fOptions;

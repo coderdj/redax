@@ -65,21 +65,12 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
 }
 
 StraxFormatter::~StraxFormatter(){
-  std::stringstream ss;
-  ss << std::hex << fThreadId;
-  std::map<std::string, double> times {
-    {"data_packets_us", fProcTimeDP},
-    {"events_us", fProcTimeEv},
-    {"fragments_us", fProcTimeCh},
-    {"compression_us", fCompTime}
-  };
-  std::map<std::string, std::map<int, long>> counters {
-    {"fragments", fFragsPerEvent},
-    {"events", fEvPerDP},
-    {"data_packets", fBufferCounter},
-    {"chunks", fBytesPerChunk}
-  };
-  //fOptions->SaveBenchmarks(counters, fBytesProcessed, ss.str(), times);
+  if (fMutexWaitTime.size() > 0) {
+    fLog->Entry(MongoLog::Local, "Thread %lx mutex report: min %i max %i mean %i median %i num %i",
+        fThreadId, fMutexWaitTime.front(), fMutexWaitTime.back(),
+        std::accumulate(fMutexWaitTime.begin(), fMutexWaitTime.end(), 0l)/fMutexWaitTime.size(),
+        fMutexWaitTime[fMutexWaitTime.size()/2], fMutexWaitTime.size());
+  }
 }
 
 void StraxFormatter::Close(std::map<int,int>& ret){
@@ -277,11 +268,14 @@ void StraxFormatter::AddFragmentToBuffer(std::string fragment, uint32_t ts, int 
 }
 
 void StraxFormatter::ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>& in, int bytes) {
+  auto start = std::chrono::high_resolution_clock::now();
   {
     const std::lock_guard<std::mutex> lk(fBufferMutex);
+    auto end = std::chrono::high_resolution_clock::now();
     fBufferCounter[in.size()]++;
     fBuffer.splice(fBuffer.end(), in);
     fInputBufferSize += bytes;
+    fMutexWaitTime.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count());
   }
   fCV.notify_one();
 }
@@ -309,6 +303,7 @@ void StraxFormatter::Process() {
   }
   if (fBytesProcessed > 0)
     End();
+  if (fMutexWaitTime.size() > 0) std::sort(fMutexWaitTime.begin(), fMutexWaitTime.end());
 }
 
 // Can tune here as needed, these are defaults from the LZ4 examples

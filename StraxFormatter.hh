@@ -15,6 +15,7 @@
 #include <list>
 #include <memory>
 #include <string_view>
+#include <chrono>
 
 class Options;
 class MongoLog;
@@ -109,6 +110,7 @@ private:
   std::condition_variable fCV;
   std::mutex fBufferMutex;
   std::list<std::unique_ptr<data_packet>> fBuffer;
+  std::vector<int> fMutexWaitTime;
 };
 
 #endif

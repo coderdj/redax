@@ -30,6 +30,7 @@ DAQController::DAQController(std::shared_ptr<MongoLog>& log, std::string hostnam
   fNProcessingThreads=8;
   fDataRate=0.;
   fHostname = hostname;
+  fPLL = 0;
 }
 
 DAQController::~DAQController(){
@@ -44,23 +45,26 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
 	      fNProcessingThreads);
 
   // Initialize digitizers
+  fPLL = 0;
   fStatus = DAXHelpers::Arming;
-  std::vector<int> BIDs;
-  for(auto d : fOptions->GetBoards("V17XX")){
+  int num_boards = 0;
+  for(auto& d : fOptions->GetBoards("V17XX")){
     fLog->Entry(MongoLog::Local, "Arming new digitizer %i", d.board);
 
     std::shared_ptr<V1724> digi;
     try{
       if(d.type == "V1724_MV")
-        digi = std::make_shared<V1724_MV>(fLog, fOptions, d.link, d.crate, d.board, d.vme_address);
+        digi = std::make_shared<V1724_MV>(fLog, fOptions, d.board, d.vme_address);
       else if(d.type == "V1730")
-        digi = std::make_shared<V1730>(fLog, fOptions, d.link, d.crate, d.board, d.vme_address);
+        digi = std::make_shared<V1730>(fLog, fOptions, d.board, d.vme_address);
       else if(d.type == "f1724")
-        digi = std::make_shared<f1724>(fLog, fOptions, d.link, d.crate, d.board, 0);
+        digi = std::make_shared<f1724>(fLog, fOptions, d.board, 0);
       else
-        digi = std::make_shared<V1724>(fLog, fOptions, d.link, d.crate, d.board, d.vme_address);
+        digi = std::make_shared<V1724>(fLog, fOptions, d.board, d.vme_address);
+      if (digi->Init(d.link, d.crate, fOptions))
+        throw std::runtime_error("Board init failed");
       fDigitizers[d.link].emplace_back(digi);
-      BIDs.push_back(digi->bid());
+      num_boards++;
     }catch(const std::exception& e) {
       fLog->Entry(MongoLog::Warning, "Failed to initialize digitizer %i: %s", d.board,
           e.what());
@@ -68,7 +72,7 @@ int DAQController::Arm(std::shared_ptr<Options>& options){
       return -1;
     }
   }
-  fLog->Entry(MongoLog::Local, "This host has %i boards", BIDs.size());
+  fLog->Entry(MongoLog::Local, "This host has %i boards", num_boards);
   fLog->Entry(MongoLog::Local, "Sleeping for two seconds");
   // For the sake of sanity and sleeping through the night,
   // do not remove this statement.
@@ -201,6 +205,7 @@ void DAQController::ReadData(int link){
   int err_val = 0;
   std::list<std::unique_ptr<data_packet>> local_buffer;
   std::unique_ptr<data_packet> dp;
+  std::vector<int> mutex_wait_times;
   int words = 0;
   int local_size(0);
   fRunning[link] = true;
@@ -222,8 +227,10 @@ void DAQController::ReadData(int link){
 
         } else {
           fStatus = DAXHelpers::Error; // stop command will be issued soon
-          if (err_val & 0x1) fLog->Entry(MongoLog::Local, "Board %i has PLL unlock",
-                                         digi->bid());
+          if (err_val & 0x1) {
+            fLog->Entry(MongoLog::Local, "Board %i has PLL unlock", digi->bid());
+            fPLL++;
+          }
           if (err_val & 0x2) fLog->Entry(MongoLog::Local, "Board %i has VME bus error",
                                          digi->bid());
         }
@@ -241,12 +248,23 @@ void DAQController::ReadData(int link){
     if (local_buffer.size() > 0) {
       fDataRate += local_size;
       int selector = (fCounter++)%fNProcessingThreads;
+      auto t_start = std::chrono::high_resolution_clock::now();
       fFormatters[selector]->ReceiveDatapackets(local_buffer, local_size);
+      auto t_end = std::chrono::high_resolution_clock::now();
+      mutex_wait_times.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(
+            t_end-t_start).count());
       local_size = 0;
     }
     readcycler++;
     std::this_thread::sleep_for(sleep_time);
   } // while run
+  if (mutex_wait_times.size() > 0) {
+    std::sort(mutex_wait_times.begin(), mutex_wait_times.end());
+    fLog->Entry(MongoLog::Local, "RO thread %i mutex report: min %i max %i mean %i median %i num %i",
+        link, mutex_wait_times.front(), mutex_wait_times.back(),
+        std::accumulate(mutex_wait_times.begin(), mutex_wait_times.end(), 0l)/mutex_wait_times.size(),
+        mutex_wait_times[mutex_wait_times.size()/2], mutex_wait_times.size());
+  }
   fRunning[link] = false;
   fLog->Entry(MongoLog::Local, "RO thread %i returning", link);
 }
@@ -320,6 +338,7 @@ void DAQController::StatusUpdate(mongocxx::collection* collection) {
     "buffer_size" << (buf.first + buf.second)/1e6 <<
     "mode" << (fOptions ? fOptions->GetString("name", "none") : "none") <<
     "number" << (fOptions ? fOptions->GetInt("number", -1) : -1) <<
+    "pll" << fPLL.load() <<
     "channels" << open_document <<
       [&](key_context<> doc){
       for( auto const& pair : retmap)
@@ -339,7 +358,7 @@ void DAQController::InitLink(std::vector<std::shared_ptr<V1724>>& digis,
       fLog->Entry(MongoLog::Warning, "Errors during baseline fitting");
       return;
     } else if (ret > 0) {
-      fLog->Entry(MongoLog::Warning, "Baselines didn't converge so we'll use Plan B");
+      fLog->Entry(MongoLog::Message, "Baselines didn't converge so we'll use Plan B");
     }
   }
 

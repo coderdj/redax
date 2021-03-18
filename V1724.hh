@@ -16,9 +16,10 @@ class data_packet;
 class V1724{
 
  public:
-  V1724(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, int, int, unsigned=0);
+  V1724(std::shared_ptr<MongoLog>&, std::shared_ptr<Options>&, int, unsigned=0);
   virtual ~V1724();
 
+  virtual int Init(int, int, std::shared_ptr<Options>&);
   virtual int Read(std::unique_ptr<data_packet>&);
   virtual int WriteRegister(unsigned int reg, unsigned int value);
   virtual unsigned int ReadRegister(unsigned int reg);
@@ -74,7 +75,6 @@ protected:
   int BLT_SIZE;
   std::map<int, long> fBLTCounter;
 
-  virtual int Init(int, int, std::shared_ptr<Options>&);
   bool MonitorRegister(uint32_t reg, uint32_t mask, int ntries, int sleep, uint32_t val=1);
   virtual std::tuple<uint32_t, long> GetClockInfo(std::u32string_view);
   virtual int GetClockCounter(uint32_t);

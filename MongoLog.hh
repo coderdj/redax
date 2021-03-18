@@ -15,6 +15,7 @@
 #include <thread>
 #include <experimental/filesystem>
 #include <memory>
+#include <tuple>
 
 #include <mongocxx/pool.hpp>
 #include <mongocxx/client.hpp>
@@ -56,12 +57,8 @@ class MongoLog{
   */
 
 public:
-  MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>&, std::string, std::string, std::string);
+  MongoLog(int, std::shared_ptr<mongocxx::pool>&, std::string, std::string, std::string);
   ~MongoLog();
-  
-  int  Initialize(std::string connection_string,
-		  std::string db, std::string collection,
-		  std::string host, bool debug=false);
 
   const static int Debug   = 0;  // Verbose output
   const static int Message = 1;  // Normal output
@@ -70,15 +67,21 @@ public:
   const static int Fatal   = 4;  // Program gonna die
   const static int Local   = -1; // Write to local (file) log only
 
-  int Entry(int priority,std::string message, ...);
+  virtual int Initialize() {return RotateLogFile();}
+  virtual int Entry(int priority, std::string, ...);
   void SetRunId(const int runid) {fRunId = runid;}
 
-private:
+protected:
+  std::tuple<struct tm, int> Now();
   void Flusher();
-  std::string FormatTime(struct tm* date);
-  int Today(struct tm* date);
   int RotateLogFile();
-  std::string LogFileName(struct tm* date);
+  virtual std::string FormatTime(struct tm*, int);
+  virtual int Today(struct tm*);
+  virtual std::string LogFileName(struct tm*);
+  virtual std::experimental::filesystem::path OutputDirectory(struct tm*);
+  virtual std::experimental::filesystem::path LogFilePath(struct tm*);
+
+
   std::shared_ptr<mongocxx::pool> fPool;
   mongocxx::pool::entry fClient;
   mongocxx::database fDB;
@@ -98,4 +101,15 @@ private:
   int fRunId;
 };
 
+class MongoLog_nT : public MongoLog {
+public:
+  // subclass to support the managed logging
+  MongoLog_nT(std::shared_ptr<mongocxx::pool>& pool, std::string dbname, std::string host) :
+    MongoLog(0, pool, dbname, "/daq_common/logs", host) {}
+  virtual ~MongoLog_nT() {}
+
+protected:
+  virtual std::string LogFileName(struct tm*);
+  virtual std::experimental::filesystem::path OutputDirectory(struct tm*);
+};
 #endif
