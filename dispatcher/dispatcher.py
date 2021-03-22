@@ -49,7 +49,7 @@ def main():
         if (goal_state := MongoConnector.get_wanted_state()) is None:
             continue
         # Get the Super-Detector configuration
-        current_config = MongoConnector.get_super_detector(goal_state)
+        current_config = MongoConnector.get_super_detector()
         # Get most recent check-in from all connected hosts
         if (latest_status := MongoConnector.get_update(current_config)) is None:
             continue

@@ -2,6 +2,7 @@ import datetime
 from daqnt import DAQ_STATUS
 import threading
 import time
+import pytz
 
 '''
 MongoDB Connectivity Class for XENONnT DAQ Dispatcher
@@ -29,6 +30,10 @@ def _all(values, target):
         if value != target:
             return False
     return True
+
+def now():
+    return datetime.datetime.now(pytz.utc)
+    #return datetime.datetime.utcnow() # wrong?
 
 class MongoConnect():
 
@@ -87,10 +92,7 @@ class MongoConnect():
         #                'readers': {
         #                    'reader_0_reader_0': {
         #                           'status': {enum},
-        #                           'checkin': {int},
         #                           'rate': {float},
-        #                           'pulses': {int},
-        #                           'blt': {int}
         #                     },
         #                 'controller': {}
         #                 }
@@ -107,7 +109,7 @@ class MongoConnect():
                 self.latest_status[detector]['controller'][controller] = {}
                 self.host_config[controller] = detector
 
-        self.command_oid = {d:{c:None} for c in ['start','stop','arm'] for d in self.dc} # TODO fix
+        self.command_oid = {d:{c:None} for c in ['start','stop','arm'] for d in self.dc}
         self.log = log
         self.run = True
         self.event = threading.Event()
@@ -172,10 +174,10 @@ class MongoConnect():
         now = time.time()
         ret = None
         aggstat = {
-                k:{'status': -1,
+                k:{ 'status': -1,
                     'detector': k,
                     'rate': 0,
-                    'time': datetime.datetime.utcnow(),
+                    'time': now(),
                     'buff': 0,
                     'mode': None,
                     'pll_unlocks': 0,
@@ -312,8 +314,8 @@ class MongoConnect():
                     if latest is None or doc['time'] > latest:
                         latest = doc['time']
                         latest_settings[detector]['user'] = doc['user']
-            self.latest_settings = latest_settings
-            return self.latest_settings
+            self.goal_state = latest_settings
+            return self.goal_state
         except Exception as e:
             self.log.debug(f'get_wanted_state failed due to {type(e)} {e}')
             return None
@@ -322,8 +324,8 @@ class MongoConnect():
         '''
         Check if the detectors are in a compatible linked configuration.
         '''
-        mode_a = self.latest_settings[a]["mode"]
-        mode_b = self.latest_settings[b]["mode"]
+        mode_a = self.goal_state[a]["mode"]
+        mode_b = self.goal_state[b]["mode"]
         doc_a = self.collections['options'].find_one({'name': mode_a})
         doc_b = self.collections['options'].find_one({'name': mode_b})
         detectors_a = doc_a['detector']
@@ -333,7 +335,7 @@ class MongoConnect():
         # if they are both present in the detectors list of that mode
         return mode_a == mode_b and a in detectors_b and b in detectors_a
 
-    def get_super_detector(self, goal_state):
+    def get_super_detector(self):
         '''
         Get the Super Detector configuration
         if the detectors are in a compatible linked mode.
@@ -453,15 +455,14 @@ class MongoConnect():
         self.log.info(f"Updating run {number} with end time ({detectors})")
         try:
             time.sleep(0.5) # this number depends on the CC command polling time
-            endtime = self.get_cc_ack_time(detectors, 'stop')
-            if endtime is None:
+            if (endtime := self.get_cc_ack_time(detectors, 'stop') is None:
                 self.logger.debug(f'No end time found for run {number}')
-                endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
+                endtime = now()-datetime.timedelta(seconds=1)
             query = {"number": int(number), "end": None, 'detectors': detectors}
             updates = {"$set": {"end": endtime}}
             if force:
                 updates["$push"] = {"tags": {"name": "_messy", "user": "daq",
-                    "date": datetime.datetime.utcnow()}}
+                    "date": now()}}
             if self.collections['run'].update_one(query, updates).modified_count == 1:
                 self.log.debug('Update successful')
                 rate = {}
@@ -512,7 +513,7 @@ class MongoConnect():
                 "user": user,
                 "detector": detector,
                 "mode": mode,
-                "createdAt": datetime.datetime.utcnow()
+                "createdAt": now()
             }
             if command == 'arm':
                 doc_base['options_override'] = {'number': number}
@@ -546,7 +547,7 @@ class MongoConnect():
                 if next_cmd is None:
                     dt = 10
                 else:
-                    dt = (next_cmd['createdAt'] - datetime.datetime.utcnow()).total_seconds()
+                    dt = (next_cmd['createdAt'] - now()).total_seconds()
                 if dt < 0.01:
                     oid = next_cmd.pop('_id')
                     ret = self.collections['outgoing_commands'].insert_one(next_cmd)
@@ -596,7 +597,7 @@ class MongoConnect():
     def log_error(self, message, priority, etype):
 
         # Note that etype allows you to define timeouts.
-        nowtime = datetime.datetime.utcnow()
+        nowtime = now()
         if ( (etype in self.error_sent and self.error_sent[etype] is not None) and
              (etype in self.error_timeouts and self.error_timeouts[etype] is not None) and 
              (nowtime-self.error_sent[etype]).total_seconds() <= self.error_timeouts[etype]):
@@ -627,7 +628,6 @@ class MongoConnect():
     def insert_run_doc(self, detector):
 
         if (number := self.get_next_run_number()) == -1:
-            # TODO: do this, or use latest_status?
             self.log.error("DB having a moment")
             return -1
         detectors = self.goal_state[detector]['detectors']
@@ -651,7 +651,7 @@ class MongoConnect():
         if "comment" in goal_state[detector] and goal_state[detector]['comment'] != "":
             run_doc['comments'] = [{
                 "user": goal_state[detector]['user'],
-                "date": datetime.datetime.utcnow(),
+                "date": now(),
                 "comment": goal_state[detector]['comment']
             }]
 
@@ -666,13 +666,13 @@ class MongoConnect():
         time.sleep(2)
         try:
             start_time = self.get_cc_ack_time(detector, 'start')
+
         except Exception as e:
             self.log.error(f'Could not find ack time for {rundoc["number"]} start')
             start_time = None
 
         if start_time is None:
-            # TODO discuss utc-ness
-            start_time = datetime.datetime.utcnow()-datetime.timedelta(seconds=2)
+            start_time = now()-datetime.timedelta(seconds=2)
             # if we miss the ack time, we don't really know when the run started
             # so may as well tag it
             run_doc['tags'] = [{'name': 'messy', 'user': 'daq', 'date': start_time}]

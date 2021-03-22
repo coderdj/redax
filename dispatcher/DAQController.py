@@ -14,6 +14,9 @@ any action needs to be taken to get the DAQ into the target state. It also handl
 resetting of runs (the ~hourly stop/start) during normal operations.
 '''
 
+def now():
+    return datetime.datetime.now(pytz.utc)
+    #return datetime.datetime.utcnow() # wrong?
 
 class DAQController():
 
@@ -32,7 +35,7 @@ class DAQController():
         for k in ['arm', 'start', 'stop']:
             self.last_command[k] = {}
             for d in detectors:
-                self.last_command[k][d] = datetime.datetime.utcnow()
+                self.last_command[k][d] = now()
         self.error_stop_count = {d : 0 for d in detectors}
         self.max_arm_cycles = int(config['MaxArmCycles'])
         self.missed_arm_cycles={k:0 for k in config['MasterDAQConfig'].keys()}
@@ -102,6 +105,7 @@ class DAQController():
                 # Deal separately with the TIMEOUT and ERROR statuses, by stopping the detector if needed
                 elif latest_status[det]['status'] == STATUS.TIMEOUT:
                     self.log.info(f"The {det} is in timeout, check timeouts")
+                    # TODO update
                     self.handle_timeout(detector=det)
 
                 elif latest_status[det]['status'] == STATUS.ERROR:
@@ -117,7 +121,9 @@ class DAQController():
                 if latest_status[det]['status'] == STATUS.RUNNING:
                     self.log.info(f"The {det} is running")
                     self.check_run_turnover(detector=det)
-                    # TODO check modes
+                    # TODO does this work properly?
+                    if latest_status[det]['mode'] != goal_state[det]['mode']:
+                        self.control_detector(command='stop', detector=det)
                 # ARMED, start the run
                 elif latest_status[det]['status'] == STATUS.ARMED:
                     self.log.info(f"The {det} is armed, sending start command")
@@ -162,7 +168,6 @@ class DAQController():
 
         return
 
-
     def stop_detector_gently(self, detector):
         '''
         Stops the detector, unless we're told to wait for the current
@@ -181,7 +186,7 @@ class DAQController():
         '''
         Issues the command to the detector if allowed by the timeout
         '''
-        now = datetime.datetime.utcnow()
+        now = now()
         try:
             dt = (now - self.last_command[command][detector]).total_seconds()
         except (KeyError, TypeError):
@@ -223,7 +228,6 @@ class DAQController():
                     delay = 0
                 else:
                     delay = self.stop_cmd_delay
-                # TODO smart delay?
                 if ls[detector]['status'] in [DAQ_STATUS.ARMING, DAQ_STATUS.ARMED]:
                     # this was the arming detector
                     self.one_detector_arming = False
@@ -236,8 +240,7 @@ class DAQController():
             if command == 'start' and self.mongo.insert_run_doc(detector)
                 # db having a moment
                 return
-            if (command == 'stop' and 'number' in ls[detector] and 
-                    ls[detector]['number'], detector, force)):
+            if (command == 'stop' and ls[detector]['number'] != -1 and self.mongo.set_stop_time(ls[detector]['number'], detector, force)):
                 # db having a moment
                 return
 
@@ -256,7 +259,7 @@ class DAQController():
         '''
 
         sendstop = False
-        nowtime = datetime.datetime.utcnow()
+        nowtime = now()
 
         #First check how often we have been timing out, if it happend to often something
         #  bad happend and we start from scratch again
@@ -323,26 +326,13 @@ class DAQController():
         automatically stop and restart the run. No biggie. We check the time here
         to see if it's something we have to do.
         '''
-        # If no stop after configured, return
-        try:
-            _ = int(self.goal_state[detector]['stop_after'])
-        except Exception as e:
-            self.log.info(f'No run duration specified for {detector}? {type(e)}, {e}')
-            return
 
-        try:
-            number = self.latest_status[detector]['number']
-        except Exception as e:
-            self.log.debug(f'Could not get number {type(e)}, let\'s resort to workaround. {e}')
-            # dirty workaround just in case there was a dispatcher crash
-            number = self.latest_status[detector]['number'] = self.mongo.get_next_run_number() - 1
-            if number == -2:  # db issue
-                return
+        number = self.latest_status[detector]['number']
         start_time = self.mongo.get_run_start(number)
         if start_time is None:
             self.log.debug(f'No start time for {number}?')
             return
-        nowtime = datetime.datetime.utcnow()
+        nowtime = now()
         run_length = int(self.goal_state[detector]['stop_after'])*60
         run_duration = (nowtime - start_time).total_seconds()
         self.log.debug('Checking run turnover for %s: %i/%i' % (detector, run_duration, run_length))
