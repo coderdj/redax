@@ -4,7 +4,7 @@ import threading
 import time
 import pytz
 
-'''
+"""
 MongoDB Connectivity Class for XENONnT DAQ Dispatcher
 D. Coderre, 12. Mar. 2019
 
@@ -22,7 +22,7 @@ Requires: Initialize it with the following config:
 }
 
 The environment variables MONGO_PASSWORD and RUNS_MONGO_PASSWORD must be set!
-'''
+"""
 
 def _all(values, target):
     ret = len(values) > 0
@@ -34,6 +34,10 @@ def _all(values, target):
 def now():
     return datetime.datetime.now(pytz.utc)
     #return datetime.datetime.utcnow() # wrong?
+
+# Communicate between various parts of dispatcher that no new run was determined
+NO_NEW_RUN = -1
+
 
 class MongoConnect():
 
@@ -109,7 +113,7 @@ class MongoConnect():
                 self.latest_status[detector]['controller'][controller] = {}
                 self.host_config[controller] = detector
 
-        self.command_oid = {d:{c:None} for c in ['start','stop','arm'] for d in self.dc}
+        self.command_oid = {d:{c:None} for c in ['start', 'stop', 'arm'] for d in self.dc}
         self.log = log
         self.run = True
         self.event = threading.Event()
@@ -171,7 +175,7 @@ class MongoConnect():
            detector, not the logical detector, while status and run number
            apply to both
         """
-        now = time.time()
+        time_time = time.time()
         ret = None
         aggstat = {
                 k:{ 'status': -1,
@@ -202,18 +206,19 @@ class MongoConnect():
 
                 try:
                     status = DAQ_STATUS(doc['status'])
-                    dt = (now - int(str(doc['_id'])[:8], 16))
+                    dt = (time_time - int(str(doc['_id'])[:8], 16))
                     if dt > self.timeout:
                         self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
                         status = DAQ_STATUS.TIMEOUT
                         if hc[doc['host']] == 'tpc':
                             if (dt > self.timeout_take_action or
                                     ((ts := self.host_ackd_command(doc['host'])) is not None and
-                                     ts-now > self.timeout)):
+                                     ts-time_time > self.timeout)):
                                 self.log.info(f'{doc["host"]} is getting restarted')
                                 self.hypervisor.handle_timeout(doc['host'])
                                 ret = 1
                 except Exception as e:
+                    self.log.debug(f'Ran into {type(e)}, daq is in timeout. {e}')
                     status = DAQ_STATUS.UNKNOWN
 
                 statuses[doc['host']] = status
@@ -225,7 +230,7 @@ class MongoConnect():
                 try:
                     status = DAQ_STATUS(doc['status'])
 
-                    dt = (now - int(str(doc['_id'])[:8], 16))
+                    dt = (time_time - int(str(doc['_id'])[:8], 16))
                     doc['last_checkin'] = dt
                     if dt > self.timeout:
                         self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
@@ -233,7 +238,7 @@ class MongoConnect():
                         if self.host_config[doc['host']] == 'tpc':
                             if (dt > self.timeout_take_action or
                                     ((ts := self.host_ackd_command(doc['host'])) is not None and
-                                     ts-now > self.timeout)):
+                                     ts-time_time > self.timeout)):
                                 self.log.info(f'{doc["host"]} is getting restarted')
                                 self.hypervisor.handle_timeout(doc['host'])
                                 ret = 1
@@ -243,7 +248,7 @@ class MongoConnect():
 
                 statuses[doc['host']] = status
                 modes.append(doc.get('mode', 'none'))
-                run_nums.append(doc.get('number', -1))
+                run_nums.append(doc.get('number', NO_NEW_RUN))
                 aggstat[det]['status'] = status
                 aggstat[det]['mode'] = modes[-1]
                 aggstat[det]['number'] = run_nums[-1]
@@ -321,9 +326,9 @@ class MongoConnect():
             return None
 
     def is_linked(self, a, b):
-        '''
+        """
         Check if the detectors are in a compatible linked configuration.
-        '''
+        """
         mode_a = self.goal_state[a]["mode"]
         mode_b = self.goal_state[b]["mode"]
         doc_a = self.collections['options'].find_one({'name': mode_a})
@@ -336,7 +341,7 @@ class MongoConnect():
         return mode_a == mode_b and a in detectors_b and b in detectors_a
 
     def get_super_detector(self):
-        '''
+        """
         Get the Super Detector configuration
         if the detectors are in a compatible linked mode.
         - case A: tpc, mv and nv all linked
@@ -345,7 +350,7 @@ class MongoConnect():
         - case D: tpc and nv linked, mv un-linked
         - case E: tpc unlinked, mv and nv linked
         We will check the compatibility of the linked mode for a pair of detectors per time.
-        '''
+        """
         ret = {'tpc': {'controller': list(self.dc['tpc']['controller'].keys()),
                        'readers': list(self.dc['tpc']['readers'].keys()),
                        'detectors': ['tpc']}}
@@ -387,21 +392,21 @@ class MongoConnect():
         return ret
 
     def get_run_mode(self, mode):
-        '''
+        """
         Pull a run doc from the options collection and add all the includes
-        '''
+        """
         if mode is None:
             return None
         base_doc = self.collections['options'].find_one({'name': mode})
         if base_doc is None:
-            self.log_error("dispatcher", "Mode '%s' doesn't exist" % mode, "info", "info")
+            self.log_error("Mode '%s' doesn't exist" % mode, "info", "info")
             return None
         if 'includes' not in base_doc or len(base_doc['includes']) == 0:
             return base_doc
         try:
             if self.collections['options'].count_documents({'name':
                 {'$in': base_doc['includes']}}) != len(base_doc['includes']):
-                self.log_error("dispatcher", "At least one subconfig for mode '%s' doesn't exist" % mode, "warn", "warn")
+                self.log_error("At least one subconfig for mode '%s' doesn't exist" % mode, "warn", "warn")
                 return None
             return list(self.collections["options"].aggregate([
                 {'$match': {'name': mode}},
@@ -418,9 +423,9 @@ class MongoConnect():
         return None
 
     def get_hosts_for_mode(self, mode):
-        '''
+        """
         Get the nodes we need from the run mode
-        '''
+        """
         if mode is None:
             self.log.debug("Run mode is none?")
             return [], []
@@ -442,20 +447,20 @@ class MongoConnect():
             cursor = self.collections["run"].find({},{'number': 1}).sort("number", -1).limit(1)
         except Exception as e:
             self.log.error(f'Database is having a moment? {type(e)}, {e}')
-            return -1
+            return NO_NEW_RUN
         if cursor.count() == 0:
             self.log.info("wtf, first run?")
             return 0
         return list(cursor)[0]['number']+1
 
     def set_stop_time(self, number, detectors, force):
-        '''
+        """
         Sets the 'end' field of the run doc to the time when the STOP command was ack'd
-        '''
+        """
         self.log.info(f"Updating run {number} with end time ({detectors})")
         try:
             time.sleep(0.5) # this number depends on the CC command polling time
-            if (endtime := self.get_cc_ack_time(detectors, 'stop') is None:
+            if (endtime := self.get_cc_ack_time(detectors, 'stop')) is None:
                 self.logger.debug(f'No end time found for run {number}')
                 endtime = now()-datetime.timedelta(seconds=1)
             query = {"number": int(number), "end": None, 'detectors': detectors}
@@ -482,9 +487,9 @@ class MongoConnect():
         return
 
     def get_cc_ack_time(self, detector, command):
-        '''
+        """
         Finds the time when specified detector's crate controller ack'd the specified command
-        '''
+        """
         query = {'_id': self.command_oid[detector][command]}
         doc = self.collections['outgoing_commands'].find_one(query)
         cc = list(self.latest_status[detector]['controller'].keys())[0]
@@ -494,9 +499,9 @@ class MongoConnect():
         return None
 
     def send_command(self, command, hosts, user, detector, mode="", delay=0, force=False):
-        '''
+        """
         Send this command to these hosts. If delay is set then wait that amount of time
-        '''
+        """
         number = None
         if command == 'stop' and not self.detector_ackd_command(detector, 'stop'):
             self.log.error(f"{detector} hasn't ack'd its last stop, let's not flog a dead horse")
@@ -505,7 +510,7 @@ class MongoConnect():
         try:
             if command == 'arm':
                 number = self.get_next_run_number()
-                if number == -1:
+                if number == NO_NEW_RUN:
                     return -1
                 self.latest_status[detector]['number'] = number
             doc_base = {
@@ -538,9 +543,9 @@ class MongoConnect():
         return 0
 
     def process_commands(self):
-        '''
+        """
         Process our internal command queue
-        '''
+        """
         while self.run == True:
             try:
                 next_cmd = self.collections['command_queue'].find_one({}, sort=[('createdAt', 1)])
@@ -627,7 +632,7 @@ class MongoConnect():
 
     def insert_run_doc(self, detector):
 
-        if (number := self.get_next_run_number()) == -1:
+        if (number := self.get_next_run_number()) == NO_NEW_RUN:
             self.log.error("DB having a moment")
             return -1
         detectors = self.goal_state[detector]['detectors']
@@ -642,17 +647,17 @@ class MongoConnect():
         }
 
         # If there's a source add the source. Also add the complete ini file.
-        cfg = self.get_run_mode(goal_state[detector]['mode'])
+        cfg = self.get_run_mode(self.goal_state[detector]['mode'])
         if cfg is not None and 'source' in cfg.keys():
             run_doc['source'] = {'type': cfg['source']}
         run_doc['daq_config'] = cfg
 
         # If the user started the run with a comment add that too
-        if "comment" in goal_state[detector] and goal_state[detector]['comment'] != "":
+        if "comment" in self.goal_state[detector] and self.goal_state[detector]['comment'] != "":
             run_doc['comments'] = [{
-                "user": goal_state[detector]['user'],
+                "user": self.goal_state[detector]['user'],
                 "date": now(),
-                "comment": goal_state[detector]['comment']
+                "comment": self.goal_state[detector]['comment']
             }]
 
         # Make a data entry so bootstrax can find the thing
@@ -663,16 +668,19 @@ class MongoConnect():
                 'location': cfg['strax_output_path']
             }]
 
-        time.sleep(2)
+        # The cc needs some time to get started, this is 2s (why not in the config)
+        wait_cc_start_time = 2 #s
+        time.sleep(wait_cc_start_time)
         try:
             start_time = self.get_cc_ack_time(detector, 'start')
 
         except Exception as e:
-            self.log.error(f'Could not find ack time for {rundoc["number"]} start')
+            self.log.error(f'Could not find ack time for {run_doc["number"]} start')
+            self.log.debug(f'Due to {type(e)}, {e}')
             start_time = None
 
         if start_time is None:
-            start_time = now()-datetime.timedelta(seconds=2)
+            start_time = now()-datetime.timedelta(seconds=wait_cc_start_time)
             # if we miss the ack time, we don't really know when the run started
             # so may as well tag it
             run_doc['tags'] = [{'name': 'messy', 'user': 'daq', 'date': start_time}]
