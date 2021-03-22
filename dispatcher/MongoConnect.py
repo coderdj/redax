@@ -80,6 +80,9 @@ class MongoConnect():
         # How long a node can be timing out before it gets fixed (TPC only)
         self.timeout_take_action = int(config['TimeoutActionThreshold'])
 
+        # how long to give the CC to start the run
+        self.cc_start_wait = int(config['StartCmdDelay']) + 1
+
         # Which control keys do we look for?
         self.control_keys = config['ControlKeys'].split()
 
@@ -187,18 +190,18 @@ class MongoConnect():
                     'pll_unlocks': 0,
                     'number': -1}
                 for k in self.dc}
-        hc = self.host_config
         for detector in self.latest_status.keys():
+            # detector = logical
             statuses = {}
             status = None
             modes = []
             run_nums = []
             for doc in self.latest_status[detector]['readers'].values():
-                det = hc[doc['host']]
+                phys_det = self.host_config[doc['host']]
                 try:
-                    aggstat[det]['rate'] += doc['rate']
-                    aggstat[det]['buff'] += doc['buffer_size']
-                    aggstat[det]['pll_unlocks'] += doc.get('pll', 0)
+                    aggstat[phys_det]['rate'] += doc['rate']
+                    aggstat[phys_det]['buff'] += doc['buffer_size']
+                    aggstat[phys_det]['pll_unlocks'] += doc.get('pll', 0)
                 except Exception as e:
                     # This is not really important but it's nice if we have it
                     self.log.debug(f'Rate calculation ran into {type(e)}: {e}')
@@ -210,7 +213,7 @@ class MongoConnect():
                     if dt > self.timeout:
                         self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
                         status = DAQ_STATUS.TIMEOUT
-                        if hc[doc['host']] == 'tpc':
+                        if phys_det == 'tpc':
                             if (dt > self.timeout_take_action or
                                     ((ts := self.host_ackd_command(doc['host'])) is not None and
                                      ts-time_time > self.timeout)):
@@ -223,10 +226,8 @@ class MongoConnect():
 
                 statuses[doc['host']] = status
 
-            # If we have a crate controller check on it too
             for doc in self.latest_status[detector]['controller'].values():
-                det = hc[doc['host']]
-                # Copy above. I guess it would be possible to have no readers
+                phys_det = self.host_config[doc['host']]
                 try:
                     status = DAQ_STATUS(doc['status'])
 
@@ -235,7 +236,7 @@ class MongoConnect():
                     if dt > self.timeout:
                         self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
                         status = DAQ_STATUS.TIMEOUT
-                        if self.host_config[doc['host']] == 'tpc':
+                        if phys_det == 'tpc':
                             if (dt > self.timeout_take_action or
                                     ((ts := self.host_ackd_command(doc['host'])) is not None and
                                      ts-time_time > self.timeout)):
@@ -248,10 +249,10 @@ class MongoConnect():
 
                 statuses[doc['host']] = status
                 modes.append(doc.get('mode', 'none'))
-                run_nums.append(doc.get('number', NO_NEW_RUN))
-                aggstat[det]['status'] = status
-                aggstat[det]['mode'] = modes[-1]
-                aggstat[det]['number'] = run_nums[-1]
+                run_nums.append(doc.get('number', None))
+                aggstat[phys_det]['status'] = status
+                aggstat[phys_det]['mode'] = modes[-1]
+                aggstat[phys_det]['number'] = run_nums[-1]
 
             mode = modes[0]
             run_num = run_nums[0]
@@ -357,8 +358,12 @@ class MongoConnect():
         mv = self.dc['muon_veto']
         nv = self.dc['neutron_veto']
 
+        tpc_mv = self.is_linked('tpc', 'muon_veto')
+        tpc_nv = self.is_linked('tpc', 'neutron_veto')
+        mv_nv = self.is_linked('muon_veto', 'neutron_veto')
+
         # tpc and muon_veto linked mode
-        if self.is_linked('tpc', 'muon_veto'):
+        if tpc_mv:
             # case A or C
             ret['tpc']['controller'] += list(mv['controller'].keys())
             ret['tpc']['readers'] += list(mv['readers'].keys())
@@ -368,19 +373,18 @@ class MongoConnect():
             ret['muon_veto'] = {'controller': list(mv['controller'].keys()),
                     'readers': list(mv['readers'].keys()),
                     'detectors': ['muon_veto']}
-        if self.is_linked('tpc', 'neutron_veto'):
+        if tpc_nv:
             # case A or D
             ret['tpc']['controller'] += list(nv['controller'].keys())
             ret['tpc']['readers'] += list(nv['readers'].keys())
             ret['tpc']['detectors'] += ['neutron_veto']
-        elif self.is_linked('muon_veto', 'neutron_veto') and \
-                not self.is_linked('tpc', 'muon_veto'):
+        elif mv_nv and not tpc_mv:
             # case E
             ret['muon_veto']['controller'] += list(nv['controller'].keys())
             ret['muon_veto']['readers'] += list(nv['readers'].keys())
             ret['muon_veto']['detectors'] += ['neutron_veto']
         else:
-            # case B
+            # case B or C
             ret['neutron_veto'] = {'controller': list(nv['controller'].keys()),
                     'readers': list(nv['readers'].keys()),
                     'detectors': ['neutron_veto']}
@@ -492,6 +496,7 @@ class MongoConnect():
         """
         query = {'_id': self.command_oid[detector][command]}
         doc = self.collections['outgoing_commands'].find_one(query)
+        # the first cc is the "master", so its ack time is what counts
         cc = list(self.latest_status[detector]['controller'].keys())[0]
         if doc is not None and cc in doc['acknowledged']:
             return doc['acknowledged'][cc]
@@ -524,7 +529,7 @@ class MongoConnect():
                 doc_base['options_override'] = {'number': number}
             if delay == 0:
                 docs = doc_base
-                docs['host'] = hosts[0]+hosts[1] if isinstance(hosts, tuple) else hosts
+                docs['host'] = hosts[0]+hosts[1]
                 docs['acknowledged'] = {h:0 for h in docs['host']}
             else:
                 docs = [dict(doc_base.items()), dict(doc_base.items())]
@@ -635,6 +640,7 @@ class MongoConnect():
         if (number := self.get_next_run_number()) == NO_NEW_RUN:
             self.log.error("DB having a moment")
             return -1
+        # the rundoc gets the physical detectors, not the logical
         detectors = self.goal_state[detector]['detectors']
 
         run_doc = {
@@ -668,9 +674,8 @@ class MongoConnect():
                 'location': cfg['strax_output_path']
             }]
 
-        # The cc needs some time to get started, this is 2s (why not in the config)
-        wait_cc_start_time = 2 #s
-        time.sleep(wait_cc_start_time)
+        # The cc needs some time to get started
+        time.sleep(self.cc_start_wait)
         try:
             start_time = self.get_cc_ack_time(detector, 'start')
 
@@ -680,7 +685,7 @@ class MongoConnect():
             start_time = None
 
         if start_time is None:
-            start_time = now()-datetime.timedelta(seconds=wait_cc_start_time)
+            start_time = now()-datetime.timedelta(seconds=self.cc_start_wait)
             # if we miss the ack time, we don't really know when the run started
             # so may as well tag it
             run_doc['tags'] = [{'name': 'messy', 'user': 'daq', 'date': start_time}]

@@ -246,7 +246,7 @@ class DAQController():
             if command == 'start' and self.mongo.insert_run_doc(detector):
                 # db having a moment
                 return
-            if (command == 'stop' and ls[detector]['number'] != -NO_NEW_RUN and
+            if (command == 'stop' and ls[detector]['number'] != NO_NEW_RUN and
                     self.mongo.set_stop_time(ls[detector]['number'], detector, force)):
                 # db having a moment
                 return
