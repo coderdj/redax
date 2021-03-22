@@ -11,7 +11,7 @@ from urllib.parse import quote_plus
 
 from MongoConnect import MongoConnect
 from DAQController import DAQController
-
+from .MongoConnect import NO_NEW_RUN
 
 def main():
 
@@ -60,13 +60,12 @@ def main():
             msg = (f'The {detector} should be {state} and is '
                     f'{latest_status[detector]["status"].name}')
             # TODO add statement about linking
-            if latest_status[detector]['number'] != -1:
+            if latest_status[detector]['number'] != NO_NEW_RUN:
                 msg += f' ({latest_status[detector]["number"]})'
             logger.debug(msg)
 
         # Decision time. Are we actually in our goal state? If not what should we do?
         DAQControl.solve_problem(latest_status, goal_state)
-
 
     MongoConnector.quit()
     return

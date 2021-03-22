@@ -2,7 +2,9 @@ import datetime
 import json
 import enum
 import pytz
-from daqnt import DAQ_STATUS 
+from daqnt import DAQ_STATUS
+from .MongoConnect import NO_NEW_RUN
+
 """
 DAQ Controller Brain Class
 D. Coderre, 12. Mar. 2019
@@ -19,9 +21,6 @@ resetting of runs (the ~hourly stop/start) during normal operations.
 def now():
     return datetime.datetime.now(pytz.utc)
     #return datetime.datetime.utcnow() # wrong?
-
-# Communicate between various parts of dispatcher that no new run was determined
-NO_NEW_RUN = -1
 
 class DAQController():
 
