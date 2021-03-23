@@ -61,7 +61,6 @@ int PrintUsage() {
     << "--logdir <directory>: where to write the logs, default pwd\n"
     << "--reader: this instance is a reader\n"
     << "--cc: this instance is a crate controller\n"
-    << "--arm-delay <delay>: ms to wait between the ARM command and the arming sequence, default 0\n"
     << "--log-retention <value>: how many days to keep logfiles, default 7, 0 = forever\n"
     << "--help: print this message\n"
     << "--version: print version information and return\n"
@@ -86,40 +85,40 @@ int main(int argc, char** argv){
   std::string dbname = "daq", suri = "", sid = "";
   bool reader = false, cc = false;
   int log_retention = 7; // days, 0 = someone else's problem
-  int c(0), opt_index, delay(0);
+  int c(0), opt_index;
+  enum { arg_id, arg_uri, arg_db, arg_logdir, arg_reader, arg_cc,
+    arg_retention, arg_help, arg_version };
   struct option longopts[] = {
-    {"id", required_argument, 0, c++},
-    {"uri", required_argument, 0, c++},
-    {"db", required_argument, 0, c++},
-    {"logdir", required_argument, 0, c++},
-    {"reader", no_argument, 0, c++},
-    {"cc", no_argument, 0, c++},
-    {"arm-delay", required_argument, 0, c++},
-    {"log-retention", required_argument, 0, c++},
-    {"help", no_argument, 0, c++},
-    {"version", no_argument, 0, c++}
+    {"id", required_argument, 0, arg_id},
+    {"uri", required_argument, 0, arg_uri},
+    {"db", required_argument, 0, arg_db},
+    {"logdir", required_argument, 0, arg_logdir},
+    {"reader", no_argument, 0, arg_reader},
+    {"cc", no_argument, 0, arg_cc},
+    {"log-retention", required_argument, 0, arg_retention},
+    {"help", no_argument, 0, arg_help},
+    {"version", no_argument, 0, arg_version},
+    {0, 0, 0, 0}
   };
   while ((c = getopt_long(argc, argv, "", longopts, &opt_index)) != -1) {
     switch(c) {
-      case 0:
+      case arg_id:
         sid = optarg; break;
-      case 1:
+      case arg_uri:
         suri = optarg; break;
-      case 2:
+      case arg_db:
         dbname = optarg; break;
-      case 3:
+      case arg_logdir:
         log_dir = optarg; break;
-      case 4:
+      case arg_reader:
         reader = true; break;
-      case 5:
+      case arg_cc:
         cc = true; break;
-      case 6:
-        delay = std::stoi(optarg); break;
-      case 7:
+      case arg_retention:
         log_retention = std::stoi(optarg); break;
-      case 8:
+      case arg_help:
         return PrintUsage();
-      case 9:
+      case arg_version:
         return PrintVersion();
       default:
         std::cout<<"Received unknown arg\n";
@@ -247,7 +246,6 @@ int main(int argc, char** argv){
             int dt = duration_cast<milliseconds>(system_clock::now()-ack_time).count();
             fLog->SetRunId(fOptions->GetInt("number", -1));
             fLog->Entry(MongoLog::Local, "Took %i ms to load config", dt);
-            if (dt < delay) std::this_thread::sleep_for(milliseconds(delay-dt));
 	    if(controller->Arm(fOptions) != 0){
 	      fLog->Entry(MongoLog::Error, "Failed to initialize electronics");
 	      controller->Stop();
