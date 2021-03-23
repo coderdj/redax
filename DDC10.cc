@@ -7,10 +7,9 @@
 
 
 // Note: Need to make sure that you have tcl8.6 and expect libraries for communication with the DDC10 device
-// The following below will be probably refactored for XENONnT 
 DDC10::DDC10(){
-   fHopts.signal_threshold = fHopts.sign = fHopts.rise_time_cut = fHopts.inner_ring_factor = fHopts.outer_ring_factor =-1;
-   fHopts.integration_threshold = fHopts.parameter_0 = fHopts.parameter_1 = fHopts.parameter_2 = fHopts.parameter_3 = -1;
+   fHopts.signal_threshold = fHopts.sign = fHopts.rise_time_cut = fHopts.dynamic_veto_limit = fHopts.static_veto_duration =-1;
+   fHopts.integration_threshold = fHopts.rho_0 = fHopts.rho_1 = fHopts.rho_2 = fHopts.rho_3 = -1;
    fHopts.window = fHopts.prescaling = fHopts.component_status = fHopts.width_cut = fHopts.delay = -1;
    fHopts.address = fHopts.required = "";
 
@@ -34,7 +33,7 @@ int DDC10::Initialize(HEVOptions d_opts)
         if (expect == 0) return 1;
 
         enum { usage, permission_denied, command_not_found,
-               command_failed, connection_failed, prompt };
+               command_failed, connection_failed, prompt, got_success};
       
         switch (exp_fexpectl(expect,
                 exp_glob, "password:", prompt,
@@ -68,10 +67,10 @@ int DDC10::Initialize(HEVOptions d_opts)
         // Recalculate few values to fit to DDC10s' format
         bool success = true;
         long pars[4];
-        pars[0] = round(d_opts.parameter_0 * pow(2,48));
-        pars[1] = round(d_opts.parameter_1 * pow(2,48));
-        pars[2] = round(d_opts.parameter_2 * pow(2,48));
-        pars[3] = round(d_opts.parameter_3 * pow(2,48));
+        pars[0] = round(d_opts.rho_0 * pow(2,48));
+        pars[1] = round(d_opts.rho_1 * pow(2,48));
+        pars[2] = round(d_opts.rho_2 * pow(2,48));
+        pars[3] = round(d_opts.rho_3 * pow(2,48));
 
         int ParLow_int[4]; //int type needed for DDC10s' blackfin chip
         int ParHi_int[4];  //int type needed for DDC10s' blackfin chip
@@ -83,7 +82,7 @@ int DDC10::Initialize(HEVOptions d_opts)
 
         // Set Initialization command 
         char command [1000];
-        sprintf(command, "./../HEveto/Initialize ");
+        sprintf(command, "./../HEveto/Initialize_v0 ");
         sprintf(command + strlen(command), "%d ",d_opts.sign);
         sprintf(command + strlen(command), "%d ",d_opts.window);
         sprintf(command + strlen(command), "%d ",d_opts.delay);
@@ -92,7 +91,6 @@ int DDC10::Initialize(HEVOptions d_opts)
         sprintf(command + strlen(command), "%d ",d_opts.width_cut);
         sprintf(command + strlen(command), "%d ",d_opts.rise_time_cut);
         sprintf(command + strlen(command), "%d ",d_opts.component_status);
-
         sprintf(command + strlen(command), "%d ",ParHi_int[0]);
         sprintf(command + strlen(command), "%d ",ParLow_int[0]);
         sprintf(command + strlen(command), "%d ",ParHi_int[1]);
@@ -101,13 +99,12 @@ int DDC10::Initialize(HEVOptions d_opts)
         sprintf(command + strlen(command), "%d ",ParLow_int[2]);
         sprintf(command + strlen(command), "%d ",ParHi_int[3]);
         sprintf(command + strlen(command), "%d ",ParLow_int[3]);
-
-        sprintf(command + strlen(command), "%d ",d_opts.outer_ring_factor);
-        sprintf(command + strlen(command), "%d ",d_opts.inner_ring_factor);
+        sprintf(command + strlen(command), "%d ",d_opts.static_veto_duration);
+        sprintf(command + strlen(command), "%d ",d_opts.dynamic_veto_limit);
         sprintf(command + strlen(command), "%d ",d_opts.prescaling);
         
 	// Send the Initialisation command
-        fprintf(expect, "%s\r", command);
+        fprintf(expect,"%s\r",command);
 
 	// Check return of connection
 	switch (exp_fexpectl(expect,
@@ -121,14 +118,16 @@ int DDC10::Initialize(HEVOptions d_opts)
                 break;
         case usage:
                 success = false;
-                std::cout << std::endl << "DDC10: wrong usage of \"Initialize\"" << std::endl;
+                std::cout << std::endl << "DDC10: wrong usage of \"Initialize_v0\"" << std::endl;
+                break;
+        case prompt:
+                //continue
+                std::cout << "DDC10: initialization successful" << std::endl;
                 break;
         case EXP_TIMEOUT:
 		success = false;
                 std::cout << "DDC10: Login timeout" << std::endl;
                 break;
-        case prompt:
-		break;
         default:
 		success = false;
 		std::cout << std::endl << "DDC10: unknown error" << std::endl;
