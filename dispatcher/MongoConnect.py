@@ -67,10 +67,7 @@ class MongoConnect():
         # Timeout (in seconds). How long must a node not report to be considered timing out
         self.timeout = int(config['ClientTimeout'])
 
-        # How long (in seconds) a host has to ack a command before it gets restarted (TPC only)
-        self.ack_timeout = int(config['ClientAckTimeout'])
-
-        # How long a node can be timing out before it gets fixed (TPC only)
+        # How long a node can be timing out or missed an ack before it gets fixed (TPC only)
         self.timeout_take_action = int(config['TimeoutActionThreshold'])
 
         # Which control keys do we look for?
@@ -276,7 +273,7 @@ class MongoConnect():
         if dt > self.timeout:
             self.log.debug(f'{host} last reported {int(dt)} sec ago')
             return True
-        if has_ackd is not None and t - has_ackd > self.ack_timeout:
+        if has_ackd is not None and t - has_ackd > self.timeout_take_action:
             self.log.debug(f'{host} hasn\'t ackd a command from {int(t-has_ackd)} sec ago')
             if self.host_config[host] == 'tpc':
                 self.hypervisor.handle_timeout(host)
