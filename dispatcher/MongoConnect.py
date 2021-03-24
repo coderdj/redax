@@ -31,7 +31,7 @@ def _all(values, target):
 
 class MongoConnect():
 
-    def __init__(self, config, log, control_mc, runs_mc, hypervisor, testing=False):
+    def __init__(self, config, daq_config, log, control_mc, runs_mc, hypervisor, testing=False):
 
         # Define DB connectivity. Log is separate to make it easier to split off if needed
         dbn = config['ControlDatabaseName']
@@ -98,7 +98,7 @@ class MongoConnect():
         #  }
         self.latest_status = {}
         self.host_config = {}
-        self.dc = config['MasterDAQConfig']
+        self.dc = daq_config
         for detector in self.dc:
             self.latest_status[detector] = {'readers': {}, 'controller': {}}
             for reader in self.dc[detector]['readers']:
@@ -108,7 +108,7 @@ class MongoConnect():
                 self.latest_status[detector]['controller'][controller] = {}
                 self.host_config[controller] = detector
 
-        self.command_oid = {d:{c:None} for c in ['start','stop','arm'] for d in self.dc}
+        self.command_oid = {d:{c:None for c in ['start','stop','arm']} for d in self.dc}
         self.log = log
         self.run = True
         self.event = threading.Event()
@@ -389,11 +389,13 @@ class MongoConnect():
         Sets the 'end' field of the run doc to the time when the STOP command was ack'd
         '''
         self.log.info(f"Updating run {number} with end time ({detectors})")
+        if number == -1:
+            return
         try:
             time.sleep(0.5) # this number depends on the CC command polling time
             endtime = self.get_ack_time(detectors, 'stop')
             if endtime is None:
-                self.logger.debug(f'No end time found for run {number}')
+                self.log.debug(f'No end time found for run {number}')
                 endtime = datetime.datetime.utcnow()-datetime.timedelta(seconds=1)
             query = {"number": int(number), "end": None, 'detectors': detectors}
             updates = {"$set": {"end": endtime}}
@@ -514,7 +516,7 @@ class MongoConnect():
         """
         if (oid := self.command_oid[detector][command]) is None:
             return True
-        if (doc := self.collections['outoing_commands'].find_one({'_id': oid})) is None:
+        if (doc := self.collections['outgoing_commands'].find_one({'_id': oid})) is None:
             self.log.error('No previous command found?')
             return True
         for h in doc['host']:
