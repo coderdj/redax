@@ -67,6 +67,9 @@ class MongoConnect():
         # Timeout (in seconds). How long must a node not report to be considered timing out
         self.timeout = int(config['ClientTimeout'])
 
+        # How long (in seconds) a host has to ack a command before it gets restarted (TPC only)
+        self.ack_timeout = int(config['ClientAckTimeout'])
+
         # How long a node can be timing out before it gets fixed (TPC only)
         self.timeout_take_action = int(config['TimeoutActionThreshold'])
 
@@ -210,17 +213,8 @@ class MongoConnect():
 
                 try:
                     status = DAQ_STATUS(doc['status'])
-                    dt = (now - int(str(doc['_id'])[:8], 16))
-                    if dt > self.timeout:
-                        self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
-                        status = DAQ_STATUS.TIMEOUT
-                        if self.host_config[doc['host']] == 'tpc':
-                            if (dt > self.timeout_take_action or
-                                    ((ts := self.host_ackd_command(doc['host'])) is not None and
-                                     ts-now > self.timeout)):
-                                self.log.info(f'{doc["host"]} is getting restarted')
-                                self.hypervisor.handle_timeout(doc['host'])
-                                ret = 1
+                    if self.is_timeout(doc, now):
+                        self.status = DAQ_STATUS.TIMEOUT
                 except Exception as e:
                     status = DAQ_STATUS.UNKNOWN
 
@@ -233,18 +227,8 @@ class MongoConnect():
                     mode = doc['mode']
                     status = DAQ_STATUS(doc['status'])
 
-                    dt = (now - int(str(doc['_id'])[:8], 16))
-                    doc['last_checkin'] = dt
-                    if dt > self.timeout:
-                        self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
+                    if self.is_timeout(doc, now):
                         status = DAQ_STATUS.TIMEOUT
-                        if self.host_config[doc['host']] == 'tpc':
-                            if (dt > self.timeout_take_action or
-                                    ((ts := self.host_ackd_command(doc['host'])) is not None and
-                                     ts-now > self.timeout)):
-                                self.log.info(f'{doc["host"]} is getting restarted')
-                                self.hypervisor.handle_timeout(doc['host'])
-                                ret = 1
                 except Exception as e:
                     self.log.debug(f'Setting status to unknown because of {type(e)}: {e}')
                     status = DAQ_STATUS.UNKNOWN
@@ -282,6 +266,22 @@ class MongoConnect():
 
         return ret
 
+    def is_timeout(self, doc, t):
+        """
+        Checks to see if the specified status doc corresponds to a timeout situation
+        """
+        host = doc['host']
+        dt = t - int(str(doc['_id'])[:8], 16)
+        has_ackd = self.host_ackd_command(host)
+        if dt > self.timeout:
+            self.log.debug(f'{host} last reported {int(dt)} sec ago')
+            return True
+        if has_ackd is not None and t - has_ackd > self.ack_timeout:
+            self.log.debug(f'{host} hasn\'t ackd a command from {int(t-has_ackd)} sec ago')
+            if self.host_config[host] == 'tpc':
+                self.hypervisor.handle_timeout(host)
+            return True
+        return False
 
     def get_wanted_state(self):
         # Aggregate the wanted state per detector from the DB and return a dict
