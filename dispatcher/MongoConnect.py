@@ -1,4 +1,4 @@
-iquote_plus(os.environ['MONGO_PASSWORD_DAQ'])mport datetime
+import datetime
 from daqnt import DAQ_STATUS
 import threading
 import time
