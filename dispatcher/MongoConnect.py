@@ -614,14 +614,19 @@ class MongoConnect():
                 'location': cfg['strax_output_path']
             }]
 
+        time.sleep(2)
         try:
-            time.sleep(2)
             start_time = self.get_ack_time(detector, 'start')
-            if start_time is None:
-                start_time = now()-datetime.timedelta(seconds=2)
-                run_doc['tags'] = [{'name': 'messy', 'user': 'daq', 'date': start_time}]
-            run_doc['start'] = start_time
+        except Exception as e:
+            self.log.error('Couldn\'t find start time ack')
+            start_time = None
 
+        if start_time is None:
+            start_time = now()-datetime.timedelta(seconds=2)
+            run_doc['tags'] = [{'name': 'messy', 'user': 'daq', 'date': start_time}]
+        run_doc['start'] = start_time
+
+        try:
             self.collections['run'].insert_one(run_doc)
         except Exception as e:
             self.log.error(f'Database having a moment: {type(e)}, {e}')
