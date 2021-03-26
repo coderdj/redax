@@ -157,7 +157,7 @@ class MongoConnect():
         '''
         for detector in self.latest_status.keys():
             doc = {
-                "status": self.latest_status[detector]['status'].values(),
+                "status": self.latest_status[detector]['status'].value,
                 "detector": detector,
                 "rate": self.latest_status[detector]['rate'],
                 "readers": len(self.latest_status[detector]['readers'].keys()),
@@ -200,7 +200,7 @@ class MongoConnect():
             buff = 0
             pll = 0
             run_num = -1
-            for doc in self.latest_status[detector]['readers'].value:
+            for doc in self.latest_status[detector]['readers'].values():
                 try:
                     rate += doc['rate']
                     buff += doc['buffer_size']
