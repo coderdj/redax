@@ -34,10 +34,13 @@ def main():
 
     # Declare necessary classes
     sh = daqnt.SignalHandler()
-    Hypervisor = daqnt.Hypervisor(control_mc[config['ControlDatabaseName']], logger,
+    hypervisor = daqnt.Hypervisor(control_mc[config['ControlDatabaseName']], logger,
             config['MasterDAQConfig']['tpc'], vme_config, sh=sh, testing=args.test)
-    MongoConnector = MongoConnect(config, logger, control_mc, runs_mc, Hypervisor, args.test)
-    DAQControl = DAQController(config, MongoConnector, logger, Hypervisor)
+    MongoConnector = MongoConnect(config, logger, control_mc, runs_mc, hypervisor, args.test)
+    DAQControl = DAQController(config, MongoConnector, logger, hypervisor)
+    # connect the triangle
+    hypervisor.mongo_connect = MongoConnector
+    hypervisor.daq_controller = DAQControl
 
     sleep_period = int(config['PollFrequency'])
 
