@@ -157,7 +157,7 @@ class MongoConnect():
         '''
         for detector in self.latest_status.keys():
             doc = {
-                "status": self.latest_status[detector]['status'].value,
+                "status": self.latest_status[detector]['status'].values(),
                 "detector": detector,
                 "rate": self.latest_status[detector]['rate'],
                 "readers": len(self.latest_status[detector]['readers'].keys()),
@@ -190,7 +190,7 @@ class MongoConnect():
         #  - If any single node reports error then the whole thing is in error
         #  - If any single node times out then the whole thing is in timeout
 
-        now = time.time()
+        time_now = time.time()
         ret = None
         for detector in self.latest_status.keys():
             statuses = {}
@@ -213,14 +213,14 @@ class MongoConnect():
 
                 try:
                     status = DAQ_STATUS(doc['status'])
-                    dt = (now - int(str(doc['_id'])[:8], 16))
+                    dt = (time_now - int(str(doc['_id'])[:8], 16))
                     if dt > self.timeout:
                         self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
                         status = DAQ_STATUS.TIMEOUT
                         if self.host_config[doc['host']] == 'tpc':
                             if (dt > self.timeout_take_action or
                                     ((ts := self.host_ackd_command(doc['host'])) is not None and
-                                     ts-now > self.timeout)):
+                                     ts-time_now > self.timeout)):
                                 self.log.info(f'{doc["host"]} is getting restarted')
                                 self.hypervisor.handle_timeout(doc['host'])
                                 ret = 1
@@ -236,7 +236,7 @@ class MongoConnect():
                     mode = doc['mode']
                     status = DAQ_STATUS(doc['status'])
 
-                    dt = (now - int(str(doc['_id'])[:8], 16))
+                    dt = (time_now - int(str(doc['_id'])[:8], 16))
                     doc['last_checkin'] = dt
                     if dt > self.timeout:
                         self.log.debug(f'{doc["host"]} reported {int(dt)} sec ago')
@@ -244,7 +244,7 @@ class MongoConnect():
                         if self.host_config[doc['host']] == 'tpc':
                             if (dt > self.timeout_take_action or
                                     ((ts := self.host_ackd_command(doc['host'])) is not None and
-                                     ts-now > self.timeout)):
+                                     ts-time_now > self.timeout)):
                                 self.log.info(f'{doc["host"]} is getting restarted')
                                 self.hypervisor.handle_timeout(doc['host'])
                                 ret = 1
