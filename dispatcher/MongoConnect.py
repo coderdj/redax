@@ -427,7 +427,7 @@ class MongoConnect():
         Finds the time when specified detector's crate controller ack'd the specified command
         '''
         cc = list(self.latest_status[detector]['controller'].keys())[0]
-        query = {'host': cc, f'acknowledged.{cc}': {'$ne': 0}, command: command}
+        query = {'host': cc, f'acknowledged.{cc}': {'$ne': 0}, 'command': command}
         sort = [('_id', -1)]
         doc = self.collections['outgoing_commands'].find_one(query, sort=sort)
         dt = (now() - doc['acknowledged'][cc].replace(tzinfo=pytz.utc)).total_seconds()
@@ -499,7 +499,7 @@ class MongoConnect():
                 if (next_cmd := incoming.find_one({}, sort=sort)) is None:
                     dt = 10
                 else:
-                    dt = (next_cmd['createdAt'] - now()).total_seconds()
+                    dt = (next_cmd['createdAt'].replace(tzinfo=pytz.utc) - now()).total_seconds()
                 if dt < 0.01:
                     oid = next_cmd.pop('_id')
                     outgoing.insert_one(next_cmd)
