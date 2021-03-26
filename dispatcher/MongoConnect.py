@@ -396,7 +396,7 @@ class MongoConnect():
             return
         try:
             time.sleep(0.5) # this number depends on the CC command polling time
-            if (endtime := self.get_ack_time(detectors, 'stop') )is None:
+            if (endtime := self.get_ack_time(detectors, 'stop') ) is None:
                 self.log.debug(f'No end time found for run {number}')
                 endtime = now() -datetime.timedelta(seconds=1)
             query = {"number": int(number), "end": None, 'detectors': detectors}
@@ -501,7 +501,7 @@ class MongoConnect():
                 if dt < 0.01:
                     oid = next_cmd.pop('_id')
                     ret = outgoing.insert_one(next_cmd)
-                    self.incoming.delete_one({'_id': oid})
+                    incoming.delete_one({'_id': oid})
             except Exception as e:
                 dt = 10
                 self.log.error(f"DB down? {type(e)}, {e}")
