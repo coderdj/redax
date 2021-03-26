@@ -430,10 +430,12 @@ class MongoConnect():
         query = {'host': cc, f'acknowledged.{cc}': {'$ne': 0}, command: command}
         sort = [('_id', -1)]
         doc = self.collections['outgoing_commands'].find_one(query, sort=sort)
-        if now() - doc['acknowledged'][cc] > datetime.timedelta(seconds=30):
+        dt = (now() - doc['acknowledged'][cc].replace(tzinfo=pytz.utc)).total_seconds()
+        if dt > 30:
             if recurse:
                 # No way we found the correct command here, maybe we're too soon
-                time.sleep(2)
+                self.log.debug(f'Most recent ack for {detector}-{command} is {dt:.1f}?')
+                time.sleep(2) # if in doubt
                 return self.get_ack_time(detector, command, False)
             else:
                 # Welp
@@ -500,7 +502,7 @@ class MongoConnect():
                     dt = (next_cmd['createdAt'] - now()).total_seconds()
                 if dt < 0.01:
                     oid = next_cmd.pop('_id')
-                    ret = outgoing.insert_one(next_cmd)
+                    outgoing.insert_one(next_cmd)
                     incoming.delete_one({'_id': oid})
             except Exception as e:
                 dt = 10
