@@ -78,7 +78,7 @@ class MongoConnect():
 
         # a place to buffer commands temporarily
         self.command_queue = []
-        self.q_mutex = threading.Mutex()
+        self.q_mutex = threading.Lock()
 
         self.digi_type = 'V17' if not testing else 'f17'
         self.cc_type = 'V2718' if not testing else 'f2718'
