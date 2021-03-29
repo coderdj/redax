@@ -57,7 +57,6 @@ class MongoConnect():
             'log': self.dax_db['log'],
             'options': self.dax_db['options'],
             'run': self.runs_db[config['RunsDatabaseCollection']],
-            'command_queue': self.dax_db['dispatcher_queue'],
         }
 
         self.error_sent = {}
@@ -76,6 +75,10 @@ class MongoConnect():
 
         # Which control keys do we look for?
         self.control_keys = config['ControlKeys'].split()
+
+        # a place to buffer commands temporarily
+        self.command_queue = []
+        self.q_mutex = threading.Mutex()
 
         self.digi_type = 'V17' if not testing else 'f17'
         self.cc_type = 'V2718' if not testing else 'f2718'
@@ -471,15 +474,16 @@ class MongoConnect():
                 docs = doc_base
                 docs['host'] = hosts[0]+hosts[1] if isinstance(hosts, tuple) else hosts
                 docs['acknowledged'] = {h:0 for h in docs['host']}
+                docs = [docs]
             else:
                 docs = [dict(doc_base.items()), dict(doc_base.items())]
                 docs[0]['host'], docs[1]['host'] = hosts
                 docs[0]['acknowledged'] = {h:0 for h in docs[0]['host']}
                 docs[1]['acknowledged'] = {h:0 for h in docs[1]['host']}
                 docs[1]['createdAt'] += datetime.timedelta(seconds=delay)
-            self.collections['command_queue'].insert(docs)
+            with self.q_mutex:
+                self.collections['command_queue'] += docs
         except Exception as e:
-            self.log.info(f'Database issue, dropping command {command} to {detector}')
             self.log.debug(f'SendCommand ran into {type(e)}, {e})')
             return -1
         else:
@@ -491,24 +495,25 @@ class MongoConnect():
         '''
         Process our internal command queue
         '''
-        sort = [('createdAt', 1)]
-        incoming = self.collections['command_queue']
         outgoing = self.collections['outgoing_commands']
         while self.run == True:
             try:
-                if (next_cmd := incoming.find_one({}, sort=sort)) is None:
-                    dt = 10
-                else:
-                    dt = (next_cmd['createdAt'].replace(tzinfo=pytz.utc) - now()).total_seconds()
+                with self.q_mutex:
+                    if len(self.command_queue) > 1:
+                        self.command_queue.sort(key=lambda d : d['createdAt'].timestamp())
+                    if len(self.command_queue) > 0:
+                        next_cmd = self.command_queue[0]
+                        dt = (next_cmd['createdAt'].replace(tzinfo=pytz.utc) - now()).total_seconds()
+                    else:
+                        dt = 10
                 if dt < 0.01:
-                    oid = next_cmd.pop('_id')
-                    outgoing.insert_one(next_cmd)
-                    incoming.delete_one({'_id': oid})
+                    with self.q_mutex:
+                        outgoing.insert_one(self.command_queue.pop(0))
             except Exception as e:
                 dt = 10
                 self.log.error(f"DB down? {type(e)}, {e}")
-            self.event.wait(dt)
             self.event.clear()
+            self.event.wait(dt)
 
     def host_ackd_command(self, host):
         """
