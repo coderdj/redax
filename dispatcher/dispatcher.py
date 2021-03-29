@@ -26,7 +26,7 @@ def main():
     config = configparser.ConfigParser()
     config.read(args.config)
     config = config['DEFAULT' if not args.test else "TESTING"]
-    config['MasterDAQConfig'] = json.loads(config['MasterDAQConfig'])
+    daq_config = json.loads(config['MasterDAQConfig'])
     control_mc = daqnt.get_client('daq')
     runs_mc = daqnt.get_client('runs')
     logger = daqnt.get_daq_logger(config['LogName'], level=args.log, mc=control_mc)
@@ -35,15 +35,15 @@ def main():
     # Declare necessary classes
     sh = daqnt.SignalHandler()
     Hypervisor = daqnt.Hypervisor(control_mc[config['ControlDatabaseName']], logger,
-            config['MasterDAQConfig']['tpc'], vme_config, sh=sh, testing=args.test)
-    MongoConnector = MongoConnect(config, logger, control_mc, runs_mc, Hypervisor, args.test)
-    DAQControl = DAQController(config, MongoConnector, logger, Hypervisor)
+            daq_config['tpc'], vme_config, sh=sh, testing=args.test)
+    MongoConnector = MongoConnect(config, daq_config, logger, control_mc, runs_mc, Hypervisor, args.test)
+    DAQControl = DAQController(config, daq_config, MongoConnector, logger, Hypervisor)
 
     sleep_period = int(config['PollFrequency'])
 
     logger.info('Dispatcher starting up')
 
-    while(sh.event.is_set() == False):
+    while sh.event.is_set() == False:
         sh.event.wait(sleep_period)
         # Get most recent goal state from database. Users will update this from the website.
         if (goal_state := MongoConnector.get_wanted_state()) is None:

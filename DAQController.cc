@@ -188,6 +188,7 @@ int DAQController::Stop(){
   fDigitizers.clear();
   fStatus = DAXHelpers::Idle;
 
+  fPLL = 0;
   fLog->SetRunId(-1);
   fOptions.reset();
   std::cout<<"Finished end"<<std::endl;

@@ -281,19 +281,18 @@ int Options::GetHEVOpt(HEVOptions &ret){
     ret.signal_threshold = bson_options["DDC10"]["signal_threshold"].get_int32().value;
     ret.sign = bson_options["DDC10"]["sign"].get_int32().value;
     ret.rise_time_cut = bson_options["DDC10"]["rise_time_cut"].get_int32().value;
-    ret.inner_ring_factor = bson_options["DDC10"]["inner_ring_factor"].get_int32().value;
-    ret.outer_ring_factor = bson_options["DDC10"]["outer_ring_factor"].get_int32().value;
+    ret.dynamic_veto_limit = bson_options["DDC10"]["dynamic_veto_limit"].get_int32().value;
+    ret.static_veto_duration = bson_options["DDC10"]["static_veto_duration"].get_int32().value;
     ret.integration_threshold = bson_options["DDC10"]["integration_threshold"].get_int32().value;
-    ret.parameter_0 = bson_options["DDC10"]["parameter_0"].get_int32().value;
-    ret.parameter_1 = bson_options["DDC10"]["parameter_1"].get_int32().value;
-    ret.parameter_2 = bson_options["DDC10"]["parameter_2"].get_int32().value;
-    ret.parameter_3 = bson_options["DDC10"]["parameter_3"].get_int32().value;
+    ret.rho_0 = bson_options["DDC10"]["rho_0"].get_int32().value;
+    ret.rho_1 = bson_options["DDC10"]["rho_1"].get_int32().value;
+    ret.rho_2 = bson_options["DDC10"]["rho_2"].get_int32().value;
+    ret.rho_3 = bson_options["DDC10"]["rho_3"].get_int32().value;
     ret.window = bson_options["DDC10"]["window"].get_int32().value;
     ret.prescaling = bson_options["DDC10"]["prescaling"].get_int32().value;
     ret.component_status = bson_options["DDC10"]["component_status"].get_int32().value;
     ret.width_cut = bson_options["DDC10"]["width_cut"].get_int32().value;
     ret.delay = bson_options["DDC10"]["delay"].get_int32().value;
-
     ret.address = bson_options["DDC10"]["address"].get_utf8().value.to_string();
     ret.required = bson_options["DDC10"]["required"].get_utf8().value.to_string();
   }catch(std::exception &E){

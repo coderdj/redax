@@ -24,7 +24,7 @@ def now():
 
 class DAQController():
 
-    def __init__(self, config, mongo_connector, log, hypervisor):
+    def __init__(self, config, daq_config, mongo_connector, log, hypervisor):
 
         self.mongo = mongo_connector
         self.hypervisor = hypervisor
@@ -34,7 +34,7 @@ class DAQController():
 
         # Timeouts. There are a few things that we want to wait for that might take time.
         # The keys for these dicts will be detector identifiers.
-        detectors = list(config['MasterDAQConfig'].keys())
+        detectors = list(daq_config.keys())
         self.last_command = {}
         for k in ['arm', 'start', 'stop']:
             self.last_command[k] = {}
@@ -42,7 +42,7 @@ class DAQController():
                 self.last_command[k][d] = now()
         self.error_stop_count = {d : 0 for d in detectors}
         self.max_arm_cycles = int(config['MaxArmCycles'])
-        self.missed_arm_cycles={k:0 for k in config['MasterDAQConfig'].keys()}
+        self.missed_arm_cycles={k:0 for k in detectors}
 
         # Timeout properties come from config
         self.timeouts = {
@@ -299,7 +299,8 @@ class DAQController():
                                         'ERROR',
                                         "STOP_TIMEOUT")
                     # also invoke the nuclear option
-                    self.hypervisor.tactical_nuclear_option()
+                    if detector == 'tpc':
+                        self.hypervisor.tactical_nuclear_option()
                     self.error_stop_count[detector] = 0
                 else:
                     self.control_detector(detector=detector, command='stop')
