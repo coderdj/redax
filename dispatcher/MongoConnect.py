@@ -180,7 +180,7 @@ class MongoConnect():
            detector, not the logical detector, while status and run number
            apply to both
         """
-        time_time = time.time()
+        now_time = time.time()
         ret = None
         aggstat = {
                 k:{ 'status': -1,
@@ -211,7 +211,7 @@ class MongoConnect():
 
                 try:
                     status = DAQ_STATUS(doc['status'])
-                    if self.is_timeout(doc, now):
+                    if self.is_timeout(doc, now_time):
                         self.status = DAQ_STATUS.TIMEOUT
                 except Exception as e:
                     self.log.debug(f'Ran into {type(e)}, daq is in timeout. {e}')
@@ -224,7 +224,7 @@ class MongoConnect():
                 try:
                     status = DAQ_STATUS(doc['status'])
 
-                    if self.is_timeout(doc, now):
+                    if self.is_timeout(doc, now_time):
                         status = DAQ_STATUS.TIMEOUT
                 except Exception as e:
                     self.log.debug(f'Setting status to unknown because of {type(e)}: {e}')
