@@ -38,6 +38,9 @@ def main():
             daq_config['tpc'], vme_config, sh=sh, testing=args.test)
     MongoConnector = MongoConnect(config, daq_config, logger, control_mc, runs_mc, Hypervisor, args.test)
     DAQControl = DAQController(config, daq_config, MongoConnector, logger, Hypervisor)
+    # connect the triangle
+    hypervisor.mongo_connect = MongoConnector
+    hypervisor.daq_controller = DAQControl
 
     sleep_period = int(config['PollFrequency'])
 
