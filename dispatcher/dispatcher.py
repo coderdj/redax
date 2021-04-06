@@ -11,14 +11,13 @@ from urllib.parse import quote_plus
 
 from MongoConnect import MongoConnect
 from DAQController import DAQController
-from .MongoConnect import NO_NEW_RUN
 
 def main():
 
     # Parse command line
     parser = argparse.ArgumentParser(description='Manage the DAQ')
     parser.add_argument('--config', type=str, help='Path to your configuration file',
-            default='config_test.ini')
+            default='config.ini')
     parser.add_argument('--log', type=str, help='Logging level', default='DEBUG',
             choices=['DEBUG','INFO','WARNING','ERROR','CRITICAL'])
     parser.add_argument('--test', action='store_true', help='Are you testing?')
@@ -39,8 +38,8 @@ def main():
     MongoConnector = MongoConnect(config, daq_config, logger, control_mc, runs_mc, Hypervisor, args.test)
     DAQControl = DAQController(config, daq_config, MongoConnector, logger, Hypervisor)
     # connect the triangle
-    hypervisor.mongo_connect = MongoConnector
-    hypervisor.daq_controller = DAQControl
+    Hypervisor.mongo_connect = MongoConnector
+    Hypervisor.daq_controller = DAQControl
 
     sleep_period = int(config['PollFrequency'])
 
@@ -62,10 +61,13 @@ def main():
             state = 'ACTIVE' if goal_state[detector]['active'] == 'true' else 'INACTIVE'
             msg = (f'The {detector} should be {state} and is '
                     f'{latest_status[detector]["status"].name}')
-            # TODO add statement about linking
-            if latest_status[detector]['number'] != NO_NEW_RUN:
+            if latest_status[detector]['number'] != -1:
                 msg += f' ({latest_status[detector]["number"]})'
             logger.debug(msg)
+        msg = (f"Linking: tpc-mv: {MongoConnector.is_linked('tpc', 'muon_veto')}, "
+               f"tpc-nv: {MongoConnector.is_linked('tpc', 'neutron_veto')}, "
+               f"mv-nv: {MongoConnector.is_linked('muon_veto', 'neutron_veto')}")
+        logger.debug(msg)
 
         # Decision time. Are we actually in our goal state? If not what should we do?
         DAQControl.solve_problem(latest_status, goal_state)
