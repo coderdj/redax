@@ -33,8 +33,9 @@ def main():
 
     # Declare necessary classes
     sh = daqnt.SignalHandler()
+    SlackBot = daqnt.DaqntBot(os.environ['SLACK_KEY'])
     Hypervisor = daqnt.Hypervisor(control_mc[config['ControlDatabaseName']], logger,
-            daq_config['tpc'], vme_config, sh=sh, testing=args.test)
+            daq_config['tpc'], vme_config, sh=sh, testing=args.test, slackbot=SlackBot)
     MongoConnector = MongoConnect(config, daq_config, logger, control_mc, runs_mc, Hypervisor, args.test)
     DAQControl = DAQController(config, daq_config, MongoConnector, logger, Hypervisor)
     # connect the triangle
