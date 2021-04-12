@@ -17,6 +17,7 @@
 #include <memory>
 #include <tuple>
 #include <condition_variable>
+#include <list>
 
 #include <mongocxx/pool.hpp>
 #include <mongocxx/client.hpp>
@@ -95,7 +96,7 @@ protected:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
-  std::queue<std::tuple<struct tm, int, int, std::string>> fQueue;
+  std::list<std::tuple<struct tm, int, int, std::string>> fQueue;
   std::condition_variable fCV;
   std::experimental::filesystem::path fOutputDir;
   std::thread fFlushThread;
