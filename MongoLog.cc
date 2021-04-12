@@ -162,8 +162,10 @@ int MongoLog::Entry(int priority, const std::string& message, ...){
   std::string msg(len + 1, 0);
   va_start (args, message);
   // Fill the new string we just made
-  std::vsnprintf(msg.data(), len + 1, message.c_str(), args);
+  std::vsnprintf(msg.data(), len+1, message.c_str(), args);
   va_end (args);
+  // strip the trailing \0
+  msg.pop_back();
   {
     std::unique_lock<std::mutex> lg(fMutex);
     fQueue.emplace_back(std::make_tuple(std::move(today), ms, priority, std::move(msg)));
