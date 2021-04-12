@@ -89,6 +89,8 @@ class MongoConnect():
         # Which control keys do we look for?
         self.control_keys = config['ControlKeys'].split()
 
+        self.run_start_cache = {}
+
         self.digi_type = 'V17' if not testing else 'f17'
         self.cc_type = 'V2718' if not testing else 'f2718'
 
@@ -487,6 +489,8 @@ class MongoConnect():
                     rate[doc['_id']] = {'avg': doc['avg'], 'max': doc['max']}
                 self.collections['run'].update_one({'number': int(number)},
                                                    {'$set': {'rate': rate}})
+                if (number,) in self.run_start_cache:
+                    del self.run_start_cache[(number,)]
             else:
                 self.log.debug('No run updated?')
         except Exception as e:
@@ -634,12 +638,15 @@ class MongoConnect():
         return
 
     def get_run_start(self, number):
+        if (number,) in self.run_start_cache:
+            return self.run_start_cache[(number,)]
         try:
             doc = self.collections['run'].find_one({"number": number}, {"start": 1})
         except Exception as e:
             self.log.error(f'Database is having a moment: {type(e)}, {e}')
             return None
         if doc is not None and 'start' in doc:
+            self.run_start_cache[(number,)] = doc['start'].replace(tzinfo=pytz.utc)
             return doc['start']
         return None
 
