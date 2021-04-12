@@ -69,7 +69,7 @@ public:
   const static int Local   = -1; // Write to local (file) log only
 
   virtual int Initialize() {return RotateLogFile();}
-  virtual int Entry(int priority, std::string, ...);
+  virtual int Entry(int priority, const std::string&, ...);
   void SetRunId(const int runid) {fRunId = runid;}
 
 protected:
@@ -95,7 +95,7 @@ protected:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
-  std::vector<std::pair<int, std::string>> fQueue;
+  std::queue<std::tuple<struct tm, int, int, std::string>> fQueue;
   std::condition_variable fCV;
   std::experimental::filesystem::path fOutputDir;
   std::thread fFlushThread;
