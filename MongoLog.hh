@@ -16,6 +16,7 @@
 #include <experimental/filesystem>
 #include <memory>
 #include <tuple>
+#include <condition_variable>
 
 #include <mongocxx/pool.hpp>
 #include <mongocxx/client.hpp>
@@ -80,7 +81,7 @@ protected:
   virtual std::string LogFileName(struct tm*);
   virtual std::experimental::filesystem::path OutputDirectory(struct tm*);
   virtual std::experimental::filesystem::path LogFilePath(struct tm*);
-
+  void MakeEntry(int priority, const std::string& message);
 
   std::shared_ptr<mongocxx::pool> fPool;
   mongocxx::pool::entry fClient;
@@ -94,6 +95,8 @@ protected:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
+  std::vector<std::pair<int, std::string>> fQueue;
+  std::condition_variable fCV;
   std::experimental::filesystem::path fOutputDir;
   std::thread fFlushThread;
   std::atomic_bool fFlush;

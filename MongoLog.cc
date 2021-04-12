@@ -41,12 +41,43 @@ std::tuple<struct tm, int> MongoLog::Now() {
 }
 
 void MongoLog::Flusher() {
+  int counter = 0;
   while (fFlush == true) {
-    std::this_thread::sleep_for(std::chrono::seconds(fFlushPeriod));
-    fMutex.lock();
-    if (fOutfile.is_open()) fOutfile << std::flush;
-    fMutex.unlock();
-  }
+    std::unique_lock<std::mutex> lk(fMutex);
+    fCV.wait(lk, [&]{return fQueue.size() > 0 || fFlush == false;});
+    if (fQueue.size()) {
+      auto [today, ms, priority, message] = std::move(fQueue.front());
+      fQueue.pop();
+      lk.unlock();
+      std::stringstream msg;
+      msg<<FormatTime(&today, ms)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
+      std::cout << msg.str();
+      if (Today(&today) != fToday) RotateLogFile();
+      fOutfile<<fQueue.front().second;
+      if(priority >= fLogLevel){
+        try{
+          auto d = bsoncxx::builder::stream::document{} <<
+            "user" << fHostname <<
+            "message" << message <<
+            "priority" << fQueue.front().first <<
+            "runid" << fRunId <<
+            bsoncxx::builder::stream::finalize;
+          fCollection.insert_one(std::move(d));
+        }
+        catch(const std::exception &e){
+          std::cout<<"Failed to insert log message "<<message<<" ("<<
+            priority<<")"<<std::endl;
+          return -1;
+        }
+      }
+      fQueue.pop();
+      if (++counter >= fFlushPeriod && fOutfile.is_open()) {
+        counter = 0;
+        fOutfile << std::flush;
+      }
+    } // queue not empty
+    lk.unlock();
+  } // while
 }
 
 std::string MongoLog::FormatTime(struct tm* date, int ms) {
@@ -127,29 +158,11 @@ int MongoLog::Entry(int priority, std::string message, ...){
   std::vsnprintf(&vec[0], len + 1, message.c_str(), args);
   va_end (args);
   message = &vec[0];
-
-  std::stringstream msg;
-  msg<<FormatTime(&today, ms)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
-  std::unique_lock<std::mutex> lg(fMutex);
-  std::cout << msg.str();
-  if (Today(&today) != fToday) RotateLogFile();
-  fOutfile<<msg.str();
-  if(priority >= fLogLevel){
-    try{
-      auto d = bsoncxx::builder::stream::document{} <<
-        "user" << fHostname <<
-        "message" << message <<
-        "priority" << priority <<
-        "runid" << fRunId <<
-        bsoncxx::builder::stream::finalize;
-      fCollection.insert_one(std::move(d));
-    }
-    catch(const std::exception &e){
-      std::cout<<"Failed to insert log message "<<message<<" ("<<
-	priority<<")"<<std::endl;
-      return -1;
-    }
+  {
+    std::unique_lock<std::mutex> lg(fMutex);
+    fQueue.emplace_back(std::make_tuple(std::move(today), ms, priority, std::move(message)));
   }
+  fCV.notify_one();
   return 0;
 }
 
