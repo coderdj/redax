@@ -3,7 +3,6 @@ import json
 import enum
 import pytz
 from daqnt import DAQ_STATUS
-from .MongoConnect import NO_NEW_RUN
 
 """
 DAQ Controller Brain Class
@@ -20,7 +19,6 @@ resetting of runs (the ~hourly stop/start) during normal operations.
 
 def now():
     return datetime.datetime.now(pytz.utc)
-    #return datetime.datetime.utcnow() # wrong?
 
 class DAQController():
 
@@ -49,6 +47,9 @@ class DAQController():
                 k.lower() : int(config['%sCommandTimeout' % k])
                 for k in ['Arm','Start','Stop']}
         self.stop_retries = int(config['RetryReset'])
+
+        self.hv_nuclear_timeout = int(config['HypervisorNuclearTimeout'])
+        self.last_nuke = now()
 
         self.log = log
         self.time_between_commands = int(config['TimeBetweenCommands'])
@@ -148,7 +149,7 @@ class DAQController():
 
                 # Maybe the detector is IDLE, we should arm a run
                 elif latest_status[det]['status'] == DAQ_STATUS.IDLE:
-                    self.log.info(f"The {det} is in idle, sending arm command")
+                    self.log.info(f"The {det} is idle, sending arm command")
                     self.control_detector(command='arm', detector=det)
 
                 # Deal separately with the TIMEOUT and ERROR statuses, by stopping the detector if needed
@@ -228,7 +229,7 @@ class DAQController():
                 #Reset arming timeout counter 
                 self.missed_arm_cycles[detector]=0
             else: # stop
-                readers, cc = self.mongo.get_hosts_for_mode(ls[detector]['mode'])
+                readers, cc = self.mongo.get_hosts_for_mode(ls[detector]['mode'], detector)
                 hosts = (cc, readers)
                 if force or ls[detector]['status'] not in [DAQ_STATUS.RUNNING]:
                     delay = 0
@@ -246,7 +247,7 @@ class DAQController():
             if command == 'start' and self.mongo.insert_run_doc(detector):
                 # db having a moment
                 return
-            if (command == 'stop' and ls[detector]['number'] != NO_NEW_RUN and
+            if (command == 'stop' and ls[detector]['number'] != -1 and
                     self.mongo.set_stop_time(ls[detector]['number'], detector, force)):
                 # db having a moment
                 return
@@ -270,7 +271,13 @@ class DAQController():
         #First check how often we have been timing out, if it happened to often
         # something bad happened and we start from scratch again
         if self.missed_arm_cycles[detector]>self.max_arm_cycles and detector=='tpc':
-            self.hypervisor.tactical_nuclear_option()
+            if (dt := (now()-self.last_nuke).total_seconds()) > self.hv_nuclear_timeout:
+                self.log.critical('There\'s only one way to be sure')
+                self.control_detector(detector='tpc', command='stop', force=True)
+                self.hypervisor.tactical_nuclear_option()
+                self.last_nuke = now()
+            else:
+                self.log.debug(f'Nuclear timeout at {int(dt)}/{self.hv_nuclear_timeout}')
             return
 
         if command is None: # not specified, we figure out it here
@@ -300,7 +307,13 @@ class DAQController():
                                         "STOP_TIMEOUT")
                     # also invoke the nuclear option
                     if detector == 'tpc':
-                        self.hypervisor.tactical_nuclear_option()
+                        if (dt := (now()-self.last_nuke).total_seconds()) > self.hv_nuclear_timeout:
+                            self.control_detector(detector='tpc', command='stop', force=True)
+                            self.log.critical('There\'s only one way to be sure')
+                            self.hypervisor.tactical_nuclear_option()
+                            self.last_nuke = now()
+                        else:
+                            self.log.debug(f'Nuclear timeout at {int(dt)}/{self.hv_nuclear_timeout}')
                     self.error_stop_count[detector] = 0
                 else:
                     self.control_detector(detector=detector, command='stop')

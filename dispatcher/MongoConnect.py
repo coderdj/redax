@@ -91,6 +91,9 @@ class MongoConnect():
 
         self.run_start_cache = {}
 
+        # How often can we restart hosts?
+        self.hypervisor_host_restart_timeout = int(config['HypervisorHostRestartTimeout'])
+
         self.digi_type = 'V17' if not testing else 'f17'
         self.cc_type = 'V2718' if not testing else 'f2718'
 
@@ -112,14 +115,17 @@ class MongoConnect():
         self.latest_status = {}
         self.host_config = {}
         self.dc = daq_config
+        self.hv_timeout_fix = {}
         for detector in self.dc:
             self.latest_status[detector] = {'readers': {}, 'controller': {}}
             for reader in self.dc[detector]['readers']:
                 self.latest_status[detector]['readers'][reader] = {}
                 self.host_config[reader] = detector
+                self.hv_timeout_fix[reader] = now()
             for controller in self.dc[detector]['controller']:
                 self.latest_status[detector]['controller'][controller] = {}
                 self.host_config[controller] = detector
+                self.hv_timeout_fix[controller] = now()
 
         self.log = log
         self.run = True
@@ -155,12 +161,12 @@ class MongoConnect():
                     dc[detector]['controller'][host] = doc
         except Exception as e:
             self.log.error(f'Got error while getting update: {type(e)}: {e}')
-            return True
+            return None
 
         self.latest_status = dc
 
         # Now compute aggregate status
-        return self.aggregate_status() is not None
+        return self.latest_status if self.aggregate_status() is None else None
 
     def clear_error_timeouts(self):
         self.error_sent = {}
@@ -214,7 +220,7 @@ class MongoConnect():
                 try:
                     status = DAQ_STATUS(doc['status'])
                     if self.is_timeout(doc, now_time):
-                        self.status = DAQ_STATUS.TIMEOUT
+                        status = DAQ_STATUS.TIMEOUT
                 except Exception as e:
                     self.log.debug(f'Ran into {type(e)}, daq is in timeout. {e}')
                     status = DAQ_STATUS.UNKNOWN
@@ -296,12 +302,17 @@ class MongoConnect():
         ret = False
         if dt > self.timeout:
             self.log.debug(f'{host} last reported {int(dt)} sec ago')
-            ret |= True
+            ret = ret or True
         if has_ackd is not None and t - has_ackd > self.timeout_take_action:
             self.log.debug(f'{host} hasn\'t ackd a command from {int(t-has_ackd)} sec ago')
             if self.host_config[host] == 'tpc':
-                self.hypervisor.handle_timeout(host)
-            ret |= True
+                dt = (now() - self.hv_timeout_fix[host]).total_seconds()
+                if dt > self.hypervisor_host_restart_timeout:
+                    self.hypervisor.handle_timeout(host)
+                    self.hv_timeout_fix[host] = now()
+                else:
+                    self.log.debug(f'Not restarting {host}, timeout at {int(dt)}')
+            ret = ret or True
         return ret
 
     def get_wanted_state(self):
@@ -355,8 +366,8 @@ class MongoConnect():
         - case E: tpc unlinked, mv and nv linked
         We will check the compatibility of the linked mode for a pair of detectors per time.
         """
-        ret = {'tpc': {'controller': list(self.dc['tpc']['controller'].keys()),
-                       'readers': list(self.dc['tpc']['readers'].keys()),
+        ret = {'tpc': {'controller': self.dc['tpc']['controller'][:],
+                       'readers': self.dc['tpc']['readers'][:],
                        'detectors': ['tpc']}}
         mv = self.dc['muon_veto']
         nv = self.dc['neutron_veto']
@@ -368,29 +379,29 @@ class MongoConnect():
         # tpc and muon_veto linked mode
         if tpc_mv:
             # case A or C
-            ret['tpc']['controller'] += list(mv['controller'].keys())
-            ret['tpc']['readers'] += list(mv['readers'].keys())
+            ret['tpc']['controller'] += mv['controller']
+            ret['tpc']['readers'] += mv['readers']
             ret['tpc']['detectors'] += ['muon_veto']
         else:
             # case B or E
-            ret['muon_veto'] = {'controller': list(mv['controller'].keys()),
-                    'readers': list(mv['readers'].keys()),
-                    'detectors': ['muon_veto']}
+            ret['muon_veto'] = {'controller': mv['controller'][:],
+                                'readers': mv['readers'][:],
+                                'detectors': ['muon_veto']}
         if tpc_nv:
             # case A or D
-            ret['tpc']['controller'] += list(nv['controller'].keys())
-            ret['tpc']['readers'] += list(nv['readers'].keys())
+            ret['tpc']['controller'] += nv['controller'][:]
+            ret['tpc']['readers'] += nv['readers'][:]
             ret['tpc']['detectors'] += ['neutron_veto']
         elif mv_nv and not tpc_mv:
             # case E
-            ret['muon_veto']['controller'] += list(nv['controller'].keys())
-            ret['muon_veto']['readers'] += list(nv['readers'].keys())
+            ret['muon_veto']['controller'] += nv['controller'][:]
+            ret['muon_veto']['readers'] += nv['readers'][:]
             ret['muon_veto']['detectors'] += ['neutron_veto']
         else:
             # case B or C
-            ret['neutron_veto'] = {'controller': list(nv['controller'].keys()),
-                    'readers': list(nv['readers'].keys()),
-                    'detectors': ['neutron_veto']}
+            ret['neutron_veto'] = {'controller': nv['controller'][:],
+                                   'readers': nv['readers'][:],
+                                   'detectors': ['neutron_veto']}
 
         # convert the host lists to dics for later
         for det in list(ret.keys()):
@@ -429,16 +440,18 @@ class MongoConnect():
             self.log.error("Got a %s exception in doc pulling: %s" % (type(e), e))
         return None
 
-    def get_hosts_for_mode(self, mode):
+    def get_hosts_for_mode(self, mode, detector=None):
         """
         Get the nodes we need from the run mode
         """
-        if mode is None:
-            self.log.debug("Run mode is none?")
-            return [], []
-        doc = self.get_run_mode(mode)
-        if doc is None:
-            self.log.debug("No run mode?")
+        if mode is None or mode == 'none':
+            if detector is None:
+                self.log.error('No mode, no detector? wtf?')
+                return [], []
+            return (list(self.latest_status[detector]['readers'].keys()),
+                    list(self.latest_status[detector]['controller'].keys()))
+        if (doc := self.get_run_mode(mode)) is None:
+            self.log.error('How did this happen?')
             return [], []
         cc = []
         hostlist = []
@@ -596,7 +609,7 @@ class MongoConnect():
         sort = [('_id', 1)]
         if (doc := self.collections['outgoing_commands'].find_one(q, sort=sort)) is None:
             return None
-        return doc['createdAt'].timestamp()
+        return doc['createdAt'].replace(tzinfo=pytz.utc).timestamp()
 
     def detector_ackd_command(self, detector, command):
         """
@@ -632,12 +645,15 @@ class MongoConnect():
                 "message": message,
                 "priority": self.loglevels[priority]
             })
-        except:
-            self.log.error('Database error, can\'t issue error message')
+        except Exception as e:
+            self.log.error(f'Database error, can\'t issue error message: {type(e)}, {e}')
         self.log.info("Error message from dispatcher: %s" % (message))
         return
 
     def get_run_start(self, number):
+        """
+        Returns the timezone-corrected run start time from the rundoc
+        """
         if str(number) in self.run_start_cache:
             return self.run_start_cache[str(number)]
         try:
@@ -647,7 +663,7 @@ class MongoConnect():
             return None
         if doc is not None and 'start' in doc:
             self.run_start_cache[str(number)] = doc['start'].replace(tzinfo=pytz.utc)
-            return doc['start']
+            return self.run_start_cache[str(number)]
         return None
 
     def insert_run_doc(self, detector):
@@ -656,7 +672,7 @@ class MongoConnect():
             self.log.error("DB having a moment")
             return -1
         # the rundoc gets the physical detectors, not the logical
-        detectors = self.goal_state[detector]['detectors']
+        detectors = self.latest_status[detector]['detectors']
 
         run_doc = {
             "number": number,
