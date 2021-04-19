@@ -208,9 +208,11 @@ void DAQController::ReadData(int link){
   std::unique_ptr<data_packet> dp;
   std::vector<int> mutex_wait_times;
   int words = 0;
-  int local_size(0);
+  int bytes_this_loop(0);
   fRunning[link] = true;
   std::chrono::microseconds sleep_time(fOptions->GetInt("us_between_reads", 10));
+  int c = 0;
+  const int num_threads = fNumProcessingThreads;
   while(fReadLoop){
     for(auto& digi : fDigitizers[link]) {
 
@@ -243,18 +245,18 @@ void DAQController::ReadData(int link){
       } else if(words>0){
         dp->digi = digi;
         local_buffer.emplace_back(std::move(dp));
-        local_size += words*sizeof(char32_t);
+        bytes_this_loop += words*sizeof(char32_t);
       }
     } // for digi in digitizers
     if (local_buffer.size() > 0) {
-      fDataRate += local_size;
+      fDataRate += bytes_this_loop;
       int selector = (fCounter++)%fNProcessingThreads;
       auto t_start = std::chrono::high_resolution_clock::now();
-      fFormatters[selector]->ReceiveDatapackets(local_buffer, local_size);
+      while (fFormatters[(++c)%num_threads]->ReceiveDataPackets(local_buffer, bytes_this_loop)) {}
       auto t_end = std::chrono::high_resolution_clock::now();
       mutex_wait_times.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(
             t_end-t_start).count());
-      local_size = 0;
+      bytes_this_loop = 0;
     }
     readcycler++;
     std::this_thread::sleep_for(sleep_time);
