@@ -16,6 +16,8 @@
 #include <experimental/filesystem>
 #include <memory>
 #include <tuple>
+#include <condition_variable>
+#include <list>
 
 #include <mongocxx/pool.hpp>
 #include <mongocxx/client.hpp>
@@ -68,7 +70,7 @@ public:
   const static int Local   = -1; // Write to local (file) log only
 
   virtual int Initialize() {return RotateLogFile();}
-  virtual int Entry(int priority, std::string, ...);
+  virtual int Entry(int priority, const std::string&, ...);
   void SetRunId(const int runid) {fRunId = runid;}
 
 protected:
@@ -80,7 +82,7 @@ protected:
   virtual std::string LogFileName(struct tm*);
   virtual std::experimental::filesystem::path OutputDirectory(struct tm*);
   virtual std::experimental::filesystem::path LogFilePath(struct tm*);
-
+  void MakeEntry(int priority, const std::string& message);
 
   std::shared_ptr<mongocxx::pool> fPool;
   mongocxx::pool::entry fClient;
@@ -94,6 +96,8 @@ protected:
   int fDeleteAfterDays;
   int fToday;
   std::mutex fMutex;
+  std::list<std::tuple<struct tm, int, int, std::string>> fQueue;
+  std::condition_variable fCV;
   std::experimental::filesystem::path fOutputDir;
   std::thread fFlushThread;
   std::atomic_bool fFlush;
