@@ -686,7 +686,7 @@ class MongoConnect():
         # If there's a source add the source. Also add the complete ini file.
         cfg = self.get_run_mode(self.goal_state[detector]['mode'])
         if cfg is not None and 'source' in cfg.keys():
-            run_doc['source'] = {'type': cfg['source']}
+            run_doc['source'] = str(cfg['source'])
         run_doc['daq_config'] = cfg
 
         # If the user started the run with a comment add that too
