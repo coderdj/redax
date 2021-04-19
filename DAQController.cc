@@ -207,12 +207,13 @@ void DAQController::ReadData(int link){
   std::list<std::unique_ptr<data_packet>> local_buffer;
   std::unique_ptr<data_packet> dp;
   std::vector<int> mutex_wait_times;
+  mutex_wait_times.reserve(1<<20);
   int words = 0;
   int bytes_this_loop(0);
   fRunning[link] = true;
   std::chrono::microseconds sleep_time(fOptions->GetInt("us_between_reads", 10));
   int c = 0;
-  const int num_threads = fNumProcessingThreads;
+  const int num_threads = fProcessingThreads;
   while(fReadLoop){
     for(auto& digi : fDigitizers[link]) {
 
@@ -250,7 +251,6 @@ void DAQController::ReadData(int link){
     } // for digi in digitizers
     if (local_buffer.size() > 0) {
       fDataRate += bytes_this_loop;
-      int selector = (fCounter++)%fNProcessingThreads;
       auto t_start = std::chrono::high_resolution_clock::now();
       while (fFormatters[(++c)%num_threads]->ReceiveDataPackets(local_buffer, bytes_this_loop)) {}
       auto t_end = std::chrono::high_resolution_clock::now();
