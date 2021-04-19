@@ -52,7 +52,7 @@ void MongoLog::Flusher() {
     fCV.wait(lk, [&]{return fQueue.size() > 0 || fFlush == false;});
     if (fQueue.size()) {
       auto [today, ms, priority, message] = std::move(fQueue.front());
-      fQueue.pop();
+      fQueue.pop_front();
       lk.unlock();
       std::stringstream msg;
       msg<<FormatTime(&today, ms)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
