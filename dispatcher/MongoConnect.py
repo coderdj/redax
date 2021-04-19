@@ -571,7 +571,7 @@ class MongoConnect():
                 docs[1]['acknowledged'] = {h:0 for h in docs[1]['host']}
                 docs[1]['createdAt'] += datetime.timedelta(seconds=delay)
             with self.q_mutex:
-                self.collections['command_queue'] += docs
+                self.command_queue += docs
         except Exception as e:
             self.log.debug(f'SendCommand ran into {type(e)}, {e})')
             return -1
