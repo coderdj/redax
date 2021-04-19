@@ -28,6 +28,7 @@ MongoLog::MongoLog(int DeleteAfterDays, std::shared_ptr<mongocxx::pool>& pool, s
 
 MongoLog::~MongoLog(){
   fFlush = false;
+  fCV.notify_one();
   fFlushThread.join();
   fOutfile.close();
 }
@@ -37,16 +38,50 @@ std::tuple<struct tm, int> MongoLog::Now() {
   auto now = system_clock::now();
   auto t = system_clock::to_time_t(now);
   int ms = duration_cast<milliseconds>(now.time_since_epoch()).count() % 1000;
-  return {*std::gmtime(&t), ms};
+  auto tm_ = *std::gmtime(&t);
+  return {std::move(tm_), ms};
 }
 
 void MongoLog::Flusher() {
+  // Logging from many threads occasionally segfaults when the messages are
+  // coming in thick and fast, so this thread actually communicates with the db
+  // while everything else just queues messages for handling
+  int counter = 0;
   while (fFlush == true) {
-    std::this_thread::sleep_for(std::chrono::seconds(fFlushPeriod));
-    fMutex.lock();
-    if (fOutfile.is_open()) fOutfile << std::flush;
-    fMutex.unlock();
-  }
+    std::unique_lock<std::mutex> lk(fMutex);
+    fCV.wait(lk, [&]{return fQueue.size() > 0 || fFlush == false;});
+    if (fQueue.size()) {
+      auto [today, ms, priority, message] = std::move(fQueue.front());
+      fQueue.pop();
+      lk.unlock();
+      std::stringstream msg;
+      msg<<FormatTime(&today, ms)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
+      if (Today(&today) != fToday) RotateLogFile();
+      std::cout << msg.str();
+      fOutfile << msg.str();
+      if(priority >= fLogLevel){
+        try{
+          auto d = bsoncxx::builder::stream::document{} <<
+            "user" << fHostname <<
+            "message" << std::move(message) <<
+            "priority" << priority <<
+            "runid" << fRunId <<
+            bsoncxx::builder::stream::finalize;
+          fCollection.insert_one(std::move(d));
+        }
+        catch(const std::exception &e){
+          std::cout<<"Failed to insert log message "<<message<<" ("<<
+            priority<<")"<<std::endl;
+          std::cout<<e.what()<<std::endl;
+        }
+      }
+      if (++counter >= fFlushPeriod) {
+        counter = 0;
+        fOutfile << std::flush;
+      }
+    } else // queue not empty
+      lk.unlock();
+  } // while
 }
 
 std::string MongoLog::FormatTime(struct tm* date, int ms) {
@@ -113,43 +148,29 @@ int MongoLog::RotateLogFile() {
   return 0;
 }
 
-int MongoLog::Entry(int priority, std::string message, ...){
+int MongoLog::Entry(int priority, const std::string& message, ...){
   auto [today, ms] = Now();
 
   // Thanks Martin
   // http://www.martinbroadhurst.com/string-formatting-in-c.html
   va_list args;
-  va_start (args, message); // First pass just gets what the length will be
+  va_start (args, message);
+  // First pass just gets what the length will be
   size_t len = std::vsnprintf(NULL, 0, message.c_str(), args);
   va_end (args);
-  std::vector<char> vec(len + 1); // Declare with proper length
-  va_start (args, message);  // Fill the vector we just made
-  std::vsnprintf(&vec[0], len + 1, message.c_str(), args);
+  // Declare with proper length
+  std::string msg(len + 1, 0);
+  va_start (args, message);
+  // Fill the new string we just made
+  std::vsnprintf(msg.data(), len+1, message.c_str(), args);
   va_end (args);
-  message = &vec[0];
-
-  std::stringstream msg;
-  msg<<FormatTime(&today, ms)<<" ["<<fPriorities[priority+1] <<"]: "<<message<<std::endl;
-  std::unique_lock<std::mutex> lg(fMutex);
-  std::cout << msg.str();
-  if (Today(&today) != fToday) RotateLogFile();
-  fOutfile<<msg.str();
-  if(priority >= fLogLevel){
-    try{
-      auto d = bsoncxx::builder::stream::document{} <<
-        "user" << fHostname <<
-        "message" << message <<
-        "priority" << priority <<
-        "runid" << fRunId <<
-        bsoncxx::builder::stream::finalize;
-      fCollection.insert_one(std::move(d));
-    }
-    catch(const std::exception &e){
-      std::cout<<"Failed to insert log message "<<message<<" ("<<
-	priority<<")"<<std::endl;
-      return -1;
-    }
+  // strip the trailing \0
+  msg.pop_back();
+  {
+    std::unique_lock<std::mutex> lg(fMutex);
+    fQueue.emplace_back(std::make_tuple(std::move(today), ms, priority, std::move(msg)));
   }
+  fCV.notify_one();
   return 0;
 }
 
