@@ -304,7 +304,7 @@ class MongoConnect():
             self.log.debug(f'{host} last reported {int(dt)} sec ago')
             ret = ret or True
         if has_ackd is not None and t - has_ackd > self.timeout_take_action:
-            self.log.info(f'{host} hasn\'t ackd a command from {int(t-has_ackd)} sec ago')
+            self.log.critical(f'{host} hasn\'t ackd a command from {int(t-has_ackd)} sec ago')
             if self.host_config[host] == 'tpc':
                 dt = (now() - self.hv_timeout_fix[host]).total_seconds()
                 if dt > self.hypervisor_host_restart_timeout:
