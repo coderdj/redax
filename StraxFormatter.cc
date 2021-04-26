@@ -50,6 +50,7 @@ StraxFormatter::StraxFormatter(std::shared_ptr<Options>& opts, std::shared_ptr<M
 
   fBufferNumChunks = fOptions->GetInt("strax_buffer_num_chunks", 2);
   fWarnIfChunkOlderThan = fOptions->GetInt("strax_chunk_phase_limit", 2);
+  fMutexWaitTime.reserve(1<<20);
 
   std::string output_path = fOptions->GetString("strax_output_path", "./");
   try{
@@ -267,17 +268,20 @@ void StraxFormatter::AddFragmentToBuffer(std::string fragment, uint32_t ts, int 
   }
 }
 
-void StraxFormatter::ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>& in, int bytes) {
-  auto start = std::chrono::high_resolution_clock::now();
-  {
-    const std::lock_guard<std::mutex> lk(fBufferMutex);
-    auto end = std::chrono::high_resolution_clock::now();
+int StraxFormatter::ReceiveDatapackets(std::list<std::unique_ptr<data_packet>>& in, int bytes) {
+  using namespace std::chrono;
+  auto start = high_resolution_clock::now();
+  if (fBufferMutex.try_lock()) {
+    auto end = high_resolution_clock::now();
     fBufferCounter[in.size()]++;
     fBuffer.splice(fBuffer.end(), in);
     fInputBufferSize += bytes;
-    fMutexWaitTime.push_back(std::chrono::duration_cast<std::chrono::nanoseconds>(end-start).count());
+    fMutexWaitTime.push_back(duration_cast<nanoseconds>(end-start).count());
+    fBufferMutex.unlock();
+    fCV.notify_one();
+    return 0;
   }
-  fCV.notify_one();
+  return 1;
 }
 
 void StraxFormatter::Process() {

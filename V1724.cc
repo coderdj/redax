@@ -217,7 +217,8 @@ int V1724::Read(std::unique_ptr<data_packet>& outptr){
   if ((GetAcquisitionStatus() & 0x8) == 0) return 0;
   // Initialize
   int blt_words=0, nb=0, ret=-5;
-  std::list<std::pair<char32_t*, int>> xfer_buffers;
+  std::vector<std::pair<char32_t*, int>> xfer_buffers;
+  xfer_buffers.reserve(16);
 
   int count = 0;
   int alloc_words = BLT_SIZE/sizeof(char32_t)*fBLTSafety;
